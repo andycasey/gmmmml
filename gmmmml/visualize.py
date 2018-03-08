@@ -27,6 +27,7 @@ class VisualizationHandler(object):
 
         self._predict_slw = []
         self._predict_ll = []
+        self._predict_slogdetcovs = []
 
         self._reference_ll = None
 
@@ -108,6 +109,13 @@ class VisualizationHandler(object):
 
             #del item
 
+
+    def _update_previous_predict_slogdetcovs(self):
+        L = len(self._predict_slogdetcovs)
+        for l in range(L):
+            item = self._predict_slogdetcovs.pop(0)
+            item.set_visible(False)
+            del item
 
 
 
@@ -210,6 +218,23 @@ class VisualizationHandler(object):
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
+
+        elif kind == "predict_slogdetcov":
+
+            self._update_previous_predict_slogdetcovs()
+
+            K = params["K"]
+            p_slogdetcovs = params["p_slogdetcovs"]
+            p_slogdetcovs_pos_err = params["p_slogdetcovs_pos_err"]
+            p_slogdetcovs_neg_err = params["p_slogdetcovs_neg_err"]
+
+            self._predict_slogdetcovs.extend([
+                self.axes[3].plot(K, p_slogdetcovs, c=self._color_prediction)[0],
+                self.axes[3].fill_between(K,
+                    p_slogdetcovs - p_slogdetcovs_neg_err,
+                    p_slogdetcovs + p_slogdetcovs_pos_err,
+                    facecolor=self._color_prediction, alpha=0.5, zorder=-1)
+            ])
 
         else:
             raise ValueError("what you tryin' to tell me?!")

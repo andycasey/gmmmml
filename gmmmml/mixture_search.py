@@ -505,7 +505,7 @@ class GaussianMixture(object):
             
             if kwds["visualization_handler"] is not None:
 
-                target_K = weight.size + np.arange(1, 10)
+                target_K = weight.size + np.arange(1, 100)
                 self._predict_message_length(target_K, **kwds)
 
 
@@ -599,7 +599,8 @@ class GaussianMixture(object):
         p_ll, p_ll_err = self._predict_log_likelihoods(target_K)
 
         # Predict sum log of the determinates of the covariance matrices.
-        foo = self._predict_slogdetcovs(target_K)
+        p_slogdetcovs, p_slogdetcovs_pos_err, p_slogdetcovs_neg_err \
+            = self._predict_slogdetcovs(target_K)
 
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
@@ -610,6 +611,14 @@ class GaussianMixture(object):
             if p_ll is not None:
                 visualization_handler.emit("predict_ll",
                     dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err))
+
+            # Sometimes we don't predict the sum of the log of the determinants
+            # of the covariance matrices.
+            if p_slogdetcovs is not None:
+                visualization_handler.emit("predict_slogdetcov",
+                    dict(K=target_K, p_slogdetcovs=p_slogdetcovs,
+                        p_slogdetcovs_pos_err=p_slogdetcovs_pos_err,
+                        p_slogdetcovs_neg_err=p_slogdetcovs_neg_err))
 
 
 
@@ -706,38 +715,49 @@ class GaussianMixture(object):
 
 
 
-    def _predict_slogdetcovs(self, target_K):
+    def _predict_slogdetcovs(self, target_K, size=100, p0=None):
 
 
         xo = np.array(self._state_K)
-        yo = np.array([np.sum(np.log(each)) for each in self._state_det_covs])
         yo = np.array([np.mean(np.log(each)) for each in self._state_det_covs])
 
-
+        # unique things.
         xu = np.sort(np.unique(xo))
         yu = np.array([np.mean(yo[xo==xi]) for xi in xu])
-        yu_err = np.array([np.std(yo[xo==xi]) for xi in xu])
+        
+        if xu.size <= 10:
+            return (None, None, None)
 
-        #yerr = 0.1 # 1.0/x
-        x, y, yerr = xu, yu, yu_err
-        yerr = 0.1
+        def mean_logdetcov(x, *params):
+            a, b, c = params
+            return b * np.exp(a * x) + c * x
 
-        #ok = yerr > 0
-        #x, y, yerr = x[ok], y[ok], yerr[ok]
+        def slogdetcov(x, a, b, c):
+            x, a, b, c = [np.atleast_2d(ea).T for ea in (x, a, b, c)]
+            return x.T * b * np.exp(np.dot(a, x.T)) + np.dot(c, x.T)
 
-        """
-        kernel = np.var(y) * kernels.ExpSquaredKernel(1)
-        gp = george.GP(kernel, mean=np.mean(y), fit_mean=True)
-        gp.compute(x, yerr)
+        
+        if p0 is None:
+            p0 = [0, 1, 0]
+        
+        p_opt, p_cov = op.curve_fit(mean_logdetcov, xu, yu, p0=p0, maxfev=10000)
 
-        x_pred = np.atleast_1d(target_K)
-        pred, pred_var = gp.predict(y, x_pred, return_var=True)
+        p50, p16, p84 = np.percentile(slogdetcov(
+            target_K, *np.random.multivariate_normal(p_opt, p_cov, size=size).T),
+            [50, 16, 84], axis=0)
 
-        fig, ax = plt.subplots()
-        ax.scatter(x, y)
+        #import matplotlib.pyplot as plt
+        #fig, ax = plt.subplots()
+        #ax.plot(xo, slogdetcovs, c='k')
+        #ax.plot(target_K, pred, c='r')
 
-        ax.fill_between(x_pred, pred - np.sqrt(pred_var), pred + np.sqrt(pred_var), color="r", alpha=0.2)
-        """
+        #ax.plot(target_K, p50, c='b')
+        #ax.fill_between(target_K, p16, p84, facecolor="b", alpha=0.5)
+
+        u_pos, u_neg = (p84 - p50, p16 - p50)
+
+        return (p50, u_pos, u_neg)
+
 
         
 
