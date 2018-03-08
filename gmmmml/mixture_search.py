@@ -458,7 +458,7 @@ class GaussianMixture(object):
         kwds.update(kwargs)
         
         y = np.atleast_1d(y)
-        
+
         N, D = y.shape
         K_max = N if K_max is None else K_max
 
@@ -584,7 +584,7 @@ class GaussianMixture(object):
 
     def _predict_message_length(self, target_K, **kwargs):
         """
-        Predict the message lengths of unobserved mixtures.
+        Predict the message lengths of future mixtures.
 
         :param target_K:
             An array-like object of K-th mixtures to predict message lengths
@@ -593,14 +593,13 @@ class GaussianMixture(object):
 
         target_K = np.atleast_1d(target_K)
 
-
         p_slw, p_slw_err, p_slw_max = self._predict_slogweights(target_K)
 
         # Predict log-likelihoods.
         p_ll, p_ll_err = self._predict_log_likelihoods(target_K)
 
-
         # Predict sum log of the determinates of the covariance matrices.
+        foo = self._predict_slogdetcovs(target_K)
 
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
@@ -740,7 +739,8 @@ class GaussianMixture(object):
         ax.fill_between(x_pred, pred - np.sqrt(pred_var), pred + np.sqrt(pred_var), color="r", alpha=0.2)
         """
 
-        raise a
+        
+
 
 
     def _search_slow(self, y, **kwargs):

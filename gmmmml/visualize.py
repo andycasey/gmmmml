@@ -7,12 +7,17 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse
 
 
+
+
 class VisualizationHandler(object):
 
-    def __init__(self, y, figure_path, **kwargs):
+    def __init__(self, y, target=None, figure_path=None, **kwargs):
+
+        figure_path = "" if figure_path is None else figure_path
 
         self._color_model = "r"
         self._color_prediction = "b"
+        self._color_target = "g"
 
         self._model = []
         self._expectation_iter = 1
@@ -55,6 +60,22 @@ class VisualizationHandler(object):
         self.axes[6].set_xlabel("K")
         self.axes[6].set_ylabel(r"$\log{L}/\log{L_0}$")
 
+        if target is not None:
+            K_target = target["weight"].size
+                
+            target_kwds = dict(facecolor=self._color_target, s=50, alpha=0.5)
+
+            self.axes[1].scatter([K_target], [target["I"]], **target_kwds)
+
+            self.axes[5].scatter(
+                [K_target], [np.sum(np.log(target["weight"]))], **target_kwds)
+
+            self.axes[3].scatter(
+                [K_target],
+                [np.sum(np.linalg.slogdet(target["cov"])[1])],
+                **target_kwds)
+
+
         self.savefig()
 
 
@@ -93,7 +114,7 @@ class VisualizationHandler(object):
 
     def emit(self, kind, params):
 
-    
+        
         if kind == "model":
 
             self._clear_model()
