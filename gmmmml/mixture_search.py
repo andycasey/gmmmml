@@ -417,6 +417,7 @@ class GaussianMixture(object):
         self._state_predictions_K = []
         self._state_predictions_slog_det_covs = []
         self._state_predictions_slog_likelihoods = []
+        self._state_meta = {}
 
         return None
 
@@ -718,27 +719,52 @@ class GaussianMixture(object):
     def _predict_slogdetcovs(self, target_K, size=100, p0=None):
 
 
-        xo = np.array(self._state_K)
-        yo = np.array([np.mean(np.log(each)) for each in self._state_det_covs])
+        K = np.array(self._state_K)
+        sldc = np.array([np.sum(np.log(dc)) for dc in self._state_det_covs])
 
         # unique things.
-        xu = np.sort(np.unique(xo))
-        yu = np.array([np.mean(yo[xo==xi]) for xi in xu])
-        
-        if xu.size <= 10:
+        Ku = np.sort(np.unique(K))
+        sldcu = np.array([np.median(sldc[K==k]) for k in K])
+
+        if Ku.size <= 3:
             return (None, None, None)
 
-        def mean_logdetcov(x, *params):
-            a, b, c = params
-            return b * np.exp(a * x) + c * x
+        x = Ku
+        y = sldcu/Ku
 
-        def slogdetcov(x, a, b, c):
-            x, a, b, c = [np.atleast_2d(ea).T for ea in (x, a, b, c)]
-            return x.T * b * np.exp(np.dot(a, x.T)) + np.dot(c, x.T)
+        def approximate_ldc_per_mixture_component(k, *params):
+            a, b, c = params
+            return a/(k - b) + c
+
+
+        p0 = self._state_meta.get("_predict_slogdetcovs_p0", [y[0], 0.5, 0])
+        p0 = [y[0], 0.5, 0]
+
+        p_opt, p_cov = op.curve_fit(approximate_ldc_per_mixture_component, x, y,
+            p0=p0, maxfev=100000, sigma=x.astype(float)**-1)
+
+        # Save optimized point for next iteration.
+        self._state_meta["_predict_slogdetcovs_p0"] = p_opt
+
+        p_sldcu = np.array([
+            target_K * approximate_ldc_per_mixture_component(target_K, *p_draw)\
+            for p_draw in np.random.multivariate_normal(p_opt, p_cov, size=size)])
+
+        p50, p16, p84 = np.percentile(p_sldcu, [50, 16, 84], axis=0)
+
+        """
+
+        def mean_logdetcov(x, *params):
+            a, b = params
+            return b * np.exp(a * x) #+ c * x
+
+        def slogdetcov(x, a, b):
+            x, a, b = [np.atleast_2d(ea).T for ea in (x, a, b)]
+            return x.T * b * np.exp(np.dot(a, x.T)) #+ np.dot(c, x.T)
 
         
         if p0 is None:
-            p0 = [0, 1, 0]
+            p0 = [0, 1]
         
         p_opt, p_cov = op.curve_fit(mean_logdetcov, xu, yu, p0=p0, maxfev=10000)
 
@@ -746,15 +772,27 @@ class GaussianMixture(object):
             target_K, *np.random.multivariate_normal(p_opt, p_cov, size=size).T),
             [50, 16, 84], axis=0)
 
-        #import matplotlib.pyplot as plt
-        #fig, ax = plt.subplots()
-        #ax.plot(xo, slogdetcovs, c='k')
-        #ax.plot(target_K, pred, c='r')
+        import matplotlib.pyplot as plt
+        fig, axes = plt.subplots(2)
+        ax = axes[0]
+        x = np.array(self._state_K)
+        y = np.array([np.sum(np.log(each)) for each in self._state_det_covs])
 
-        #ax.plot(target_K, p50, c='b')
-        #ax.fill_between(target_K, p16, p84, facecolor="b", alpha=0.5)
+        ax.scatter(x, y)
+        ax.scatter([100], [-129])
 
+        ax.plot(target_K, p50, c='b')
+        ax.fill_between(target_K, p16, p84, facecolor="b", alpha=0.5)
+
+        ax = axes[1]
+        ax.scatter(x, y - slogdetcov(x, *p_opt), c='r')
+
+        raise a
+        """
         u_pos, u_neg = (p84 - p50, p16 - p50)
+
+        assert  np.all(u_pos > 0) and np.all(u_neg < 0)
+        assert np.all(np.isfinite(p50))
 
         return (p50, u_pos, u_neg)
 

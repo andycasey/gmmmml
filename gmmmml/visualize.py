@@ -76,6 +76,8 @@ class VisualizationHandler(object):
                 [np.sum(np.linalg.slogdet(target["cov"])[1])],
                 **target_kwds)
 
+        for ax in self.axes:
+            ax.autoscale(enable=True)
 
         self.savefig()
 
@@ -114,6 +116,10 @@ class VisualizationHandler(object):
         L = len(self._predict_slogdetcovs)
         for l in range(L):
             item = self._predict_slogdetcovs.pop(0)
+            try:
+                item.set_data([], [])
+            except AttributeError:
+                None
             item.set_visible(False)
             del item
 
@@ -231,10 +237,13 @@ class VisualizationHandler(object):
             self._predict_slogdetcovs.extend([
                 self.axes[3].plot(K, p_slogdetcovs, c=self._color_prediction)[0],
                 self.axes[3].fill_between(K,
-                    p_slogdetcovs - p_slogdetcovs_neg_err,
+                    p_slogdetcovs + p_slogdetcovs_neg_err,
                     p_slogdetcovs + p_slogdetcovs_pos_err,
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             ])
+
+            self.axes[3].relim()
+            self.axes[3].autoscale_view()
 
         else:
             raise ValueError("what you tryin' to tell me?!")

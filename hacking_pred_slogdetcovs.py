@@ -5,7 +5,159 @@ import  scipy.optimize as op
 
 np.random.seed(42)
 
+import pickle
 
+with open("foo.pkl", "rb")  as fp:
+    x, y, logcovs =  pickle.load(fp)
+
+
+
+covs = np.array([np.exp(ea) for ea  in logcovs])
+
+xu = x
+yu = np.array([np.median(lc) for lc in logcovs])
+slogdets = np.array([np.sum(each) for each in logcovs])
+
+p0 = [slogdets[0]/x[0], 0.5, 0]
+
+np.random.seed(42)
+
+for N in range(3, 20):
+    indices = np.random.choice(np.arange(len(xu)), N, replace=False)
+    x_fit = xu[indices]
+    y_fit = slogdets[indices]/x_fit
+
+
+    def f(x, *params):
+        a, b, c = params
+        #print(params)
+        return a/(x - b) + c #c*x + d
+
+    bounds = np.asarray([
+        (y_fit.min(), 100 * y_fit.max()),
+        (-np.inf, np.inf),
+        (-np.inf, 0)
+    ], dtype=float).T
+
+    bounds = (-np.inf, np.inf)
+
+    def objective_function(p):
+        return np.sum((y_fit - f(x_fit, *p))**2)
+    print(N, p0, objective_function(p0))
+
+    p_opt, p_cov = op.curve_fit(f, x_fit, y_fit, p0=p0, maxfev=1000000,
+      bounds=bounds, sigma=x_fit.astype(float)**-1)
+
+
+    print(N, p_opt, objective_function(p_opt))
+
+
+
+    fig, axes = plt.subplots(2)
+    ax = axes[0]
+    ax.scatter(xu, yu)
+    ax.scatter(x_fit, y_fit, c='r')
+    ax.set_title("N = {}".format(N))
+
+    xi = np.linspace(xu[0], xu[-1], 1000)
+    ax.plot(xi, f(xi, *p_opt), c='r')
+
+    ax = axes[1]
+    ax.plot(xu, yu - f(xu, *p_opt))
+
+
+    # OK try use this to predict what we actually want.
+    fig, axes =  plt.subplots(2)
+    ax = axes[0]
+    ax.scatter(xu, slogdets)
+    ax.scatter(x_fit, y_fit * x_fit, c='r')
+    ax.plot(xu, f(xu, *p_opt) * xu, c='r')
+    ax.set_title("N = {}".format(N))
+
+    ax = axes[1]
+    ax.scatter(xu, slogdets  - f(xu, *p_opt) * xu)
+
+
+    p0 = list()
+    p0.extend(p_opt)
+
+raise a
+# Fit a spline to the residuals
+
+# just fit a spline.
+import scipy.interpolate
+
+knots = np.linspace(x_fit[0], x_fit[-1], 10)[1:-1]
+tck = scipy.interpolate.splrep(x_fit, y_fit - f(x_fit, *p_opt), t=knots, task=-1,
+  k=2)
+
+
+ax.plot(x, scipy.interpolate.splev(x, tck), c='r')
+
+raise a
+
+fig,  ax = plt.subplots()
+ax.scatter(x,  slogdets)
+ax.plot(x, scipy.interpolate.splev(x, tck), c='r')
+
+
+
+
+
+
+raise a
+
+raise a
+
+#yerr = np.array([np.std(lc) for lc in logcovs])
+
+"""
+fig, ax = plt.subplots()
+ax.scatter(x, x*yu)
+ax.fill_between(x, x*yu + x*yerr, x*yu - x*yerr, alpha=0.5)
+
+"""
+
+
+
+def slogdetcov(x, *params):
+    a, b, c = params
+    return x * (a * np.exp(b * x - c))
+
+target_K = np.arange(1, 111)
+
+p0 = [1, 0, 0]
+size = 30
+
+p_opt, p_cov = op.curve_fit(slogdetcov, xu, slogdets, p0=p0, maxfev=10000)
+
+p16, p84 = np.nanpercentile(np.array(
+  [slogdetcov(target_K, *p_draw) for p_draw in np.random.multivariate_normal(p_opt, p_cov, size=size)]),
+  [16, 84], axis=0)
+
+
+import matplotlib.pyplot as plt
+fig, axes = plt.subplots(2)
+ax = axes[0]
+
+
+ax.scatter(x, slogdets)
+ax.scatter([100], [-129])
+
+ax.plot(target_K, slogdetcov(target_K, *p_opt), c='b')
+#ax.fill_between(target_K, p16, p84, facecolor="b", alpha=0.5)
+
+ax = axes[1]
+ax.scatter(x, slogdets - slogdetcov(x, *p_opt), c='r')
+
+residual = slogdets - slogdetcov(x, *p_opt)
+residual = residual.flatten()
+
+fig, ax = plt.subplots()
+ax.scatter(x, residual)
+
+
+raise a
 for i in range(10):
 
     y, labels, target, kwds = utils.generate_data(K=100)
