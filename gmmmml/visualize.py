@@ -43,6 +43,7 @@ class VisualizationHandler(object):
 
         self.axes[1].set_xlabel("E-M iteration")
         self.axes[1].set_ylabel("I_actual")
+        self.axes[1].semilogy()
 
         self.axes[2].set_xlabel("K")
         self.axes[2].set_ylabel("I_predicted")
@@ -59,7 +60,7 @@ class VisualizationHandler(object):
         self.axes[5].set_ylabel(r"$\sum\log{w}$")
 
         self.axes[6].set_xlabel("K")
-        self.axes[6].set_ylabel(r"$\log{L}/\log{L_0}$")
+        self.axes[6].set_ylabel(r"$\sum\log{L}$")
 
         if target is not None:
             K_target = target["weight"].size
@@ -74,6 +75,11 @@ class VisualizationHandler(object):
             self.axes[3].scatter(
                 [K_target],
                 [np.sum(np.linalg.slogdet(target["cov"])[1])],
+                **target_kwds)
+
+            self.axes[6].scatter(
+                [K_target],
+                [-target["nll"]],
                 **target_kwds)
 
         for ax in self.axes:
@@ -181,7 +187,8 @@ class VisualizationHandler(object):
             if self._reference_ll is None:
                 self._reference_ll = ll
 
-            self.axes[6].scatter([K], [ll/self._reference_ll], facecolor="k")
+            # /self._reference_ll
+            self.axes[6].scatter([K], [ll], facecolor="k")
 
 
 
@@ -212,8 +219,8 @@ class VisualizationHandler(object):
             self._update_previous_predict_lls()
 
             K = params["K"]
-            p_ll = params["p_ll"]/self._reference_ll
-            p_ll_err = params["p_ll_err"]/self._reference_ll
+            p_ll = params["p_ll"]#/self._reference_ll
+            p_ll_err = params["p_ll_err"]#/self._reference_ll
 
             self._predict_ll.extend([
                 self.axes[6].plot(K, p_ll,
