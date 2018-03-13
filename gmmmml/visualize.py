@@ -28,6 +28,7 @@ class VisualizationHandler(object):
         self._predict_slw = []
         self._predict_ll = []
         self._predict_slogdetcovs = []
+        self._predict_message_lengths = []
 
         self._reference_ll = None
 
@@ -43,7 +44,6 @@ class VisualizationHandler(object):
 
         self.axes[1].set_xlabel("E-M iteration")
         self.axes[1].set_ylabel("I_actual")
-        self.axes[1].semilogy()
 
         self.axes[2].set_xlabel("K")
         self.axes[2].set_ylabel("I_predicted")
@@ -111,11 +111,13 @@ class VisualizationHandler(object):
     def _update_previous_predict_lls(self):
         L = len(self._predict_ll)
         for l in range(L):
-            item = self._model.pop(0)
-            #item.set_visible(False)
-            item.set_alpha(0.5)
-
-            #del item
+            item = self._predict_ll.pop(0)
+            try:
+                item.set_data([], [])
+            except AttributeError:
+                None
+            item.set_visible(False)
+            del item
 
 
     def _update_previous_predict_slogdetcovs(self):
@@ -129,10 +131,21 @@ class VisualizationHandler(object):
             item.set_visible(False)
             del item
 
+    def _update_previous_predict_message_lengths(self):
+        L = len(self._predict_message_lengths)
+        for l in range(L):
+            item  = self._predict_message_lengths.pop(0)
+            try:
+                item.set_data([], [])
+            except AttributeError:
+                None
+            item.set_visible(False)
+            del item
 
 
 
-    def emit(self, kind, params):
+
+    def emit(self, kind, params, save=True):
 
         
         if kind == "model":
@@ -252,11 +265,27 @@ class VisualizationHandler(object):
             self.axes[3].relim()
             self.axes[3].autoscale_view()
 
+        elif kind == "predict_message_length":
+
+            self._update_previous_predict_message_lengths()
+
+            K = params["K"]
+            p_I = params["p_I"]
+
+            self._predict_message_lengths.extend([
+                self.axes[1].plot(K, p_I, c='b', alpha=0.5)[0]
+            ])
+
+            self.axes[1].relim()
+            self.axes[1].autoscale_view()
+
+
         else:
             raise ValueError("what you tryin' to tell me?!")
 
         # Only save on model update.
-        self.savefig()
+        if save:
+            self.savefig()
 
         return None
 

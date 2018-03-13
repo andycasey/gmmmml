@@ -509,8 +509,9 @@ class GaussianMixture(object):
             
             if kwds["visualization_handler"] is not None:
 
-                target_K = weight.size + np.arange(1, 100)
-                self._predict_message_length(target_K, **kwds)
+                target_K = weight.size + np.arange(1, 200)
+                self._predict_message_length(target_K, cov, weight, y.shape[0], 
+                    ll, message_length, **kwds)
 
 
         return None
@@ -572,7 +573,7 @@ class GaussianMixture(object):
 
                 target_K = weight.size + np.arange(1, 10)
 
-                self._predict_message_length(target_K, **kwds)
+                self._predict_message_length(target_K, cov, weight, y.shape[0], ll, I, **kwds)
 
                 #visualization_handler.emit("predict", dict(model=self))
 
@@ -586,7 +587,7 @@ class GaussianMixture(object):
         raise a
 
 
-    def _predict_message_length(self, target_K, **kwargs):
+    def _predict_message_length(self, target_K, cov, weight, N, ll, I, **kwargs):
         """
         Predict the message lengths of future mixtures.
 
@@ -606,15 +607,41 @@ class GaussianMixture(object):
         p_slogdetcovs, p_slogdetcovs_pos_err, p_slogdetcovs_neg_err \
             = self._predict_slogdetcovs(target_K)
 
+
+        # Calculate predicted message lengths.
+        if p_ll is not None and p_slogdetcovs is not None:
+            current_K, D, _ = cov.shape
+
+            delta_K = target_K - current_K
+            delta_I = delta_K * (
+                (1 - D/2.0) * np.log(2) \
+                + 0.25 * (D * (D+3) + 2) * np.log(N/(2*np.pi))) \
+                + 0.5 * (D*(D+3)/2 - 1) * (p_slw - np.sum(np.log(weight))) \
+                - np.sum([np.log(current_K + dk) for dk in delta_K]) \
+                + 0.5 * np.log(_total_parameters(target_K, D)/_total_parameters(current_K, D)) \
+                + (D + 2)/2.0 * (p_slogdetcovs - np.sum(np.log(np.linalg.det(cov)))) \
+                - p_ll + np.sum(ll)
+
+            p_I = I + delta_I
+
+            assert weight.size < 25 or np.all(delta_I < 0), "Found the end?"
+
+        else:
+            p_I = None
+
+
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
+
             visualization_handler.emit("predict_slw",
-                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max))
+                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max),
+                save=p_ll is None and p_slogdetcovs is None and p_I is None)
 
             if p_ll is not None:
                 visualization_handler.emit("predict_ll",
-                    dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err))
+                    dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err),
+                    save=p_slogdetcovs is None)
 
             # Sometimes we don't predict the sum of the log of the determinants
             # of the covariance matrices.
@@ -622,11 +649,12 @@ class GaussianMixture(object):
                 visualization_handler.emit("predict_slogdetcov",
                     dict(K=target_K, p_slogdetcovs=p_slogdetcovs,
                         p_slogdetcovs_pos_err=p_slogdetcovs_pos_err,
-                        p_slogdetcovs_neg_err=p_slogdetcovs_neg_err))
+                        p_slogdetcovs_neg_err=p_slogdetcovs_neg_err),
+                    save=p_I is None)
 
-
-
-
+            if p_I is not None:            
+                visualization_handler.emit("predict_message_length",
+                    dict(K=target_K, p_I=p_I))
 
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood):
