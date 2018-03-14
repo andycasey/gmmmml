@@ -1,61 +1,14 @@
-# This Travis configuration file is a modification upon Dan Foreman-Mackey's
-# excellent setup. See http://dfm.io/posts/travis-latex/ for details.
+# Credit for this build setup goes to Dan Foreman-Mackey (github.com/dfm)
 
 sudo: false
-language: python
-
-env:
-    global:
-        - TEST_LANG='python'
-          
-matrix:
-    include:
-
-        # This build will compile the LaTeX source of the paper
-        - os: linux
-          env: TEST_LANG='paper'
-
-        # TODO: Include support for numpy versions 1.10 and 1.11
-        
-        # Linux, Python 2.7
-        #- os: linux
-        #  env: PYTHON_VERSION=2.7 NUMPY_VERSION=1.12
-
-        # Linux, Python 3.5
-        #- os: linux
-        #  env: PYTHON_VERSION=3.5 NUMPY_VERSION=1.12
-
-        # Linux, Python 3.6
-        #- os: linux
-        #  env: PYTHON_VERSION=3.6 NUMPY_VERSION=1.12
-
-        # OSX
-        #- os: osx
-        #  env: PYTHON_VERSION=2.7 NUMPY_VERSION=1.12
-        #- os: osx
-        #  env: PYTHON_VERSION=3.6 NUMPY_VERSION=1.12
 
 install:
-    - source .ci/travis.sh
+    - source .ci/install.sh
 
-script: |
-    if [[ $TEST_LANG == paper ]]
-    then
-      source .ci/build-papers.sh
-    elif [[ $TEST_LANG == python ]]
-    then
-      py.test -v --cov snob
-    fi
+script:
+    - source .ci/build.sh
 
 after_success: |
-    if [[ $TEST_LANG == python ]]
-    then
-      coveralls
+    if [[ "$PYTHON_VERSION" == "2.7" ]] && [ -n "$GITHUB_API_KEY" ]; then
+        source .ci/upload.sh
     fi
-
-notifications:
-  email:
-    recipients:
-      - andrew.casey@monash.edu
-    on_success: change
-    on_failure: change
