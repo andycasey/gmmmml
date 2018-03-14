@@ -167,28 +167,45 @@ def _approximate_log_likelihood_improvement(y, mu, cov, weight,
 
 
 
-def _approximate_sum_log_weights(target_K):
+def _bound_sum_log_weights(K, N):
     r"""
-    Return an approximate expectation of the function:
+    Return the analytical bounds of the function:
 
     .. math:
 
         \sum_{k=1}^{K}\log{w_k}
 
     Where :math:`K` is the number of mixtures, and :math:`w` is a multinomial
-    distribution. The approximating function is:
+    distribution. The bounded function for when :math:`w` are uniformly
+    distributed is:
 
     .. math:
 
-        \sum_{k=1}^{K}\log{w_k} \approx -K\log{K}
+        \sum_{k=1}^{K}\log{w_k} \lteq -K\log{K}
 
-    :param target_K:
+    and in the other extreme case, all the weight would be locked up in one
+    mixture, with the remaining :math:`w` values encapsulating the minimum
+    (physically realistic) weight of one data point. In that extreme case,
+    the bound becomes:
+
+    .. math:
+
+        \sum_{k=1}^{K}\log{w_k} \gteq log{(N + 1 - K)} - K\log{N}
+
+    :param K:
         The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :returns:
+        The lower and upper bound on :math:`\sum_{k=1}^{K}\log{w_k}`.
     """
 
-    # TODO: Return a variance on this expectation, or approximate the constant
-    #       from previous values.
-    return -target_K * np.log(target_K)
+    upper = -K * np.log(K)
+    lower = np.log(N + 1 - K) - K * np.log(N)
+
+    return (lower, upper)
 
 
 
@@ -582,7 +599,7 @@ class GaussianMixture(object):
 
         target_K = np.atleast_1d(target_K)
 
-        p_slw, p_slw_err, p_slw_max = self._predict_slogweights(target_K)
+        p_slw, p_slw_err, p_slw_min, p_slw_max = self._predict_slogweights(target_K, N)
 
         # Predict log-likelihoods.
         p_ll, p_ll_err = self._predict_log_likelihoods(target_K)
@@ -621,7 +638,8 @@ class GaussianMixture(object):
         if visualization_handler is not None:
 
             visualization_handler.emit("predict_slw",
-                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max),
+                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max,
+                    p_slw_min=p_slw_min),
                 save=p_ll is None and p_slogdetcovs is None and p_I is None)
 
             if p_ll is not None:
@@ -673,9 +691,9 @@ class GaussianMixture(object):
 
 
 
-    def  _predict_slogweights(self, target_K):
+    def  _predict_slogweights(self, target_K, N):
 
-        max_y_bound = _approximate_sum_log_weights(target_K)
+        lower_bound, upper_bound = _bound_sum_log_weights(target_K, N)
 
         x_unique, y_unique = _group_over(
             self._state_K, self._state_slog_weights, np.min)
@@ -696,10 +714,10 @@ class GaussianMixture(object):
                 pred_err = np.nan * np.ones((2, target_K.size))
 
         else:
-            pred = max_y_bound
+            pred = upper_bound
             pred_err = np.nan * np.ones((2, pred.size))
 
-        return (pred, pred_err, max_y_bound)
+        return (pred, pred_err, lower_bound, upper_bound)
 
 
 
@@ -1090,8 +1108,24 @@ def responsibility_matrix(y, mu, cov, weight, covariance_type,
     with np.errstate(under="ignore"):
         log_responsibility = weighted_log_prob - log_likelihood[:, np.newaxis]
 
-    raise a
 
+    # First order estimate of best possible log-likelihood.
+    """
+    N, D = y.shape
+    K = weight.size
+    # most things will be chi-sq ~ 3 away (per dim) from most K means
+    lp = np.ones((N, K)) * D * 3
+    # just assign each object to one thing
+    lp[:, 0] = D
+
+    lgp = -0.5 * (D * np.log(2 * np.pi) + lp) + np.log(np.linalg.det(cov))
+    wlp = np.log(weight) + lgp
+
+    foo = scipy.misc.logsumexp(wlp, axis=1)
+    bar = np.sum(foo)
+
+    """
+    
     responsibility = np.exp(log_responsibility).T
     
     if kwargs.get("dofail", False):

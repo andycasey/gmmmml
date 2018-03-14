@@ -215,6 +215,7 @@ class VisualizationHandler(object):
             p_slw = params["p_slw"]
             p_slw_err = params["p_slw_err"]
             p_slw_max = params["p_slw_max"]
+            p_slw_min = params["p_slw_min"]
 
             self._predict_slw.extend([
                 self.axes[5].plot(K, p_slw, 
@@ -222,8 +223,8 @@ class VisualizationHandler(object):
                 self.axes[5].fill_between(
                     K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1),
-                self.axes[5].plot(K, p_slw_max,
-                    c=self._color_prediction, linestyle="--", zorder=-1)[0]
+                self.axes[5].fill_between(K, p_slw_min, p_slw_max,
+                    facecolor="#666666", alpha=0.5, zorder=-1)
             ])
 
 
