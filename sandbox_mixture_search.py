@@ -8,7 +8,19 @@ np.random.seed(11)
 
 for i in range(10):
 
-    y, labels, target, kwds = utils.generate_data(center_box=(-100, 100))
+    j = 0
+    while True:
+        print(i, j)
+        j += 1
+        try:
+            
+            y, labels, target, kwds = utils.generate_data(K=30, D=10, center_box=(-1000, 1000))
+
+        except:
+            continue
+
+        else:
+          break
 
     visualization_handler = visualize.VisualizationHandler(
         y, target=target, figure_path="tmp/")

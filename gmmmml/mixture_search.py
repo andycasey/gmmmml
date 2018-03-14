@@ -662,6 +662,8 @@ class GaussianMixture(object):
             I, I_parts = _mixture_message_length(self._state_K, N, D,
                 self._state_slog_likelihoods, slogdetcovs)
 
+            #I, I_parts = _mixture_message_length(target_K, N, D, p_ll, p_slw)
+
             visualization_handler.emit("show_mml", 
                 dict(K=self._state_K, I=I, I_parts=I_parts))
 
