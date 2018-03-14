@@ -7,8 +7,9 @@ install:
 
 script:
     - source .ci/build.sh
+    - echo $PYTHON_VERSION
 
 after_success: |
-    if [[ "$PYTHON_VERSION" == "2.7" ]] && [ -n "$GITHUB_API_KEY" ]; then
+    if [ -n "$GITHUB_API_KEY" ]; then
         source .ci/upload.sh
     fi
