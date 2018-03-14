@@ -1,5 +1,7 @@
 .gitignore
 .DS_Store
 
+gmmmml/__pycache__/
+
 article/vc.tex
 article/ms.pdf
