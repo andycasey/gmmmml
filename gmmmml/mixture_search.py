@@ -509,7 +509,7 @@ class GaussianMixture(object):
             
             if kwds["visualization_handler"] is not None:
 
-                target_K = weight.size + np.arange(1, 200)
+                target_K = weight.size + np.arange(1, 25)
                 self._predict_message_length(target_K, cov, weight, y.shape[0], 
                     ll, message_length, **kwds)
 
@@ -624,7 +624,7 @@ class GaussianMixture(object):
 
             p_I = I + delta_I
 
-            assert weight.size < 25 or np.all(delta_I < 0), "Found the end?"
+            #assert weight.size < 25 or np.all(delta_I < 0), "Found the end?"
 
         else:
             p_I = None
@@ -803,8 +803,12 @@ class GaussianMixture(object):
         x, y = (Ku, sldcu/Ku)
 
         p0 = self._state_meta.get("_predict_slogdetcovs_p0", [y[0], 0.5, 0])
-        p_opt, p_cov = op.curve_fit(_approximate_ldc_per_mixture_component, x, y,
-            p0=p0, maxfev=100000, sigma=x.astype(float)**-1)
+        try:
+            p_opt, p_cov = op.curve_fit(_approximate_ldc_per_mixture_component,
+                x, y, p0=p0, maxfev=100000, sigma=x.astype(float)**-2)
+
+        except RuntimeError:
+            return (None, None, None)
 
         # Save optimized point for next iteration.
         self._state_meta["_predict_slogdetcovs_p0"] = p_opt

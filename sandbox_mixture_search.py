@@ -3,18 +3,18 @@ import numpy as np
 from gmmmml import (mixture_search as mixture, visualize, utils)
 import  scipy.optimize as op
 
-np.random.seed(42)
+np.random.seed(11)
 
 
 for i in range(10):
 
-    y, labels, target, kwds = utils.generate_data(K=100)
+    y, labels, target, kwds = utils.generate_data(center_box=(-100, 100))
 
     visualization_handler = visualize.VisualizationHandler(
         y, target=target, figure_path="tmp/")
 
     search_model = mixture.GaussianMixture()
-    search_model.kmeans_search(y, kwds["centers"] + 10, 
+    search_model.kmeans_search(y, K_max=kwds["centers"] + 25, 
         visualization_handler=visualization_handler)
 
 

@@ -37,10 +37,10 @@ class VisualizationHandler(object):
         self.axes = np.array(self.axes).flatten()
         self._display = True
 
-        self.axes[0].scatter(y.T[0], y.T[1], facecolor="k", alpha=0.5)
+        self.axes[0].scatter(y.T[0], y.T[1], facecolor="k", s=1, alpha=0.5)
 
-        self.axes[0].set_xlabel("Data X")
-        self.axes[0].set_ylabel("Data Y")
+        self.axes[0].set_xlabel(r"$x_0$")
+        self.axes[0].set_ylabel(r"$x_1$")
 
         self.axes[1].set_xlabel("E-M iteration")
         self.axes[1].set_ylabel("I_actual")
@@ -169,28 +169,28 @@ class VisualizationHandler(object):
                 # Show 2 standard deviations
                 width, height = 2 * 2 * np.sqrt(vals)
                 ellip = Ellipse(xy=mean, width=width, height=height, angle=theta,
-                    facecolor="r", alpha=0.5)
+                    facecolor="r", alpha=0.1)
 
                 self._model.append(self.axes[0].add_artist(ellip))
-                self._model.append(self.axes[0].scatter([mean[0]], [mean[1]], facecolor="r"))
+                self._model.append(self.axes[0].scatter([mean[0]], [mean[1]], facecolor="r", s=1))
 
             
             K = params["weight"].size
             slogdet_cov = np.sum(np.log(np.linalg.det(params["cov"])))
             log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
 
-            self.axes[3].scatter([K], [slogdet_cov], facecolor="k")
+            self.axes[3].scatter([K], [slogdet_cov], facecolor="k", s=1)
 
-            self.axes[4].scatter([K], [log_mean_det_cov], facecolor="k", alpha=0.5)
+            self.axes[4].scatter([K], [log_mean_det_cov], facecolor="k", alpha=0.5, s=1)
 
             sum_log_weights = np.sum(np.log(params["weight"]))
-            self.axes[5].scatter([K], [sum_log_weights], facecolor="k", alpha=0.5)
+            self.axes[5].scatter([K], [sum_log_weights], facecolor="k", alpha=0.5, s=1)
 
 
         elif kind == "expectation":
             self.axes[1].scatter(
                 [self._expectation_iter], [params["message_length"]],
-                facecolor="k")
+                facecolor="k", s=1)
             self._expectation_iter += 1
 
             # plot LL as well
@@ -201,7 +201,7 @@ class VisualizationHandler(object):
                 self._reference_ll = ll
 
             # /self._reference_ll
-            self.axes[6].scatter([K], [ll], facecolor="k")
+            self.axes[6].scatter([K], [ll], facecolor="k", s=1)
 
 
 
@@ -254,6 +254,7 @@ class VisualizationHandler(object):
             p_slogdetcovs_pos_err = params["p_slogdetcovs_pos_err"]
             p_slogdetcovs_neg_err = params["p_slogdetcovs_neg_err"]
 
+            """
             self._predict_slogdetcovs.extend([
                 self.axes[3].plot(K, p_slogdetcovs, c=self._color_prediction)[0],
                 self.axes[3].fill_between(K,
@@ -264,6 +265,7 @@ class VisualizationHandler(object):
 
             self.axes[3].relim()
             self.axes[3].autoscale_view()
+            """
 
         elif kind == "predict_message_length":
 
