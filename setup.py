@@ -19,7 +19,7 @@ def read(filename):
 # Get the version information.
 here = path.abspath(path.dirname(__file__))
 vre = re_compile("__version__ = \"(.*?)\"")
-version = vre.findall(read(path.join(here, "snob", "__init__.py")))[0]
+version = vre.findall(read(path.join(here, "gmmmml", "__init__.py")))[0]
 
 setup(
     name="gmmmml",
@@ -33,10 +33,7 @@ setup(
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.6",
-        "Topic :: Scientific/Engineering :: Astronomy",
-        "Topic :: Scientific/Engineering :: Physics"
+        "Programming Language :: Python :: 3.6"
     ],
     packages=find_packages(exclude=["tests"]),
     install_requires=["numpy", "scipy", "matplotlib", "sklearn", "six"],
