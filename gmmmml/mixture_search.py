@@ -75,7 +75,7 @@ def _total_parameters(K, D):
     :returns:
         The total number of model parameters, :math:`Q`.
     """
-    return (0.5 * D * (D + 3) * K) + (K - 1)
+    return (0.5 * D * (D + 3) * K) + K - 1
 
 
 def _generator_for_approximate_log_likelihood_improvement(K, log_likelihood,
@@ -265,98 +265,81 @@ def _approximate_bound_sum_log_determinate_covariances(target_K,
     return all_approx_slogdet_covs[keep]
 
 
-def _approximate_bounds_of_slogdet_cov_for_added_mixture(determinates):
-
-    determinates = np.atleast_1d(determinates)
-
-    #determinates = np.linalg.det(covariance_matrices)
-    current_K = determinates.size
-
-    # Two extremes: either the biggest one splits in ~half, or the smallest
-    # one will split in ~half
-
-    idx_min, idx_max = (np.argmin(determinates), np.argmax(determinates))
-
-    mask_min = np.ones(current_K, dtype=bool)
-    mask_max = np.ones(current_K, dtype=bool)
-
-    mask_min[idx_min] = False
-    mask_max[idx_max] = False
-
-    min_dets = np.hstack([determinates[mask_min], 
-        0.5 * determinates[idx_min], 0.5 * determinates[idx_min]])
-    max_dets = np.hstack([determinates[mask_max],
-        0.5 * determinates[idx_max], 0.5 * determinates[idx_max]])
-    min_slogdets = np.sum(np.log(min_dets))
-    max_slogdets = np.sum(np.log(max_dets))
-
-    return (min_slogdets, max_slogdets), (min_dets, max_dets)
 
 
+def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None, 
+    yerr=0.001):
+    """
+    Estimate the message length of a gaussian mixture model.
 
+    :param K:
+        The number of mixtures. This can be an array.
 
+    :param N:
+        The number of data points.
+    
+    :param D:
+        The dimensionality of the data.
 
+    :param log_likelihood:
+        The estimated sum of the log likelihood of the future mixtures.
 
-def _approximate_slogdets(K, covariance_matrices, covariance_type="full"):
-    r"""
-    Approximate the sum of the log of the determinates of the covariance 
-    matrices for a mixture of :math:`K` gaussians based on the current estimate
-    of the covariance matrices.
+    :param slogdetcov:
+        The estimated sum of the log of the determinant of the covariance 
+        matrices of the future mixtures.
 
-    We approximate this by stating that the log of the mean of the determinate
-    of the covariance matrices will decrease approximately as K/(K + 1).
-    You should re-read that sentence again because it is easy to confuse it!
+    :param weights: [optional]
+        The estimated weights of future mixtures. If `None` is given then the
+        upper bound for a losslessly-encoded multinomial distribution of values
+        will be used to calculate the message length:
+
+        .. math:
+
+            \sum_{k=1}^{K}\log{w_k} \approx -K\log{K}
+
+    :param yerr: [optional]
+        The homoscedastic noise in y for each data point.
     """
 
     K = np.atleast_1d(K)
-
-    # Get current_K
-    covariance_matrices = np.atleast_3d(covariance_matrices)
-    current_K = covariance_matrices.shape[0]
-
-    current_log_mean_det = np.log(np.mean(np.linalg.det(covariance_matrices)))
-
-    # Assume that the log of the mean determinate of the covariance matrices
-    # decreases approximately as (K/K + 1)
-    mean_det = np.exp(float(current_K)/K * current_log_mean_det)
-
-    return np.log(K * mean_det)
+    slogdetcov = np.atleast_1d(slogdetcov)
+    log_likelihood = np.atleast_1d(log_likelihood)
     
+    if K.size != slogdetcov.size:
+        raise ValueError("the size of K and slogdetcov are different")
 
+    if K.size != log_likelihood.size:
+        raise ValueError("the size of K and log_likelihood are different")
 
-def _approximate_message_length_change(target_K, current_weights,
-    current_cov, current_log_likelihood, N, initial_ll, normalization_factor, optimized_mixture_lls,
-    current_ml=0):
-    r"""
-    Estimate the change in message length between the current mixture of 
-    Gaussians, and a target mixture.
-    """
+    # Calculate the different contributions of the message length so we can
+    # predict them.
+    if weights is not None:
+        w_size = np.array([len(w) for w in weights])
+        if not np.all(w_size == K):
+            raise ValueError("the size of the weights does not match K")
+        slogw = np.array([np.sum(np.log(w)) for w in weights])
+    else:
+        slogw = -K * np.log(K)
 
-    func = _generator_for_approximate_log_likelihood_improvement(1, initial_ll,
-        normalization_factor, *np.hstack([optimized_mixture_lls, current_log_likelihood]))
+    Q = _total_parameters(K, D)
 
-    current_K, D, _ = current_cov.shape
-    delta_K = target_K - current_K
-    assert delta_K > 0
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + scipy.special.gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+    
+    I_data = -log_likelihood - D * N * np.log(yerr)
+    I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
+    I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
 
-    # Calculate everything except the log likelihood.
-    delta_I = delta_K * (
-            (1 - D/2.0) * np.log(2) \
-            + 0.25 * (D * (D+3) + 2) * np.log(N/(2*np.pi))) \
-        + 0.5 * (D*(D+3)/2 - 1) * (_approximate_sum_log_weights(target_K) - np.sum(np.log(current_weights))) \
-        - np.sum([np.log(current_K + dk) for dk in range(delta_K)]) \
-        + 0.5 * np.log(_total_parameters(target_K, D)/float(_total_parameters(current_K, D))) \
-        + (D + 2)/2.0 * (
-            _approximate_bound_sum_log_determinate_covariances(target_K, current_cov, "full") \
-            - np.sum(np.log(np.linalg.det(current_cov)))) \
-        - func(target_K) + current_log_likelihood
-    # Generate a function.
-    print("PREDICTING TARGET {} FROM {}: {}".format(target_K, current_weights.size, delta_I))
-    if delta_K == 1:
-        assert np.all(delta_I + current_ml > 0)
+    I_parts = dict(
+        I_mixtures=I_mixtures, I_parameters=I_parameters, 
+        I_data=I_data, I_slogdetcovs=I_slogdetcovs, 
+        I_weights=I_weights)
 
-    return delta_I
+    I = np.sum([I_mixtures, I_parameters, I_data, I_slogdetcovs, I_weights],
+        axis=0) # [nats]
 
+    return (I, I_parts)
 
 
 
@@ -499,6 +482,7 @@ class GaussianMixture(object):
 
             except ValueError:
                 logger.exception("Failed to calculate E-step")
+                raise 
                 continue
 
 
@@ -608,10 +592,11 @@ class GaussianMixture(object):
             = self._predict_slogdetcovs(target_K)
 
 
+        current_K, D, _ = cov.shape
+
         # Calculate predicted message lengths.
         if p_ll is not None and p_slogdetcovs is not None:
-            current_K, D, _ = cov.shape
-
+            
             delta_K = target_K - current_K
             delta_I = delta_K * (
                 (1 - D/2.0) * np.log(2) \
@@ -625,6 +610,7 @@ class GaussianMixture(object):
             p_I = I + delta_I
 
             #assert weight.size < 25 or np.all(delta_I < 0), "Found the end?"
+
 
         else:
             p_I = None
@@ -651,6 +637,15 @@ class GaussianMixture(object):
                         p_slogdetcovs_pos_err=p_slogdetcovs_pos_err,
                         p_slogdetcovs_neg_err=p_slogdetcovs_neg_err),
                     save=p_I is None)
+
+
+
+            slogdetcovs = [np.sum(np.log(ea)) for ea in self._state_det_covs]
+            I, I_parts = _mixture_message_length(self._state_K, N, D,
+                self._state_slog_likelihoods, slogdetcovs)
+
+            visualization_handler.emit("show_mml", 
+                dict(K=self._state_K, I=I, I_parts=I_parts))
 
             if p_I is not None:            
                 visualization_handler.emit("predict_message_length",
@@ -1095,6 +1090,7 @@ def responsibility_matrix(y, mu, cov, weight, covariance_type,
     with np.errstate(under="ignore"):
         log_responsibility = weighted_log_prob - log_likelihood[:, np.newaxis]
 
+    raise a
 
     responsibility = np.exp(log_responsibility).T
     
@@ -1268,8 +1264,13 @@ def _expectation(y, mu, cov, weight, **kwargs):
 
     nll = -np.sum(log_likelihood)
 
-    I = _message_length(y, mu, cov, weight, responsibility, nll, **kwargs)
-    
+    #I = _message_length(y, mu, cov, weight, responsibility, nll, **kwargs)
+    K = weight.size
+    N, D = y.shape
+    slogdetcov = np.sum(np.linalg.slogdet(cov)[1])
+    I, I_parts = _mixture_message_length(K, N, D, -nll, slogdetcov, 
+        weights=[weight])
+
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
         visualization_handler.emit("expectation", dict(
@@ -1405,6 +1406,11 @@ def _message_length(y, mu, cov, weight, responsibility, nll,
         print(part1, part2)
 
         raise a
+
+
+    #I_check = _predict_mixture_message_length(M, N, D, -nll, np.sum(log_det_cov), [weight])
+
+    #raise a
 
     if full_output:
         return (I, dict(I_m=I_m, I_w=I_w, log_F_m=log_F_m, nll=nll, I_l=Il, I_t=I_t,

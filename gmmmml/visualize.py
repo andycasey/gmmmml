@@ -67,7 +67,7 @@ class VisualizationHandler(object):
                 
             target_kwds = dict(facecolor=self._color_target, s=50, alpha=0.5)
 
-            self.axes[1].scatter([K_target], [target["I"]], **target_kwds)
+            #self.axes[1].scatter([K_target], [target["I"]], **target_kwds)
 
             self.axes[5].scatter(
                 [K_target], [np.sum(np.log(target["weight"]))], **target_kwds)
@@ -274,12 +274,21 @@ class VisualizationHandler(object):
             K = params["K"]
             p_I = params["p_I"]
 
-            self._predict_message_lengths.extend([
-                self.axes[1].plot(K, p_I, c='b', alpha=0.5)[0]
-            ])
+            #self._predict_message_lengths.extend([
+            #    self.axes[1].plot(K, p_I, c='b', alpha=0.5)[0]
+            #])
 
             self.axes[1].relim()
             self.axes[1].autoscale_view()
+
+
+        elif kind == "show_mml":
+
+            K = params["K"]
+            I = params["I"]
+            I_parts = params["I_parts"]
+
+            self.axes[1].plot(K, I, c='g')
 
 
         else:
