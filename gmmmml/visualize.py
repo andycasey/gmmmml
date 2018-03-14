@@ -246,6 +246,29 @@ class VisualizationHandler(object):
             #    ])
 
 
+        elif kind == "predict_ll2":
+
+            K = params["K"]
+            p_ll = params["p_ll"]
+
+            self.axes[6].plot(K, p_ll, c="g", alpha=0.5, zorder=-1)
+
+        elif kind == "predict_ll3":
+
+            K = params["K"]
+            p_ll = params["p_ll"]
+
+            self.axes[6].plot(K, p_ll, c="r", alpha=0.25, zorder=0)
+
+
+        elif kind == "predict_ll4":
+
+            K = params["K"]
+            p_ll = params["p_ll"]
+            
+            self.axes[6].plot(K, p_ll, c="m", alpha=0.25, zorder=0)
+
+
         elif kind == "predict_slogdetcov":
 
             self._update_previous_predict_slogdetcovs()
@@ -255,7 +278,6 @@ class VisualizationHandler(object):
             p_slogdetcovs_pos_err = params["p_slogdetcovs_pos_err"]
             p_slogdetcovs_neg_err = params["p_slogdetcovs_neg_err"]
 
-            """
             self._predict_slogdetcovs.extend([
                 self.axes[3].plot(K, p_slogdetcovs, c=self._color_prediction)[0],
                 self.axes[3].fill_between(K,
@@ -266,7 +288,6 @@ class VisualizationHandler(object):
 
             self.axes[3].relim()
             self.axes[3].autoscale_view()
-            """
 
         elif kind == "predict_message_length":
 

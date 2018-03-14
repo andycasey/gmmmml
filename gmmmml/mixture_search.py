@@ -78,95 +78,6 @@ def _total_parameters(K, D):
     return (0.5 * D * (D + 3) * K) + K - 1
 
 
-def _generator_for_approximate_log_likelihood_improvement(K, log_likelihood,
-    normalization_factor, *log_likelihoods_of_sequentially_increasing_mixtures):
-    
-    x = np.arange(K, K + len(log_likelihoods_of_sequentially_increasing_mixtures))
-    ll = np.hstack([
-        log_likelihood, 
-        log_likelihoods_of_sequentially_increasing_mixtures])
-    y = np.diff(ll) / normalization_factor
-
-    functions = {
-        1: lambda x, *p: p[0] / np.exp(x),
-        2: lambda x, *p: p[0] / np.exp(p[1] * x),
-        3: lambda x, *p: p[0] / np.exp(p[1] * x) + p[2]
-    }
-
-    foo = False
-    if x.size > 3:
-        #x = x[1:]
-        #y = y[1:]
-        foo = True
-
-    p_opt_ = []
-    for d in np.arange(1, 1 + x.size)[::-1]:
-
-        cost_function = functions.get(d, functions[3])
-        p0 = np.ones(d)
-
-        try:
-            p_opt, p_cov = op.curve_fit(cost_function, x, y, p0=p0)
-        except:
-            assert d > 1
-            continue
-        else:
-            p_opt_.append(p_opt)
-            break
-
-    p_opt = p_opt_.pop(0)
-    d = p_opt.size
-    cost_function = functions.get(d, functions[3])
-
-    generating_function = lambda target_K: log_likelihood \
-        + cost_function(np.arange(1, target_K), *p_opt).sum() * normalization_factor
-
-    if False and foo and x.size > 10:
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.scatter(np.arange(ll.size) + 1, ll)
-        ax.plot(np.arange(ll.size) + 1, [generating_function(_) for _ in np.arange(ll.size) + 1], c='r')
-        raise a
-
-    return generating_function
-
-
-
-def _approximate_log_likelihood_improvement(y, mu, cov, weight, 
-    log_likelihood, *log_likelihoods_of_sequentially_increasing_mixtures):
-    """
-    Return a function that will approximate the log-likelihood value for a
-    given target number of mixtures.
-    """
-
-    # Evaluate the current mixture.
-    K = weight.size
-    evaluate_f1 = np.sum(weight * np.vstack(
-        [_evaluate_gaussian(y, mu[k], cov[k]) for k in range(K)]).T)
-
-    x = np.arange(K, K + len(log_likelihoods_of_sequentially_increasing_mixtures))
-    ll = np.hstack([log_likelihood, log_likelihoods_of_sequentially_increasing_mixtures])
-    y = np.diff(ll) / evaluate_f1
-
-    d = x.size
-    functions = {
-        1: lambda x, *p: p[0] / np.exp(x),
-        2: lambda x, *p: p[0] / np.exp(p[1] * x),
-        3: lambda x, *p: p[0] / np.exp(p[1] * x) + p[2]
-    }
-    cost_function = functions.get(d, functions[3])
-    p0 = np.ones(d)
-
-    p_opt, p_cov = op.curve_fit(cost_function, x, y, p0=p0)
-    
-    # Now generate the function to estimate the log-likelihood of the K-th
-    # mixture.
-    generating_function = lambda K: log_likelihood + cost_function(np.arange(1, K-1), *p_opt).sum() * evaluate_f1
-
-    return generating_function
-
-
-
 def _bound_sum_log_weights(K, N):
     r"""
     Return the analytical bounds of the function:
@@ -207,6 +118,54 @@ def _bound_sum_log_weights(K, N):
 
     return (lower, upper)
 
+
+
+def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
+    """
+    Calculate a first-order approximation of the log-likelihood for the
+    :math:`K`-th mixture.
+
+    :param K:
+        The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data points.
+
+    :param logdetcovs:
+        The natural logarithm of the determinant of the covariance matrices of
+        the :math:`K`-th mixtures. If :math:`K` is like a list, then the
+        length of `logdetcovs` must match the size of `K`.
+
+    :param weights:
+        The weights of the :math:`K`-th mixtures. 
+
+    """
+    K = np.atleast_1d(K)
+    log_likelihoods = np.zeros(K.size)
+
+    if weights is None:
+        print("using uniform assumption")
+        weights = [np.ones(k, dtype=float)/N for k in K]
+    
+    for i, (k, logdetcov, weight) in enumerate(zip(K, logdetcovs, weights)):
+        # most things will be chi-sq ~ 3 away (per dim) from most K means
+        log_prob = np.ones((N, k)) * D * 3
+        # just assign each object to one mixture, where we would expect the 
+        # chi-sq value to be approximately 1 per dimension D
+        log_prob[:, 0] = D
+
+        weighted_log_prob = np.log(weight) + logdetcov \
+            - 0.5 * (D * np.log(2 * np.pi) + log_prob)
+
+        log_likelihoods[i] = np.sum(
+            scipy.misc.logsumexp(weighted_log_prob, axis=1))
+
+    if not np.all(np.isfinite(log_likelihoods)):
+        logger.warn("Non-finite predictions of the log-likelihood!")
+    return log_likelihoods
 
 
 def _approximate_bound_sum_log_determinate_covariances(target_K, 
@@ -414,6 +373,7 @@ class GaussianMixture(object):
         # Lists to record states for predictive purposes.
         self._state_K = []
         self._state_det_covs = []
+        self._state_weights = []
         self._state_slog_weights = []
         self._state_slog_likelihoods = []
 
@@ -667,6 +627,31 @@ class GaussianMixture(object):
             visualization_handler.emit("show_mml", 
                 dict(K=self._state_K, I=I, I_parts=I_parts))
 
+            # First order estimate of best possible log-likelihood.
+            p_ll = _approximate_log_likelihood(self._state_K, N, D, 
+                [np.log(ea) for ea in self._state_det_covs])
+
+            visualization_handler.emit("predict_ll2",
+                dict(K=self._state_K, p_ll=p_ll, save=True))
+
+
+            if p_slogdetcovs is not None and p_slw is not None:
+
+
+
+                p_ll = _approximate_log_likelihood(target_K, N, D,
+                    p_slogdetcovs/target_K, p_slw/target_K)
+
+                if target_K[0] > 20:
+                    assert np.all(np.isfinite(p_ll))
+
+                visualization_handler.emit("predict_ll3",
+                    dict(K=target_K, p_ll=p_ll), save=True)
+
+            #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
+
+
+
             if p_I is not None:            
                 visualization_handler.emit("predict_message_length",
                     dict(K=target_K, p_I=p_I))
@@ -685,6 +670,7 @@ class GaussianMixture(object):
         self._state_det_covs.append(determinates)
 
         # Record sum of the log of the weights.
+        self._state_weights.append(weight)
         self._state_slog_weights.append(np.sum(np.log(weight)))
 
         # Record log likelihood
@@ -1110,23 +1096,6 @@ def responsibility_matrix(y, mu, cov, weight, covariance_type,
     with np.errstate(under="ignore"):
         log_responsibility = weighted_log_prob - log_likelihood[:, np.newaxis]
 
-
-    # First order estimate of best possible log-likelihood.
-    """
-    N, D = y.shape
-    K = weight.size
-    # most things will be chi-sq ~ 3 away (per dim) from most K means
-    lp = np.ones((N, K)) * D * 3
-    # just assign each object to one thing
-    lp[:, 0] = D
-
-    lgp = -0.5 * (D * np.log(2 * np.pi) + lp) + np.log(np.linalg.det(cov))
-    wlp = np.log(weight) + lgp
-
-    foo = scipy.misc.logsumexp(wlp, axis=1)
-    bar = np.sum(foo)
-
-    """
     
     responsibility = np.exp(log_responsibility).T
     
