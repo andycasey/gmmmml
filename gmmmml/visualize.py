@@ -92,10 +92,11 @@ class VisualizationHandler(object):
                 
             target_kwds = dict(facecolor=self._color_target, s=5, zorder=100)
 
-            self.ax_slogw.scatter(
-                [K_target], [np.sum(np.log(target["weight"]))], **target_kwds)
 
             D = target["mean"].shape[1]
+            self.ax_slogw.scatter(
+                [K_target], [(0.25 * D * (D + 3) - 0.5) * np.sum(np.log(target["weight"]))], **target_kwds)
+
             self.ax_slogdet.scatter(
                 [K_target],
                 [-0.5 * (D + 2) * np.sum(np.linalg.slogdet(target["cov"])[1])],
@@ -226,7 +227,8 @@ class VisualizationHandler(object):
             slogdet_cov = - 0.5 * (D + 2) * np.sum(np.log(np.linalg.det(params["cov"])))
             log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
 
-            self._data_slw.append([K, np.sum(np.log(params["weight"]))])
+            self._data_slw.append([K, 
+                (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(params["weight"]))])
             self._show_slw_data.set_offsets(np.array(self._data_slw))
             self._show_slw_data.set_facecolor("k") # Needed to make them update.
             self._show_slw_data.set_sizes(5 * np.ones(len(self._data_slw)))
@@ -277,8 +279,9 @@ class VisualizationHandler(object):
             self._update_previous_predict_slws()
 
             K = params["K"]
-            p_slw = params["p_slw"]
-            p_slw_err = params["p_slw_err"]
+            D = params["D"]
+            p_slw = (0.25 * D * (D + 3) - 0.5) * params["p_slw"]
+            p_slw_err = (0.25 * D * (D + 3) - 0.5) * params["p_slw_err"]
             
             self._predict_slw.extend([
                 self.ax_slogw.plot(K, p_slw, 
@@ -295,7 +298,9 @@ class VisualizationHandler(object):
             self._clear_previous_items(self._predict_slw_bounds)
 
             K, lower, upper = (params["K"], params["lower"], params["upper"])
-
+            D = params["D"]
+            lower = (0.25 * D * (D + 3) - 0.5) * lower
+            upper = (0.25 * D * (D + 3) - 0.5) * upper
             plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
                 linewidth=0.5)
 

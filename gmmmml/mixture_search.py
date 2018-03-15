@@ -148,19 +148,19 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
 
     if weights is None:
         print("using uniform assumption")
-        weights = [np.ones(k, dtype=float)/N for k in K]
+        weights = [np.ones(k, dtype=float)/k for k in K]
     
     for i, (k, logdetcov, weight) in enumerate(zip(K, logdetcovs, weights)):
         # most things will be chi-sq ~ 5 away (per dim) from most K means
         # TODO: my intuition is that this should be D * 5, but that doesn't
         # seem to come out through experiment.
-        log_prob = np.ones((N, k)) * 5
+        log_prob = np.ones((N, k)) * 3
         # just assign each object to one mixture, where we would expect the 
         # chi-sq value to be approximately 1 per dimension D
         for j, w in enumerate(weight):
             Nk = int(np.round(w * N))
             # TODO: I feel like this should be 1 * D,.... as per above.
-            log_prob.T[j, np.arange(Nk)] = 1 
+            log_prob.T[j, np.arange(Nk)] = 1
 
         #log_prob[:, 0] = D
 
@@ -173,6 +173,58 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
     if not np.all(np.isfinite(log_likelihoods)):
         logger.warn("Non-finite predictions of the log-likelihood!")
     return log_likelihoods
+
+
+def _approximate_log_likelihood_bounds(K, N, D, logdetcov_bounds):
+
+    chisq_scalar = 1
+
+    K = np.atleast_1d(K)
+    log_likelihoods = np.zeros((K.size, 4))
+    logdetcov_lower_bound, logdetcov_upper_bound = logdetcov_bounds
+    
+    for i, (k, logdetcov_lower, logdetcov_upper) \
+    in enumerate(zip(K.astype(int), logdetcov_lower_bound, logdetcov_upper_bound)):
+
+        log_prob_uniform = np.ones((N, k)) * 3 * chisq_scalar
+
+        # Consider the first case where weights are uniformly distributed.
+        uniform_weights = np.ones(k, dtype=float)/N
+        for j, w in enumerate(uniform_weights):
+            Nk = int(np.round(w * N))
+            log_prob_uniform.T[j, np.arange(Nk)] = chisq_scalar
+
+
+        wlp_lu = np.log(uniform_weights) + logdetcov_lower \
+            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
+        wlp_uu = np.log(uniform_weights) + logdetcov_upper \
+            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
+
+        ll_lu = np.sum(scipy.misc.logsumexp(wlp_lu, axis=1))
+        ll_uu = np.sum(scipy.misc.logsumexp(wlp_uu, axis=1))
+
+        log_prob_non_uniform = np.ones_like(log_prob_uniform) * 3 * chisq_scalar
+
+        non_uniform_weights = np.ones(k, dtype=float)
+        non_uniform_weights[1:] = 1.0/N
+        non_uniform_weights[0] = 1.0 - np.sum(non_uniform_weights[1:])
+
+        for j, w in enumerate(non_uniform_weights):
+            Nk = int(np.round(w * N))
+            log_prob_non_uniform.T[j, np.arange(Nk)] = chisq_scalar
+
+        wlp_ln = np.log(non_uniform_weights) + logdetcov_lower \
+            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
+        wlp_un = np.log(non_uniform_weights) + logdetcov_upper \
+            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
+
+        ll_ln = np.sum(scipy.misc.logsumexp(wlp_ln, axis=1))
+        ll_un = np.sum(scipy.misc.logsumexp(wlp_un, axis=1))
+
+        log_likelihoods[i, :] = [ll_lu, ll_uu, ll_ln, ll_un]
+
+    raise a
+    return 
 
 
 def old__approximate_bound_sum_log_determinate_covariances(target_K, 
@@ -625,7 +677,7 @@ class GaussianMixture(object):
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
 
-            tK = np.linspace(1, max(target_K), 10)
+            tK = np.linspace(1, max(target_K), 10).astype(int)
             _, I_parts = _mixture_message_length(tK, N, D,
                 np.zeros(10), np.zeros(10))
 
@@ -634,7 +686,7 @@ class GaussianMixture(object):
 
 
             visualization_handler.emit("predict_slw",
-                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err),
+                dict(K=target_K, D=D, p_slw=p_slw, p_slw_err=p_slw_err),
                 save=p_ll is None and p_slogdetcovs is None and p_I is None)
 
             K_bound = np.linspace(1, target_K.max(), 10)
@@ -642,7 +694,7 @@ class GaussianMixture(object):
 
 
             visualization_handler.emit("slw_bounds",
-                dict(K=K_bound, lower=slw_lower, upper=slw_upper))
+                dict(K=K_bound, D=D, lower=slw_lower, upper=slw_upper))
 
             #if p_ll is not None:
             #    visualization_handler.emit("predict_ll",
@@ -701,21 +753,32 @@ class GaussianMixture(object):
 
             if p_slogdetcovs is not None and target_K[0] > 10:
 
-                p_ll = _approximate_log_likelihood(target_K, N, D,
-                    p_slogdetcovs/target_K)
 
-                if target_K[0] > 20:
-                    assert np.all(np.isfinite(p_ll))
-
-                    raise a
+                p_ll = _approximate_log_likelihood(self._state_K, N, D,
+                    [np.log(ea) for ea in self._state_det_covs],
+                    self._state_weights)
 
                 visualization_handler.emit("predict_ll",
-                    dict(K=target_K, p_ll=p_ll), save=True, clear_previous=True,
+                    dict(K=self._state_K, p_ll=p_ll), save=True, clear_previous=True,
                     plotting_kwds=dict(c="g"))
 
-                #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
-            
 
+                """
+                # Show bound of previous log likelihoods and future mixtures.
+                tK = np.arange(1, 1 + max(target_K))
+                p_sldcs, _, __ = self._predict_slogdetcovs(tK)
+
+                p_ll = _approximate_log_likelihood(tK, N, D,
+                    p_sldcs/tK)
+
+                visualization_handler.emit("predict_ll",
+                    dict(K=tK, p_ll=p_ll), save=True, clear_previous=False,
+                    plotting_kwds=dict(c="r"))
+                """
+
+                foo = _approximate_log_likelihood_bounds(tK, N, D, (lower, upper))
+
+                raise a
 
             if p_I is not None:            
                 visualization_handler.emit("predict_message_length",
