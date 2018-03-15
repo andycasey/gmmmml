@@ -446,7 +446,6 @@ class GaussianMixture(object):
             x_squared_norms = row_norms(y, squared=True)
             mu = cluster.k_means_._k_init(y, K, x_squared_norms=x_squared_norms)
             """
-
             
             # estimate covariance matrices.
             cov = _estimate_covariance_matrix_full(y, responsibility, mu)
@@ -459,7 +458,6 @@ class GaussianMixture(object):
 
             except ValueError:
                 logger.exception("Failed to calculate E-step")
-                raise 
                 continue
 
 
@@ -602,10 +600,10 @@ class GaussianMixture(object):
                     p_slw_min=p_slw_min),
                 save=p_ll is None and p_slogdetcovs is None and p_I is None)
 
-            if p_ll is not None:
-                visualization_handler.emit("predict_ll",
-                    dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err),
-                    save=p_slogdetcovs is None)
+            #if p_ll is not None:
+            #    visualization_handler.emit("predict_ll",
+            #        dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err),
+            #        save=p_slogdetcovs is None)
 
             # Sometimes we don't predict the sum of the log of the determinants
             # of the covariance matrices.
@@ -631,22 +629,23 @@ class GaussianMixture(object):
             p_ll = _approximate_log_likelihood(self._state_K, N, D, 
                 [np.log(ea) for ea in self._state_det_covs])
 
-            visualization_handler.emit("predict_ll2",
-                dict(K=self._state_K, p_ll=p_ll, save=True))
+            is_last_update = not (p_slogdetcovs is not None and p_slw is not None)
+            visualization_handler.emit("predict_ll",
+                dict(K=self._state_K, p_ll=p_ll, save=is_last_update,
+                    plotting_kwds=dict(c="r")))
 
 
-            if p_slogdetcovs is not None and p_slw is not None:
-
-
+            if not is_last_update:
 
                 p_ll = _approximate_log_likelihood(target_K, N, D,
-                    p_slogdetcovs/target_K, p_slw/target_K)
+                    p_slogdetcovs/target_K, np.exp(p_slw/target_K))
 
                 if target_K[0] > 20:
                     assert np.all(np.isfinite(p_ll))
 
-                visualization_handler.emit("predict_ll3",
-                    dict(K=target_K, p_ll=p_ll), save=True)
+                visualization_handler.emit("predict_ll",
+                    dict(K=target_K, p_ll=p_ll), save=True, clear_previous=False,
+                    plotting_kwds=dict(c="g"))
 
             #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
 

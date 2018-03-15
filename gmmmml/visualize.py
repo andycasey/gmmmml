@@ -145,9 +145,11 @@ class VisualizationHandler(object):
 
 
 
-    def emit(self, kind, params, save=True):
+    def emit(self, kind, params, save=True, clear_previous=True,
+        plotting_kwds=None):
 
-        
+        plotting_kwds = dict() if plotting_kwds is None else plotting_kwds
+
         if kind == "model":
 
             self._clear_model()
@@ -230,43 +232,26 @@ class VisualizationHandler(object):
 
         elif kind == "predict_ll":
 
-            self._update_previous_predict_lls()
+            if clear_previous:
+                self._update_previous_predict_lls()
 
             K = params["K"]
             p_ll = params["p_ll"]#/self._reference_ll
-            p_ll_err = params["p_ll_err"]#/self._reference_ll
+            p_ll_err = params.get("p_ll_err", None)#/self._reference_ll
 
-            self._predict_ll.extend([
-                self.axes[6].plot(K, p_ll,
-                    c=self._color_prediction, zorder=-1)[0]
-            ])
+            kwds = dict(c=self._color_prediction, zorder=-1)
+            kwds.update(plotting_kwds)
+
+            self._predict_ll.extend(self.axes[6].plot(K, p_ll, **kwds))
+
             #    self.axes[6].fill_between(
             #        K, p_ll_err[0] + p_ll, p_ll_err[1] + p_ll,
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
+            self.axes[6].relim()
+            self.axes[6].autoscale_view()
 
-        elif kind == "predict_ll2":
-
-            K = params["K"]
-            p_ll = params["p_ll"]
-
-            self.axes[6].plot(K, p_ll, c="g", alpha=0.5, zorder=-1)
-
-        elif kind == "predict_ll3":
-
-            K = params["K"]
-            p_ll = params["p_ll"]
-
-            self.axes[6].plot(K, p_ll, c="r", alpha=0.25, zorder=0)
-
-
-        elif kind == "predict_ll4":
-
-            K = params["K"]
-            p_ll = params["p_ll"]
-            
-            self.axes[6].plot(K, p_ll, c="m", alpha=0.25, zorder=0)
 
 
         elif kind == "predict_slogdetcov":
