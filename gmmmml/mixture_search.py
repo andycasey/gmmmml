@@ -175,7 +175,7 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
     return log_likelihoods
 
 
-def _approximate_bound_sum_log_determinate_covariances(target_K, 
+def old__approximate_bound_sum_log_determinate_covariances(target_K, 
     covariance_matrices, covariance_type="full"):
     r"""
     Return an approximate expectation of the function:
@@ -247,6 +247,23 @@ def _approximate_bound_sum_log_determinate_covariances(target_K,
 
     return all_approx_slogdet_covs[keep]
 
+
+def _approximate_bound_sum_log_determinate_covariances(target_K, cov):
+
+    K, D, _ = cov.shape
+
+    target_K = np.atleast_1d(target_K)
+    current_logdet = np.log(np.linalg.det(cov))
+    min_logdet, max_logdet = np.min(current_logdet), np.max(current_logdet)
+
+    bounds = np.zeros((target_K.size, 2))
+    for i, k in enumerate(target_K):
+        bounds[i] = [np.sum(k * min_logdet), np.sum(k * max_logdet)]
+
+    #if target_K[0] > 8:
+    #    raise a
+    bounds[:, 1] = 125.9 * target_K
+    return bounds
 
 
 
@@ -457,6 +474,9 @@ class GaussianMixture(object):
             # estimate covariance matrices.
             cov = _estimate_covariance_matrix_full(y, responsibility, mu)
 
+            # If this is K = 1, then use this as the bound limit for sumlogdetcov
+
+
             weight = responsibility.sum(axis=1)/N
 
             # Do one E-M step.
@@ -479,6 +499,7 @@ class GaussianMixture(object):
                 self._predict_message_length(target_K, cov, weight, y.shape[0], 
                     ll, message_length, **kwds)
 
+                
 
         return None
 
@@ -564,7 +585,8 @@ class GaussianMixture(object):
 
         target_K = np.atleast_1d(target_K)
 
-        p_slw, p_slw_err, p_slw_min, p_slw_max = self._predict_slogweights(target_K, N)
+        p_slw, p_slw_err, _, __ = self._predict_slogweights(target_K, N)
+
 
         # Predict log-likelihoods.
         p_ll, p_ll_err = self._predict_log_likelihoods(target_K)
@@ -572,6 +594,7 @@ class GaussianMixture(object):
         # Predict sum log of the determinates of the covariance matrices.
         p_slogdetcovs, p_slogdetcovs_pos_err, p_slogdetcovs_neg_err \
             = self._predict_slogdetcovs(target_K)
+
 
 
         current_K, D, _ = cov.shape
@@ -602,29 +625,68 @@ class GaussianMixture(object):
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
 
-            _, I_parts = _mixture_message_length(target_K, N, D,
-                np.zeros(target_K.size), np.zeros(target_K.size))
+            tK = np.linspace(1, max(target_K), 10)
+            _, I_parts = _mixture_message_length(tK, N, D,
+                np.zeros(10), np.zeros(10))
 
-            visualization_handler.emit("predict_I_other", dict(K=target_K, 
+            visualization_handler.emit("predict_I_other", dict(K=tK, 
                 I_other=I_parts["I_mixtures"] + I_parts["I_parameters"]))
 
+
             visualization_handler.emit("predict_slw",
-                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max,
-                    p_slw_min=p_slw_min),
+                dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err),
                 save=p_ll is None and p_slogdetcovs is None and p_I is None)
+
+            K_bound = np.linspace(1, target_K.max(), 10)
+            slw_lower, slw_upper = _bound_sum_log_weights(K_bound, N)
+
+
+            visualization_handler.emit("slw_bounds",
+                dict(K=K_bound, lower=slw_lower, upper=slw_upper))
 
             #if p_ll is not None:
             #    visualization_handler.emit("predict_ll",
             #        dict(K=target_K, p_ll=p_ll, p_ll_err=p_ll_err),
             #        save=p_slogdetcovs is None)
 
+
+
+
+
+            """
+            # These old bounds are NO good.
+            bounds = -0.5 * (D + 2) * _approximate_bound_sum_log_determinate_covariances(target_K, cov)
+            visualization_handler.emit("slogdetcov_bounds", dict(K=target_K,
+                lower=bounds.T[0], upper=bounds.T[1]))
+            """
+
+            # New sumlogdetcov bounds:
+            # largest and smallest with increasing K.
+            all_det_covs = np.hstack(self._state_det_covs)
+            # TODO: This is bold assuming that the max is always the first,
+            #       but I can't imagine a situation where it never would be!
+            min_cov, max_cov = np.min(all_det_covs), all_det_covs[0]
+
+            bounds = -0.5 * (D + 2) * np.array([
+                tK * np.log(min_cov),
+                tK * np.log(max_cov)])
+            lower = np.min(bounds, axis=0)
+            upper = np.max(bounds, axis=0)
+
+            visualization_handler.emit("slogdetcov_bounds", dict(K=tK,
+                lower=lower, upper=upper))
+
             # Sometimes we don't predict the sum of the log of the determinants
             # of the covariance matrices.
             if p_slogdetcovs is not None:
+                scalar = -0.5 * (D + 2)
+
+                # TODO: limit the predictions to the bounded values.
+                print("should limit predit_slogdetcov to the bounded value")
                 visualization_handler.emit("predict_slogdetcov",
-                    dict(K=target_K, p_slogdetcovs=p_slogdetcovs,
-                        p_slogdetcovs_pos_err=p_slogdetcovs_pos_err,
-                        p_slogdetcovs_neg_err=p_slogdetcovs_neg_err),
+                    dict(K=target_K, p_slogdetcovs=scalar * p_slogdetcovs,
+                        p_slogdetcovs_pos_err=scalar * p_slogdetcovs_pos_err,
+                        p_slogdetcovs_neg_err=scalar * p_slogdetcovs_neg_err),
                     save=p_I is None)
 
 
@@ -694,7 +756,7 @@ class GaussianMixture(object):
 
     def  _predict_slogweights(self, target_K, N):
 
-        lower_bound, upper_bound = _bound_sum_log_weights(target_K, N)
+        slw_lower, slw_upper = _bound_sum_log_weights(target_K, N)
 
         x_unique, y_unique = _group_over(
             self._state_K, self._state_slog_weights, np.min)
@@ -715,10 +777,10 @@ class GaussianMixture(object):
                 pred_err = np.nan * np.ones((2, target_K.size))
 
         else:
-            pred = upper_bound
+            pred = slw_upper
             pred_err = np.nan * np.ones((2, pred.size))
 
-        return (pred, pred_err, lower_bound, upper_bound)
+        return (pred, pred_err, slw_lower, slw_upper)
 
 
 

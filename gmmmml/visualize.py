@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from matplotlib.patches import Ellipse
-
+from matplotlib.ticker import MaxNLocator
 
 
 
@@ -30,6 +30,11 @@ class VisualizationHandler(object):
         self._predict_ll = []
         self._predict_slogdetcovs = []
         self._predict_message_lengths = []
+        self._predict_slw_bounds = []
+        self._predict_slogdetcov_bounds = []
+
+        self._data_slw = []
+        self._data_slogdetcov = []
 
         self._reference_ll = None
 
@@ -38,43 +43,62 @@ class VisualizationHandler(object):
         axes = np.array(axes).flatten()
         self._display = True
 
-        self.ax_data, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I_other, self.ax_I = axes
+        self.ax_data, self.ax_I_other, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I = axes
 
         self._xyindex = (x_index, y_index)
 
         self.ax_data.scatter(y.T[x_index], y.T[y_index], facecolor="k", s=1, alpha=0.5)
-
         self.ax_data.set_xlabel(r"$x_{{{0}}}$".format(x_index))
         self.ax_data.set_ylabel(r"$x_{{{0}}}$".format(y_index))
+        self.ax_data.xaxis.set_major_locator(MaxNLocator(2))
+        self.ax_data.yaxis.set_major_locator(MaxNLocator(2))
+
 
         self.ax_I.set_xlabel(r"$K$")
         self.ax_I.set_ylabel(r"$I$ $[{\rm nats}]$")
-
+        self.ax_I.xaxis.set_major_locator(MaxNLocator(5))
+        self.ax_I.yaxis.set_major_locator(MaxNLocator(5))
 
         self.ax_slogw.set_xlabel(r"$K$")
         self.ax_slogw.set_ylabel(r"$\left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
+        self.ax_slogw.xaxis.set_major_locator(MaxNLocator(5))
+        self.ax_slogw.yaxis.set_major_locator(MaxNLocator(5))
 
         self.ax_I_other.set_xlabel(r"$K$")
         self.ax_I_other.set_ylabel(r"$I_{other}$ $[{\rm nats}]$")
+        self.ax_I_other.xaxis.set_major_locator(MaxNLocator(5))
+        self.ax_I_other.yaxis.set_major_locator(MaxNLocator(5))
+        self._show_I_other_data = self.ax_I_other.plot([np.nan], [np.nan], c="k")[0]
 
         self.ax_slogdet.set_xlabel(r"$K$")
         self.ax_slogdet.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
+        self.ax_slogdet.xaxis.set_major_locator(MaxNLocator(5))
+        self.ax_slogdet.yaxis.set_major_locator(MaxNLocator(5))
 
+        #x = np.arange(1, 50)
+        #self.ax_slogdet.plot(x, -0.5 * (y.shape[1] + 2) * x * 124.55, c="r")
+
+        self._show_slw_data = self.ax_slogw.scatter(
+            [np.nan], [np.nan], facecolor="k", s=5)
+        self._show_slogdetcov_data = self.ax_slogdet.scatter([np.nan], [np.nan], facecolor="k", s=5)
 
         self.ax_sll.set_xlabel(r"$K$")
         self.ax_sll.set_ylabel(r"$\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
+        self.ax_sll.xaxis.set_major_locator(MaxNLocator(5))
+        self.ax_sll.yaxis.set_major_locator(MaxNLocator(5))
 
         if target is not None:
             K_target = target["weight"].size
                 
-            target_kwds = dict(facecolor=self._color_target, s=50, alpha=0.5)
+            target_kwds = dict(facecolor=self._color_target, s=5, zorder=100)
 
             self.ax_slogw.scatter(
                 [K_target], [np.sum(np.log(target["weight"]))], **target_kwds)
 
+            D = target["mean"].shape[1]
             self.ax_slogdet.scatter(
                 [K_target],
-                [np.sum(np.linalg.slogdet(target["cov"])[1])],
+                [-0.5 * (D + 2) * np.sum(np.linalg.slogdet(target["cov"])[1])],
                 **target_kwds)
 
             self.ax_sll.scatter(
@@ -109,6 +133,20 @@ class VisualizationHandler(object):
 
             item.set_visible(False)
             del item
+
+
+    def _clear_previous_items(self, items):
+
+        L = len(items)
+        for l in range(L):
+            item = items.pop(0)
+            try:
+                item.set_data([], [])
+            except AttributeError:
+                None
+            item.set_visible(False)
+            del item
+
 
     def _update_previous_predict_lls(self):
         L = len(self._predict_ll)
@@ -184,13 +222,24 @@ class VisualizationHandler(object):
 
             
             K = params["weight"].size
-            slogdet_cov = np.sum(np.log(np.linalg.det(params["cov"])))
+            D = params["mean"].shape[1]
+            slogdet_cov = - 0.5 * (D + 2) * np.sum(np.log(np.linalg.det(params["cov"])))
             log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
 
-            self.ax_slogdet.scatter([K], [slogdet_cov], facecolor="k", s=1)
+            self._data_slw.append([K, np.sum(np.log(params["weight"]))])
+            self._show_slw_data.set_offsets(np.array(self._data_slw))
+            self._show_slw_data.set_facecolor("k") # Needed to make them update.
+            self._show_slw_data.set_sizes(5 * np.ones(len(self._data_slw)))
 
-            sum_log_weights = np.sum(np.log(params["weight"]))
-            self.ax_slogw.scatter([K], [sum_log_weights], facecolor="k", alpha=0.5, s=1)
+            self._data_slogdetcov.append([K, slogdet_cov])
+            self._show_slogdetcov_data.set_offsets(np.array(self._data_slogdetcov))
+            self._show_slogdetcov_data.set_facecolor("k") # Needed to make them update.
+            self._show_slogdetcov_data.set_sizes(5 * np.ones(len(self._data_slogdetcov)))
+
+            #self.ax_slogdet.scatter([K], [slogdet_cov], facecolor="k", s=1)
+
+            #sum_log_weights = np.sum(np.log(params["weight"]))
+            #self.ax_slogw.scatter([K], [sum_log_weights], facecolor="k", s=1)
 
 
         elif kind == "predict_I_other":
@@ -198,15 +247,15 @@ class VisualizationHandler(object):
             K = params["K"]
             I_other = params["I_other"]
 
-            kwds = dict(c='k', lw=2)
-            kwds.update(plotting_kwds)
+            self._show_I_other_data.set_data(np.array([K, I_other]))
+            self.ax_I_other.set_xlim(0, max(K))
+            self.ax_I_other.set_ylim(0, max(I_other))
 
-            self.ax_I_other.plot(K, I_other, **kwds)
 
         elif kind == "expectation":
             self.ax_I.scatter(
                 [params["K"]], [params["message_length"]],
-                facecolor="k", s=1)
+                facecolor="k", s=5)
             self._expectation_iter += 1
 
             # plot LL as well
@@ -217,7 +266,7 @@ class VisualizationHandler(object):
                 self._reference_ll = ll
 
             # /self._reference_ll
-            self.ax_sll.scatter([K], [ll], facecolor="k", s=1)
+            self.ax_sll.scatter([K], [ll], facecolor="k", s=5)
 
 
 
@@ -230,19 +279,54 @@ class VisualizationHandler(object):
             K = params["K"]
             p_slw = params["p_slw"]
             p_slw_err = params["p_slw_err"]
-            p_slw_max = params["p_slw_max"]
-            p_slw_min = params["p_slw_min"]
-
+            
             self._predict_slw.extend([
                 self.ax_slogw.plot(K, p_slw, 
                     c=self._color_prediction, zorder=-1)[0],
                 self.ax_slogw.fill_between(
                     K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1),
-                self.ax_slogw.fill_between(K, p_slw_min, p_slw_max,
-                    facecolor="#666666", alpha=0.5, zorder=-1)
             ])
 
+            self.ax_slogw.set_xlim(0, max(K))
+
+        elif kind == "slw_bounds":
+
+            self._clear_previous_items(self._predict_slw_bounds)
+
+            K, lower, upper = (params["K"], params["lower"], params["upper"])
+
+            plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
+                linewidth=0.5)
+
+            self._predict_slw_bounds.extend([
+                self.ax_slogw.fill_between(K, lower, upper,
+                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
+                self.ax_slogw.plot(K, lower, **plot_kwds)[0],
+                self.ax_slogw.plot(K, upper, **plot_kwds)[0]
+            ])
+
+        elif kind == "slogdetcov_bounds":
+
+            self._clear_previous_items(self._predict_slogdetcov_bounds)
+
+            K, lower, upper = (params["K"], params["lower"], params["upper"])
+
+            bounds = np.array([lower, upper])
+            lower = np.min(bounds, axis=0)
+            upper = np.max(bounds, axis=0)
+
+
+            plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
+                linewidth=0.5)
+            upper_plot_kwds = plot_kwds.copy()
+            upper_plot_kwds["linestyle"] = "-."
+            self._predict_slogdetcov_bounds.extend([
+                self.ax_slogdet.fill_between(K, lower, upper,
+                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
+                self.ax_slogdet.plot(K, lower, **plot_kwds)[0],
+                self.ax_slogdet.plot(K, upper, **upper_plot_kwds)[0]
+            ])
 
         elif kind == "predict_ll":
 
@@ -266,6 +350,9 @@ class VisualizationHandler(object):
             self.ax_sll.relim()
             self.ax_sll.autoscale_view()
 
+            self.ax_sll.set_xlim(0, max(K))
+
+
 
 
         elif kind == "predict_slogdetcov":
@@ -285,8 +372,27 @@ class VisualizationHandler(object):
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             ])
 
-            self.ax_slogdet.relim()
             self.ax_slogdet.autoscale_view()
+            self.ax_slogdet.relim()
+            plt.draw()
+            
+            self.ax_slogdet.set_xlim(0, max(K))
+            # Only show y-limits of the data.
+            y = np.array(self._data_slogdetcov).T[1]
+            ylimits = np.hstack([min(y), max(y),
+                min(p_slogdetcovs + p_slogdetcovs_neg_err),
+                max(p_slogdetcovs + p_slogdetcovs_pos_err),
+            ]).flatten()
+            ylimits = (np.min(ylimits), max(ylimits))
+
+            frac = 0.05 * np.ptp(ylimits) 
+            #self.ax_slogdet.set_ylim(min(ylimits), max(ylimits))
+            
+            self.ax_slogdet.set_ylim(ylimits[0] - frac, ylimits[1] + frac)
+
+
+            #if min(K) > 8:
+            #    raise a
 
         elif kind == "predict_message_length":
 
