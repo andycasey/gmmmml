@@ -5,6 +5,8 @@ import  scipy.optimize as op
 
 np.random.seed(11)
 
+# Seed 1100 is a fun one: K = 103, D = 5, N = 4249
+
 
 for i in range(10):
 

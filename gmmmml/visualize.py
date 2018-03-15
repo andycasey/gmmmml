@@ -347,9 +347,6 @@ class VisualizationHandler(object):
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
-            self.ax_sll.relim()
-            self.ax_sll.autoscale_view()
-
             self.ax_sll.set_xlim(0, max(K))
 
 
@@ -409,17 +406,10 @@ class VisualizationHandler(object):
             self.ax_I.autoscale_view()
 
 
-        elif kind == "show_mml":
-
-            K = params["K"]
-            I = params["I"]
-            I_parts = params["I_parts"]
-
-            self.ax_I.plot(K, I, c='g')
-
 
         else:
-            raise ValueError("what you tryin' to tell me?!")
+            print("Ignoring emit kind: {}".format(kind))
+            #raise ValueError("what you tryin' to tell me?!")
 
         # Only save on model update.
         if save:

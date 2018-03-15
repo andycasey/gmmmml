@@ -697,21 +697,9 @@ class GaussianMixture(object):
 
             #I, I_parts = _mixture_message_length(target_K, N, D, p_ll, p_slw)
 
-            visualization_handler.emit("show_mml", 
-                dict(K=self._state_K, I=I, I_parts=I_parts))
-
             # First order estimate of best possible log-likelihood.
-            p_ll = _approximate_log_likelihood(self._state_K, N, D, 
-                [np.log(ea) for ea in self._state_det_covs],
-                self._state_weights)
 
-            is_last_update = not (p_slogdetcovs is not None and p_slw is not None)
-            visualization_handler.emit("predict_ll",
-                dict(K=self._state_K, p_ll=p_ll, save=is_last_update,
-                    plotting_kwds=dict(c="r")))
-
-
-            if not is_last_update:
+            if p_slogdetcovs is not None and target_K[0] > 10:
 
                 p_ll = _approximate_log_likelihood(target_K, N, D,
                     p_slogdetcovs/target_K)
@@ -719,12 +707,14 @@ class GaussianMixture(object):
                 if target_K[0] > 20:
                     assert np.all(np.isfinite(p_ll))
 
+                    raise a
+
                 visualization_handler.emit("predict_ll",
-                    dict(K=target_K, p_ll=p_ll), save=True, clear_previous=False,
+                    dict(K=target_K, p_ll=p_ll), save=True, clear_previous=True,
                     plotting_kwds=dict(c="g"))
 
-            #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
-        
+                #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
+            
 
 
             if p_I is not None:            
