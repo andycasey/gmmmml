@@ -11,7 +11,8 @@ from matplotlib.patches import Ellipse
 
 class VisualizationHandler(object):
 
-    def __init__(self, y, target=None, figure_path=None, **kwargs):
+    def __init__(self, y, target=None, x_index=0, y_index=1,
+        figure_path=None, **kwargs):
 
         figure_path = "" if figure_path is None else figure_path
 
@@ -33,57 +34,58 @@ class VisualizationHandler(object):
         self._reference_ll = None
 
 
-        self.fig, self.axes = plt.subplots(3,3)
-        self.axes = np.array(self.axes).flatten()
+        self.fig, axes = plt.subplots(1, 6, figsize=(15.6 + 2.8, 2.8))
+        axes = np.array(axes).flatten()
         self._display = True
 
-        self.axes[0].scatter(y.T[0], y.T[1], facecolor="k", s=1, alpha=0.5)
+        self.ax_data, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I_other, self.ax_I = axes
 
-        self.axes[0].set_xlabel(r"$x_0$")
-        self.axes[0].set_ylabel(r"$x_1$")
+        self._xyindex = (x_index, y_index)
 
-        self.axes[1].set_xlabel("E-M iteration")
-        self.axes[1].set_ylabel("I_actual")
+        self.ax_data.scatter(y.T[x_index], y.T[y_index], facecolor="k", s=1, alpha=0.5)
 
-        self.axes[2].set_xlabel("K")
-        self.axes[2].set_ylabel("I_predicted")
+        self.ax_data.set_xlabel(r"$x_{{{0}}}$".format(x_index))
+        self.ax_data.set_ylabel(r"$x_{{{0}}}$".format(y_index))
 
-
-        self.axes[3].set_xlabel("K")
-        self.axes[3].set_ylabel(r"$\sum\log{|C|}$")
-
-        self.axes[4].set_xlabel("K")
-        self.axes[4].set_ylabel(r"$\log{}<|C|>$")
+        self.ax_I.set_xlabel(r"$K$")
+        self.ax_I.set_ylabel(r"$I$ $[{\rm nats}]$")
 
 
-        self.axes[5].set_xlabel("K")
-        self.axes[5].set_ylabel(r"$\sum\log{w}$")
+        self.ax_slogw.set_xlabel(r"$K$")
+        self.ax_slogw.set_ylabel(r"$\left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
 
-        self.axes[6].set_xlabel("K")
-        self.axes[6].set_ylabel(r"$\sum\log{L}$")
+        self.ax_I_other.set_xlabel(r"$K$")
+        self.ax_I_other.set_ylabel(r"$I_{other}$ $[{\rm nats}]$")
+
+        self.ax_slogdet.set_xlabel(r"$K$")
+        self.ax_slogdet.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
+
+
+        self.ax_sll.set_xlabel(r"$K$")
+        self.ax_sll.set_ylabel(r"$\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
 
         if target is not None:
             K_target = target["weight"].size
                 
             target_kwds = dict(facecolor=self._color_target, s=50, alpha=0.5)
 
-            #self.axes[1].scatter([K_target], [target["I"]], **target_kwds)
-
-            self.axes[5].scatter(
+            self.ax_slogw.scatter(
                 [K_target], [np.sum(np.log(target["weight"]))], **target_kwds)
 
-            self.axes[3].scatter(
+            self.ax_slogdet.scatter(
                 [K_target],
                 [np.sum(np.linalg.slogdet(target["cov"])[1])],
                 **target_kwds)
 
-            self.axes[6].scatter(
+            self.ax_sll.scatter(
                 [K_target],
                 [-target["nll"]],
                 **target_kwds)
 
-        for ax in self.axes:
+        for ax in axes:
             ax.autoscale(enable=True)
+
+        self.fig.tight_layout()
 
         self.savefig()
 
@@ -157,6 +159,10 @@ class VisualizationHandler(object):
             # Update view of the model.
             K = params["weight"].size
 
+            x_index, y_index = self._xyindex
+            if x_index != 0 or y_index != 1:
+                raise NotImplementedError
+
             for k in range(K):
                 mean = params["mean"][k][:2]
                 cov = params["cov"][k]
@@ -173,25 +179,33 @@ class VisualizationHandler(object):
                 ellip = Ellipse(xy=mean, width=width, height=height, angle=theta,
                     facecolor="r", alpha=0.1)
 
-                self._model.append(self.axes[0].add_artist(ellip))
-                self._model.append(self.axes[0].scatter([mean[0]], [mean[1]], facecolor="r", s=1))
+                self._model.append(self.ax_data.add_artist(ellip))
+                self._model.append(self.ax_data.scatter([mean[0]], [mean[1]], facecolor="r", s=1))
 
             
             K = params["weight"].size
             slogdet_cov = np.sum(np.log(np.linalg.det(params["cov"])))
             log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
 
-            self.axes[3].scatter([K], [slogdet_cov], facecolor="k", s=1)
-
-            self.axes[4].scatter([K], [log_mean_det_cov], facecolor="k", alpha=0.5, s=1)
+            self.ax_slogdet.scatter([K], [slogdet_cov], facecolor="k", s=1)
 
             sum_log_weights = np.sum(np.log(params["weight"]))
-            self.axes[5].scatter([K], [sum_log_weights], facecolor="k", alpha=0.5, s=1)
+            self.ax_slogw.scatter([K], [sum_log_weights], facecolor="k", alpha=0.5, s=1)
 
+
+        elif kind == "predict_I_other":
+
+            K = params["K"]
+            I_other = params["I_other"]
+
+            kwds = dict(c='k', lw=2)
+            kwds.update(plotting_kwds)
+
+            self.ax_I_other.plot(K, I_other, **kwds)
 
         elif kind == "expectation":
-            self.axes[1].scatter(
-                [self._expectation_iter], [params["message_length"]],
+            self.ax_I.scatter(
+                [params["K"]], [params["message_length"]],
                 facecolor="k", s=1)
             self._expectation_iter += 1
 
@@ -203,7 +217,7 @@ class VisualizationHandler(object):
                 self._reference_ll = ll
 
             # /self._reference_ll
-            self.axes[6].scatter([K], [ll], facecolor="k", s=1)
+            self.ax_sll.scatter([K], [ll], facecolor="k", s=1)
 
 
 
@@ -220,12 +234,12 @@ class VisualizationHandler(object):
             p_slw_min = params["p_slw_min"]
 
             self._predict_slw.extend([
-                self.axes[5].plot(K, p_slw, 
+                self.ax_slogw.plot(K, p_slw, 
                     c=self._color_prediction, zorder=-1)[0],
-                self.axes[5].fill_between(
+                self.ax_slogw.fill_between(
                     K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1),
-                self.axes[5].fill_between(K, p_slw_min, p_slw_max,
+                self.ax_slogw.fill_between(K, p_slw_min, p_slw_max,
                     facecolor="#666666", alpha=0.5, zorder=-1)
             ])
 
@@ -242,15 +256,15 @@ class VisualizationHandler(object):
             kwds = dict(c=self._color_prediction, zorder=-1)
             kwds.update(plotting_kwds)
 
-            self._predict_ll.extend(self.axes[6].plot(K, p_ll, **kwds))
+            self._predict_ll.extend(self.ax_sll.plot(K, p_ll, **kwds))
 
-            #    self.axes[6].fill_between(
+            #    self.ax_sll.fill_between(
             #        K, p_ll_err[0] + p_ll, p_ll_err[1] + p_ll,
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
-            self.axes[6].relim()
-            self.axes[6].autoscale_view()
+            self.ax_sll.relim()
+            self.ax_sll.autoscale_view()
 
 
 
@@ -264,15 +278,15 @@ class VisualizationHandler(object):
             p_slogdetcovs_neg_err = params["p_slogdetcovs_neg_err"]
 
             self._predict_slogdetcovs.extend([
-                self.axes[3].plot(K, p_slogdetcovs, c=self._color_prediction)[0],
-                self.axes[3].fill_between(K,
+                self.ax_slogdet.plot(K, p_slogdetcovs, c=self._color_prediction)[0],
+                self.ax_slogdet.fill_between(K,
                     p_slogdetcovs + p_slogdetcovs_neg_err,
                     p_slogdetcovs + p_slogdetcovs_pos_err,
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             ])
 
-            self.axes[3].relim()
-            self.axes[3].autoscale_view()
+            self.ax_slogdet.relim()
+            self.ax_slogdet.autoscale_view()
 
         elif kind == "predict_message_length":
 
@@ -282,11 +296,11 @@ class VisualizationHandler(object):
             p_I = params["p_I"]
 
             #self._predict_message_lengths.extend([
-            #    self.axes[1].plot(K, p_I, c='b', alpha=0.5)[0]
+            #    self.ax_I.plot(K, p_I, c='b', alpha=0.5)[0]
             #])
 
-            self.axes[1].relim()
-            self.axes[1].autoscale_view()
+            self.ax_I.relim()
+            self.ax_I.autoscale_view()
 
 
         elif kind == "show_mml":
@@ -295,7 +309,7 @@ class VisualizationHandler(object):
             I = params["I"]
             I_parts = params["I_parts"]
 
-            self.axes[1].plot(K, I, c='g')
+            self.ax_I.plot(K, I, c='g')
 
 
         else:

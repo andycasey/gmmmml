@@ -151,11 +151,18 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
         weights = [np.ones(k, dtype=float)/N for k in K]
     
     for i, (k, logdetcov, weight) in enumerate(zip(K, logdetcovs, weights)):
-        # most things will be chi-sq ~ 3 away (per dim) from most K means
-        log_prob = np.ones((N, k)) * D * 3
+        # most things will be chi-sq ~ 5 away (per dim) from most K means
+        # TODO: my intuition is that this should be D * 5, but that doesn't
+        # seem to come out through experiment.
+        log_prob = np.ones((N, k)) * 5
         # just assign each object to one mixture, where we would expect the 
         # chi-sq value to be approximately 1 per dimension D
-        log_prob[:, 0] = D
+        for j, w in enumerate(weight):
+            Nk = int(np.round(w * N))
+            # TODO: I feel like this should be 1 * D,.... as per above.
+            log_prob.T[j, np.arange(Nk)] = 1 
+
+        #log_prob[:, 0] = D
 
         weighted_log_prob = np.log(weight) + logdetcov \
             - 0.5 * (D * np.log(2 * np.pi) + log_prob)
@@ -595,6 +602,12 @@ class GaussianMixture(object):
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
 
+            _, I_parts = _mixture_message_length(target_K, N, D,
+                np.zeros(target_K.size), np.zeros(target_K.size))
+
+            visualization_handler.emit("predict_I_other", dict(K=target_K, 
+                I_other=I_parts["I_mixtures"] + I_parts["I_parameters"]))
+
             visualization_handler.emit("predict_slw",
                 dict(K=target_K, p_slw=p_slw, p_slw_err=p_slw_err, p_slw_max=p_slw_max,
                     p_slw_min=p_slw_min),
@@ -627,7 +640,8 @@ class GaussianMixture(object):
 
             # First order estimate of best possible log-likelihood.
             p_ll = _approximate_log_likelihood(self._state_K, N, D, 
-                [np.log(ea) for ea in self._state_det_covs])
+                [np.log(ea) for ea in self._state_det_covs],
+                self._state_weights)
 
             is_last_update = not (p_slogdetcovs is not None and p_slw is not None)
             visualization_handler.emit("predict_ll",
@@ -638,7 +652,7 @@ class GaussianMixture(object):
             if not is_last_update:
 
                 p_ll = _approximate_log_likelihood(target_K, N, D,
-                    p_slogdetcovs/target_K, np.exp(p_slw/target_K))
+                    p_slogdetcovs/target_K)
 
                 if target_K[0] > 20:
                     assert np.all(np.isfinite(p_ll))
@@ -648,7 +662,7 @@ class GaussianMixture(object):
                     plotting_kwds=dict(c="g"))
 
             #def _approximate_log_likelihood(K, N, D, logdetcovs, weights):
-
+        
 
 
             if p_I is not None:            
@@ -916,7 +930,7 @@ class GaussianMixture(object):
                 visualization_logger.info("model",
                     dict(mean=mu, cov=cov, weight=weight))
                 visualization_logger.info("expectation",
-                     dict(message_length=message_length))
+                     dict(K=weight.size, message_length=message_length))
 
             else:
                 visualization_logger.info("model",
