@@ -32,6 +32,7 @@ class VisualizationHandler(object):
         self._predict_message_lengths = []
         self._predict_slw_bounds = []
         self._predict_slogdetcov_bounds = []
+        self._predict_ll_bounds = []
 
         self._data_slw = []
         self._data_slogdetcov = []
@@ -340,12 +341,18 @@ class VisualizationHandler(object):
 
             K = params["K"]
             p_ll = params["p_ll"]#/self._reference_ll
-            p_ll_err = params.get("p_ll_err", None)#/self._reference_ll
+            p_ll_pos_err = params.get("p_ll_pos_err", 0)#/self._reference_ll
+            p_ll_neg_err = params.get("p_ll_neg_err", 0)
 
-            kwds = dict(c=self._color_prediction, zorder=-1)
+            kwds = dict(c=self._color_prediction, zorder=-1, alpha=0.5)
             kwds.update(plotting_kwds)
 
-            self._predict_ll.extend(self.ax_sll.plot(K, p_ll, **kwds))
+            self._predict_ll.extend([
+                self.ax_sll.plot(K, p_ll, **kwds)[0],
+                self.ax_sll.fill_between(
+                    K, p_ll + p_ll_pos_err, p_ll + p_ll_neg_err,
+                    facecolor=self._color_prediction, alpha=0.25, zorder=-1)
+            ])
 
             #    self.ax_sll.fill_between(
             #        K, p_ll_err[0] + p_ll, p_ll_err[1] + p_ll,
@@ -355,6 +362,26 @@ class VisualizationHandler(object):
             self.ax_sll.set_xlim(0, max(K))
 
 
+
+        elif kind == "predict_ll_bounds":
+
+            K = params["K"]
+            likely_upper_bound = params["likely_upper_bound"]
+
+            lower_bound = self.ax_sll.get_ylim()[0] * np.ones_like(K)
+
+            if clear_previous:
+                self._clear_previous_items(self._predict_ll_bounds)
+
+            self._predict_ll_bounds.extend([
+                self.ax_sll.fill_between(K, lower_bound, likely_upper_bound,
+                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
+                self.ax_sll.plot(K, likely_upper_bound, c="#666666", linestyle="-.",
+                    zorder=-10, linewidth=0.5)[0]
+                ])
+
+            self.ax_sll.set_xlim(0, max(K))
+            self.ax_sll.set_ylim(lower_bound[0], self.ax_sll.get_ylim()[1])
 
 
         elif kind == "predict_slogdetcov":
