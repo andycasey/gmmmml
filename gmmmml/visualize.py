@@ -69,7 +69,7 @@ class VisualizationHandler(object):
         self.ax_I_other.set_ylabel(r"$I_{other}$ $[{\rm nats}]$")
         self.ax_I_other.xaxis.set_major_locator(MaxNLocator(5))
         self.ax_I_other.yaxis.set_major_locator(MaxNLocator(5))
-        self._show_I_other_data = self.ax_I_other.plot([np.nan], [np.nan], c="k")[0]
+        self._show_I_other_data = self.ax_I_other.plot([np.nan], [np.nan], c="#666666")[0]
 
         self.ax_slogdet.set_xlabel(r"$K$")
         self.ax_slogdet.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
@@ -84,7 +84,7 @@ class VisualizationHandler(object):
         self._show_slogdetcov_data = self.ax_slogdet.scatter([np.nan], [np.nan], facecolor="k", s=5)
 
         self.ax_sll.set_xlabel(r"$K$")
-        self.ax_sll.set_ylabel(r"$\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
+        self.ax_sll.set_ylabel(r"$-\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
         self.ax_sll.xaxis.set_major_locator(MaxNLocator(5))
         self.ax_sll.yaxis.set_major_locator(MaxNLocator(5))
 
@@ -105,7 +105,7 @@ class VisualizationHandler(object):
 
             self.ax_sll.scatter(
                 [K_target],
-                [-target["nll"]],
+                [target["nll"]],
                 **target_kwds)
 
         for ax in axes:
@@ -269,7 +269,7 @@ class VisualizationHandler(object):
                 self._reference_ll = ll
 
             # /self._reference_ll
-            self.ax_sll.scatter([K], [ll], facecolor="k", s=5)
+            self.ax_sll.scatter([K], [-ll], facecolor="k", s=5)
 
 
 
@@ -348,9 +348,9 @@ class VisualizationHandler(object):
             kwds.update(plotting_kwds)
 
             self._predict_ll.extend([
-                self.ax_sll.plot(K, p_ll, **kwds)[0],
+                self.ax_sll.plot(K, -p_ll, **kwds)[0],
                 self.ax_sll.fill_between(
-                    K, p_ll + p_ll_pos_err, p_ll + p_ll_neg_err,
+                    K, -(p_ll + p_ll_pos_err), -(p_ll + p_ll_neg_err),
                     facecolor=self._color_prediction, alpha=0.25, zorder=-1)
             ])
 
@@ -366,23 +366,23 @@ class VisualizationHandler(object):
         elif kind == "predict_ll_bounds":
 
             K = params["K"]
-            likely_upper_bound = params["likely_upper_bound"]
+            likely_lower_bound = params["likely_upper_bound"]
 
-            lower_bound = self.ax_sll.get_ylim()[0] * np.ones_like(K)
+            upper_bound = self.ax_sll.get_ylim()[1] * np.ones_like(K)
 
             if clear_previous:
                 self._clear_previous_items(self._predict_ll_bounds)
 
             self._predict_ll_bounds.extend([
-                self.ax_sll.fill_between(K, lower_bound, likely_upper_bound,
+                self.ax_sll.fill_between(K, -likely_lower_bound, upper_bound,
                     facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_sll.plot(K, likely_upper_bound, c="#666666", linestyle="-.",
+                self.ax_sll.plot(K, -likely_lower_bound, c="#666666", linestyle="-.",
                     zorder=-10, linewidth=0.5)[0]
                 ])
 
             self.ax_sll.set_xlim(0, max(K))
-            self.ax_sll.set_ylim(lower_bound[0], self.ax_sll.get_ylim()[1])
-
+            self.ax_sll.set_ylim(-likely_lower_bound[0], upper_bound[0])
+            
 
         elif kind == "predict_slogdetcov":
 
@@ -430,12 +430,12 @@ class VisualizationHandler(object):
             K = params["K"]
             p_I = params["p_I"]
 
-            #self._predict_message_lengths.extend([
-            #    self.ax_I.plot(K, p_I, c='b', alpha=0.5)[0]
-            #])
+            self._predict_message_lengths.extend([
+                self.ax_I.plot(K, p_I, c='b', alpha=0.5)[0]
+            ])
 
-            self.ax_I.relim()
-            self.ax_I.autoscale_view()
+            #self.ax_I.relim()
+            #self.ax_I.autoscale_view()
 
 
 

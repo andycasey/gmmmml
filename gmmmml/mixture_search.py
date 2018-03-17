@@ -180,34 +180,39 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
 def _log_likelihood_bound(K, N, D, logdetcov_bound, aggregate_function,
     chisq_scalar=1):
 
+    scale = 1e6
+    chisq_scalar = D
     K = np.atleast_1d(K)
     log_likelihoods = np.zeros((K.size, 2))
     
     for i, (k, logdetcov) \
     in enumerate(zip(K.astype(int), logdetcov_bound)):
 
-        log_prob_uniform = np.ones((N, k)) * 3 * chisq_scalar
+        log_prob_uniform = np.ones((N, k)) * scale * chisq_scalar
 
         # Consider the first case where weights are uniformly distributed.
         uniform_weights = np.ones(k, dtype=float)/N
+        Sk = 0
         for j, w in enumerate(uniform_weights):
             Nk = int(np.round(w * N))
-            log_prob_uniform.T[j, np.arange(Nk)] = chisq_scalar
-
+            log_prob_uniform.T[j, np.arange(Sk, Sk + Nk)] = chisq_scalar
+            Sk += Nk
 
         wlp_lu = np.log(uniform_weights) + logdetcov \
             - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
         ll_lu = np.sum(scipy.misc.logsumexp(wlp_lu, axis=1))
         
-        log_prob_non_uniform = np.ones_like(log_prob_uniform) * 3 * chisq_scalar
+        log_prob_non_uniform = np.ones_like(log_prob_uniform) * scale * chisq_scalar
 
         non_uniform_weights = np.ones(k, dtype=float)
         non_uniform_weights[1:] = 1.0/N
         non_uniform_weights[0] = 1.0 - np.sum(non_uniform_weights[1:])
 
+        Sk = 0
         for j, w in enumerate(non_uniform_weights):
             Nk = int(np.round(w * N))
-            log_prob_non_uniform.T[j, np.arange(Nk)] = chisq_scalar
+            log_prob_non_uniform.T[j, np.arange(Sk, Sk + Nk)] = chisq_scalar
+            Sk += Nk
 
         wlp_ln = np.log(non_uniform_weights) + logdetcov \
             - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
@@ -701,18 +706,22 @@ class GaussianMixture(object):
 
                 # Predict the likely upper bound for log likelihood improvements
                 likely_upper_bound = _log_likelihood_bound(K_all, N, D, ldc, 
-                    aggregate_function=np.max)
+                    aggregate_function=np.min)
+
+
+                raise a
 
                 visualization_handler.emit("predict_ll_bounds", dict(K=K_all,
                     likely_upper_bound=likely_upper_bound))
 
 
+
                 p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K_all)
 
                 p_ll_bounds = np.array([
-                    _log_likelihood_bound(
+                    -_log_likelihood_bound(
                         K_all, N, D, (p_sldc + p_sldc_pos_err)/K_all, np.max),
-                    _log_likelihood_bound(
+                    -_log_likelihood_bound(
                         K_all, N, D, (p_sldc + p_sldc_neg_err)/K_all, np.min)
                 ])
 
@@ -724,6 +733,34 @@ class GaussianMixture(object):
 
 
                 # Now let's predict the total message length...
+                K = np.array(self._state_K)
+                p_I = np.zeros_like(K)
+
+                _, I_parts = _mixture_message_length(K, N, D, p_I, p_I)
+                p_slw, p_slw_err, slw_lower, slw_upper = self._predict_slogweights(K, N)
+                
+                p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K)
+
+                likely_upper_bound = _log_likelihood_bound(K, N, D, 
+                    np.array([np.sum(np.log(dc)) for dc in self._state_det_covs])/K,
+                    aggregate_function=np.max)
+
+
+                yerr = 0.001
+
+                p_I = I_parts["I_mixtures"] + I_parts["I_parameters"] \
+                    + (D * (D + 3)/4. - 0.5) * slw_lower \
+                    + I_sldc_scalar * p_sldc \
+                    - np.array(self._state_slog_likelihoods) \
+                    - D * N * np.log(yerr)
+
+                #I_data = -log_likelihood - D * N * np.log(yerr)
+                #I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
+                #I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
+
+                visualization_handler.emit("predict_message_length", dict(K=K,
+                    p_I=p_I))
+
 
 
                 #ldc = np.ones_like(K_all) * np.min(log_det_covs)
