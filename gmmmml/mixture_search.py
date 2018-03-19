@@ -120,7 +120,7 @@ def _bound_sum_log_weights(K, N):
 
 
 
-def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
+def _approximate_log_likelihood(N, D, K, logdetcovs, weights, actuals):
     """
     Calculate a first-order approximation of the log-likelihood for the
     :math:`K`-th mixture.
@@ -143,13 +143,29 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
         The weights of the :math:`K`-th mixtures. 
 
     """
+
     K = np.atleast_1d(K)
     log_likelihoods = np.zeros(K.size)
 
-    if weights is None:
-        print("using uniform assumption")
-        weights = [np.ones(k, dtype=float)/k for k in K]
-    
+    assert len(K) == len(logdetcovs)
+    assert len(K) == len(weights)
+
+    for i, (k, ldcs, ws) in enumerate(zip(K, logdetcovs, weights)):
+
+        log_likelihoods[i] = N * np.sum(ws * np.log(ws)) \
+                           + N * np.sum(ws * ldcs) \
+                           - 0.5 * N * D * (np.log(2 * np.pi) + 1)
+
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot(K, -log_likelihoods, label="prediction", c='r')
+    ax.scatter(K, -np.array(actuals))
+
+    ax.set_ylabel('-log(L)')
+
+    raise a
+
+
     for i, (k, logdetcov, weight) in enumerate(zip(K, logdetcovs, weights)):
         # most things will be chi-sq ~ 5 away (per dim) from most K means
         # TODO: my intuition is that this should be D * 5, but that doesn't
@@ -169,6 +185,8 @@ def _approximate_log_likelihood(K, N, D, logdetcovs, weights=None):
 
         log_likelihoods[i] = np.sum(
             scipy.misc.logsumexp(weighted_log_prob, axis=1))
+
+    raise a
 
     if not np.all(np.isfinite(log_likelihoods)):
         logger.warn("Non-finite predictions of the log-likelihood!")
@@ -709,8 +727,18 @@ class GaussianMixture(object):
                     aggregate_function=np.min)
 
 
-                raise a
+                if self._state_K[-1] > 25:
 
+
+                    _approximate_log_likelihood(N, D, np.array(self._state_K),
+                        np.array([np.log(ea) for ea in self._state_det_covs]),
+                        np.array(self._state_weights),
+                        self._state_slog_likelihoods)
+
+
+                    raise a
+
+                    """
                 visualization_handler.emit("predict_ll_bounds", dict(K=K_all,
                     likely_upper_bound=likely_upper_bound))
 
@@ -761,7 +789,7 @@ class GaussianMixture(object):
                 visualization_handler.emit("predict_message_length", dict(K=K,
                     p_I=p_I))
 
-
+                """
 
                 #ldc = np.ones_like(K_all) * np.min(log_det_covs)
                 #ll_upper_bound = _log_likelihood_bound(K_all, N, D, ldc,
