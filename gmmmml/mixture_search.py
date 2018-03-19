@@ -150,11 +150,15 @@ def _approximate_log_likelihood(N, D, K, logdetcovs, weights, actuals):
     assert len(K) == len(logdetcovs)
     assert len(K) == len(weights)
 
+    # chi_r is, approximately, the estimated reduced chi-squared value for
+    # data that are correctly fit by a component in the mixture model.
+    est_red_chisq = 0
+
     for i, (k, ldcs, ws) in enumerate(zip(K, logdetcovs, weights)):
 
         log_likelihoods[i] = N * np.sum(ws * np.log(ws)) \
                            + N * np.sum(ws * ldcs) \
-                           - 0.5 * N * D * (np.log(2 * np.pi) + 1)
+                           - 0.5 * N * D * (np.log(2 * np.pi) + est_red_chisq)
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
@@ -727,7 +731,7 @@ class GaussianMixture(object):
                     aggregate_function=np.min)
 
 
-                if self._state_K[-1] > 25:
+                if self._state_K[-1] > 30:
 
 
                     _approximate_log_likelihood(N, D, np.array(self._state_K),
