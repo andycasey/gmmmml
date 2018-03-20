@@ -33,6 +33,7 @@ class VisualizationHandler(object):
         self._predict_slw_bounds = []
         self._predict_slogdetcov_bounds = []
         self._predict_ll_bounds = []
+        self._predict_I_bounds = []
 
         self._data_slw = []
         self._data_slogdetcov = []
@@ -308,7 +309,7 @@ class VisualizationHandler(object):
                 self.ax_slogw.plot(K, upper, **plot_kwds)[0]
             ])
 
-        elif kind == "slogdetcov_bounds":
+        elif kind == "I_sldc_bounds":
 
             self._clear_previous_items(self._predict_slogdetcov_bounds)
 
@@ -360,7 +361,10 @@ class VisualizationHandler(object):
         elif kind == "predict_nll_bounds":
 
             #K_obs, nll_obs_bound = params["nll_obs_bound"]
-            K_theory, nll_theory_bound = params["nll_theory_bound"]
+            #K_theory, nll_theory_bound = params["nll_theory_bound"]
+            K = params["K"]
+            nll_strict_bound = params["nll_strict_bound"]
+            nll_relaxed_bound = params["nll_relaxed_bound"]
 
             # The theory bound is often so low that it is not useful, so we will
             # store the current y limits.
@@ -372,24 +376,24 @@ class VisualizationHandler(object):
 
             self._predict_ll_bounds.extend([
                 self.ax_sll.fill_between(
-                    K_theory, nll_theory_bound, ylim[1] * np.ones_like(K_theory),
+                    K, nll_strict_bound, ylim[1] * np.ones_like(K),
                     facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_sll.plot(K_theory, nll_theory_bound, 
+                self.ax_sll.plot(K, nll_strict_bound, 
                     c="#666666", linestyle="-", zorder=-10, linewidth=0.5)[0],
-                #self.ax_sll.plot(K_obs, nll_obs_bound, c="#666666",
-                #    linestyle="-.", zorder=-10, linewidth=0.5)[0]
+                self.ax_sll.plot(K, nll_relaxed_bound, c="#666666",
+                    linestyle="-.", zorder=-10, linewidth=0.5)[0]
             ])
 
             self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
 
-            visible_bounds = nll_theory_bound
+            visible_bounds = nll_relaxed_bound
             self.ax_sll.set_ylim(
                 min(visible_bounds) - 0.05 * (ylim[1] - min(visible_bounds)),
                 ylim[1]
             )
             
 
-        elif kind == "predict_slogdetcov":
+        elif kind == "predict_I_slogdetcov":
 
             self._update_previous_predict_slogdetcovs()
 
@@ -427,6 +431,36 @@ class VisualizationHandler(object):
 
             #if min(K) > 8:
             #    raise a
+
+        elif kind == "predict_I_bounds":
+            K = params["K"]
+            I_strict_bound = params["I_strict_bound"]
+            I_relaxed_bound = params["I_relaxed_bound"]
+            p_I = params["p_I"]
+
+            if clear_previous:
+                self._clear_previous_items(self._predict_I_bounds)
+
+            ylim = self.ax_I.get_ylim()
+
+            kwds = dict(c=self._color_prediction, zorder=-1, alpha=0.5)
+            kwds.update(plotting_kwds)
+
+
+            self._predict_I_bounds.extend([
+                self.ax_I.fill_between(K, I_strict_bound,
+                    np.ones(K.size) * ylim[1],
+                    facecolor="#EEEEEE", linestyle=":", zorder=-10),
+                self.ax_I.plot(K, I_strict_bound, c="#666666",
+                    linestyle="-", zorder=-10, linewidth=0.5)[0],
+                self.ax_I.plot(K, I_relaxed_bound, c="#666666",
+                    linestyle="-.", zorder=-10, linewidth=0.5)[0],
+                self.ax_I.plot(K, p_I, **kwds)[0]
+            ])
+
+            self.ax_I.set_ylim(self.ax_I.get_ylim()[0], ylim[1])
+
+
 
         elif kind == "predict_message_length":
 

@@ -683,6 +683,32 @@ class GaussianMixture(object):
         _, I_parts = _mixture_message_length(K, N, D, _z, _z)
         I_other = I_parts["I_mixtures"] + I_parts["I_parameters"]
 
+        I_slw_c = (0.25 * D * (D + 3) - 0.5)
+        I_sldc_c = -0.5 * (D + 2)
+            
+        log_det_covs = np.log(np.hstack(self._state_det_covs))            
+        lower_ldc = K * np.max(log_det_covs)
+        upper_ldc = K * np.min(log_det_covs)
+
+        nll_strict_bound, nll_relaxed_bound \
+            = self._predict_lower_bounds_on_negative_log_likelihood(K, N, D)
+
+
+        yerr = 0.001
+        I_strict_lower_bound = I_other \
+                             + I_slw_c * slw_lower \
+                             + I_sldc_c * lower_ldc \
+                             + nll_strict_bound \
+                             - D * N * np.log(yerr)
+
+        I_relaxed_lower_bound = I_other \
+                              + I_slw_c * slw_lower \
+                              + I_sldc_c * upper_ldc \
+                              + nll_relaxed_bound \
+                              - D * N * np.log(yerr)
+
+
+
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
@@ -692,7 +718,6 @@ class GaussianMixture(object):
                 dict(K=K, I_other=I_other))
 
             # Show the information contributions from the weights.
-            I_slw_c = (0.25 * D * (D + 3) - 0.5)
             visualization_handler.emit("I_slw_bounds",
                 dict(K=K, lower=I_slw_c * slw_lower, upper=I_slw_c * slw_upper))
 
@@ -702,201 +727,42 @@ class GaussianMixture(object):
 
             # Show the information contributions from the sum of the log of the
             # determinant of the covariance matrices.
-            I_sldc_c = -0.5 * (D + 2)
-            log_det_covs = np.log(np.hstack(self._state_det_covs))            
-            visualization_handler.emit("slogdetcov_bounds", dict(K=K,
-                upper=I_sldc_c * K * np.min(log_det_covs), 
-                lower=I_sldc_c * K * np.max(log_det_covs)))
+            visualization_handler.emit("I_sldc_bounds", dict(K=K,
+                upper=I_sldc_c * upper_ldc, lower=I_sldc_c * lower_ldc))
 
-
+            # Only show predictions for the sum of the log of the determinant
+            # of the covariance matrices if it is valid.
+            # TODO: Should we do this using Gaussian KDE instead?
             if p_sldc is not None \
             and np.all(np.isfinite(np.hstack([p_sldc, p_sldc_pos_err]))) \
             and np.sum((p_sldc + p_sldc_pos_err) <= (K * np.max(log_det_covs))) >= (K.size - 2):
-                visualization_handler.emit("predict_slogdetcov",
+                visualization_handler.emit("predict_I_slogdetcov",
                     dict(K=K, p_slogdetcovs=I_sldc_c * p_sldc,
                         p_slogdetcovs_pos_err=I_sldc_c * p_sldc_pos_err,
                         p_slogdetcovs_neg_err=I_sldc_c * p_sldc_neg_err))
 
+                I_prediction = I_other \
+                     + I_slw_c * p_slw \
+                     + I_sldc_c * p_sldc \
+                     + p_nll \
+                     - D * N * np.log(yerr)
 
+            else:
+                I_prediction = np.nan * np.ones(K.size, dtype=float)
 
-
+            # Predict the negative log likelihood of the mixtures.
             visualization_handler.emit("predict_nll", dict(K=K, p_nll=p_nll))
 
+            visualization_handler.emit("predict_nll_bounds", dict(K=K,
+                nll_strict_bound=nll_strict_bound, nll_relaxed_bound=nll_relaxed_bound))
 
-            nll_theory_future_bound, nll_obs_future_bound = \
-                self._predict_lower_bounds_on_negative_log_likelihood(K, N, D)
-            nll_theory_previous_bound = \
-                self._lower_bounds_on_negative_log_likelihood_for_past_mixtures(N, D)
 
-            K_all = np.hstack([self._state_K, K])
-            visualization_handler.emit("predict_nll_bounds", dict(
-                nll_theory_bound=(K_all,
-                    np.hstack([nll_theory_previous_bound, nll_theory_previous_bound[-1] * np.ones_like(K)]))
-            ))
+            # Predict the total message length.
+            visualization_handler.emit("predict_I_bounds", dict(K=K,
+                I_strict_bound=I_strict_lower_bound,
+                I_relaxed_bound=I_relaxed_lower_bound,
+                p_I=I_prediction))
 
-
-            
-
-
-
-
-            # Sometimes we don't predict the sum of the log of the determinants
-            # of the covariance matrices.
-            if p_sldc is not None \
-            and np.all(np.isfinite(np.hstack([p_sldc, p_sldc_pos_err]))) \
-            and np.all((p_sldc + p_sldc_pos_err) <= (K * np.max(log_det_covs))):
-
-                # Suitable to show predictions..
-
-                # Predict log likelihood bounds for K values already trialled,
-                # and future Ks.
-                P = len(self._state_K)
-                
-                ldc = np.hstack([
-                    [np.min(np.log(ea)) for ea in self._state_det_covs],
-                    np.ones_like(K) * np.min(log_det_covs)
-                ])
-
-
-                # Predict the likely upper bound for log likelihood improvements
-                #nll_theory_bound = self._lower_bounds_on_negative_log_likelihood_for_past_mixtures(N, D)
-
-
-
-                
-
-                if self._state_K[-1] > 25 and False:
-
-
-
-
-                    _approximate_log_likelihood(N, D, np.array(self._state_K),
-                        np.array([np.log(ea) for ea in self._state_det_covs]),
-                        np.array(self._state_weights),
-                        self._state_slog_likelihoods)
-
-
-                    raise a
-
-                    """
-                visualization_handler.emit("predict_ll_bounds", dict(K=K_all,
-                    likely_upper_bound=likely_upper_bound))
-
-
-
-                p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K_all)
-
-                p_ll_bounds = np.array([
-                    -_log_likelihood_bound(
-                        K_all, N, D, (p_sldc + p_sldc_pos_err)/K_all, np.max),
-                    -_log_likelihood_bound(
-                        K_all, N, D, (p_sldc + p_sldc_neg_err)/K_all, np.min)
-                ])
-
-                p_ll = np.mean(p_ll_bounds, axis=0)
-                p_ll_pos_err, p_ll_neg_err = p_ll_bounds - p_ll
-
-                visualization_handler.emit("predict_ll", dict(K=K_all, 
-                    p_ll=p_ll, p_ll_pos_err=p_ll_pos_err, p_ll_neg_err=p_ll_neg_err))
-
-
-                # Now let's predict the total message length...
-                K = np.array(self._state_K)
-                p_I = np.zeros_like(K)
-
-                _, I_parts = _mixture_message_length(K, N, D, p_I, p_I)
-                p_slw, p_slw_err, slw_lower, slw_upper = self._predict_slogweights(K, N)
-                
-                p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K)
-
-                likely_upper_bound = _log_likelihood_bound(K, N, D, 
-                    np.array([np.sum(np.log(dc)) for dc in self._state_det_covs])/K,
-                    aggregate_function=np.max)
-
-
-                yerr = 0.001
-
-                p_I = I_parts["I_mixtures"] + I_parts["I_parameters"] \
-                    + (D * (D + 3)/4. - 0.5) * slw_lower \
-                    + I_sldc_scalar * p_sldc \
-                    - np.array(self._state_slog_likelihoods) \
-                    - D * N * np.log(yerr)
-
-                #I_data = -log_likelihood - D * N * np.log(yerr)
-                #I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
-                #I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
-
-                visualization_handler.emit("predict_message_length", dict(K=K,
-                    p_I=p_I))
-
-                """
-
-                #ldc = np.ones_like(K_all) * np.min(log_det_covs)
-                #ll_upper_bound = _log_likelihood_bound(K_all, N, D, ldc,
-                #    aggregate_function=np.max)
-
-                #ll_upper_bound = _log_likelihood_bound(K_bound, N, D,
-                #    np.ones_like(K_bound) * np.max(log_det_covs), aggregate_function=np.max)
-
-
-                #print("K_bound", K_bound)
-                #print("ll_lower", ll_lower_bound)
-                #print("ll_upper", ll_upper_bound)
-
-
-                
-
-
-
-
-            """
-
-            slogdetcovs = [np.sum(np.log(ea)) for ea in self._state_det_covs]
-            I, I_parts = _mixture_message_length(self._state_K, N, D,
-                self._state_slog_likelihoods, slogdetcovs)
-
-            #I, I_parts = _mixture_message_length(target_K, N, D, p_ll, p_slw)
-
-            # First order estimate of best possible log-likelihood.
-
-            if p_slogdetcovs is not None:
-
-
-                p_ll = _approximate_log_likelihood(self._state_K, N, D,
-                    [np.log(ea) for ea in self._state_det_covs],
-                    self._state_weights)
-
-                visualization_handler.emit("predict_ll",
-                    dict(K=self._state_K, p_ll=p_ll), save=True, clear_previous=True,
-                    plotting_kwds=dict(c="g"))
-
-
-                # Show bound of previous log likelihoods and future mixtures.
-                tK = np.arange(1, 1 + max(target_K))
-                p_sldcs, _, __ = self._predict_slogdetcovs(tK)
-
-                p_ll = _approximate_log_likelihood(tK, N, D,
-                    p_sldcs/tK)
-
-                visualization_handler.emit("predict_ll",
-                    dict(K=tK, p_ll=p_ll), save=True, clear_previous=False,
-                    plotting_kwds=dict(c="r"))
-
-                lower_logL_bound = _log_likelihood_bound(
-                    tK, N, D, logdetcov_lower_bound, aggregate_function=np.min)
-                upper_logL_likely_bound = _log_likelihood_bound(
-                    tK, N, D, logdetcov_upper_bound, aggregate_function=np.max)
-
-                visualization_handler.emit("predict_ll_bounds",
-                    dict(K=tK, lower_bound=lower_logL_bound,
-                        likely_upper_bound=upper_logL_likely_bound))
-
-                raise a
-
-            if p_I is not None:            
-                visualization_handler.emit("predict_message_length",
-                    dict(K=target_K, p_I=p_I))
-            """
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood):
         r"""
@@ -986,13 +852,46 @@ class GaussianMixture(object):
         else:
             nll -= N * np.log(self._state_det_covs[0][0])
 
+        # Compare to NLLs already observed?
+        obs_nll = -np.array(self._state_slog_likelihoods)
+        pre_nll = nll[:len(obs_nll)]
+
+        chisqs = (obs_nll - pre_nll)/(0.5 * N * D)
+
+        # chisqs/K w.r.t K will follow a 1/K**2 relation
+        # y = a*k**-2
+
+
+        if obs_nll.size >= 2:
+
+            x = np.array(self._state_K)
+
+            y = chisqs/x
+
+
+            f = lambda x, a: a*np.array(x, dtype=float)**-2
+
+            op_params, op_cov = op.curve_fit(f, x, y, p0=[1], sigma=x.astype(float)**-2)
+
+            """
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.scatter(x, y)
+
+            ax.plot(x, f(x, 50), c='g')
+            ax.plot(x, f(x, *op_params), c='r')
+            """
+
+            # predict chisq diff.
+            nll += 0.5 * N * D * K * f(K, *op_params)
+
         return nll
 
 
 
 
 
-    def _predict_lower_bounds_on_negative_log_likelihood(self, K, N, D, 
+    def _old_predict_lower_bounds_on_negative_log_likelihood(self, K, N, D, 
         obs_logdetcov_function=np.min):
 
         K = np.atleast_1d(K)
@@ -1007,10 +906,51 @@ class GaussianMixture(object):
             + N * np.log(N) - (N - K + 1) * np.log(N - K + 1) 
 
         logdetcovs = np.log(np.hstack(self._state_det_covs))
-        nll_bound_theory = nll - N * np.max(logdetcovs)
         nll_bound_obs = nll - N * obs_logdetcov_function(logdetcovs)
 
+        # Get better bounds for observed mixtures.
+        maxlogdetcov = np.max(logdetcovs)
+        nll_bound_theory = nll - N * maxlogdetcov
+                
+        for i, k in enumerate(K):
+            if k not in self._state_K:
+                continue
+
+            index = self._state_K.index(k)
+
+            nll_bound_theory[i] += N * maxlogdetcov - N * np.array()
+
+
+
         return (nll_bound_theory, nll_bound_obs)
+
+
+    def _predict_lower_bounds_on_negative_log_likelihood(self, K, N, D):
+
+        # For K values already trialled, use what came of it.
+        K = np.atleast_1d(K)
+        relaxed_bound = np.ones(K.size, dtype=float) * 0.5 * N * D * np.log(2 * np.pi) 
+
+        logdetcovs = np.log(np.hstack(self._state_det_covs))
+
+        min_logdetcov = np.min(logdetcovs)
+        strict_bound = relaxed_bound - N * np.max(logdetcovs)
+
+        for i, k in enumerate(K):
+
+            try:
+                index = self._state_K.index(k)
+
+            except ValueError:
+                relaxed_bound[i] -= N * min_logdetcov
+
+            else:
+                wts = self._state_weights[index]
+                dcs = self._state_det_covs[index]
+
+                relaxed_bound[i] -= N * np.sum(wts * (np.log(dcs) + np.log(wts)))
+
+        return (strict_bound, relaxed_bound)
 
 
     def _lower_bounds_on_negative_log_likelihood_for_past_mixtures(self, N, D):
