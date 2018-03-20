@@ -14,6 +14,7 @@ import logging
 import numpy as np
 import scipy
 import scipy.misc
+import scipy.stats
 import scipy.optimize as op
 import os
 from sklearn import cluster
@@ -159,6 +160,9 @@ def _approximate_log_likelihood(N, D, K, logdetcovs, weights, actuals):
         log_likelihoods[i] = N * np.sum(ws * np.log(ws)) \
                            + N * np.sum(ws * ldcs) \
                            - 0.5 * N * D * (np.log(2 * np.pi) + est_red_chisq)
+
+
+
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
@@ -668,11 +672,30 @@ class GaussianMixture(object):
         p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K)
 
         # Predict log-likelihoods.
-        p_ll, p_ll_err = self._predict_log_likelihoods(K)
+        #p_ll, p_ll_err = self._predict_log_likelihoods(K)
+        _, D, __ = cov.shape
+        p_nll = self._predict_negative_log_likelihood(K, N, D)
+
 
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
+
+
+            visualization_handler.emit("predict_nll", dict(K=K, p_nll=p_nll))
+
+
+            nll_theory_future_bound, nll_obs_future_bound = \
+                self._predict_lower_bounds_on_negative_log_likelihood(K, N, D)
+            nll_theory_previous_bound = \
+                self._lower_bounds_on_negative_log_likelihood_for_past_mixtures(N, D)
+
+            K_all = np.hstack([self._state_K, K])
+            visualization_handler.emit("predict_nll_bounds", dict(
+                nll_theory_bound=(K_all,
+                    np.hstack([nll_theory_previous_bound, nll_theory_previous_bound[-1] * np.ones_like(K)]))
+            ))
+
 
             # Show the other contributions to the message length.
             _, D, __ = cov.shape
@@ -704,6 +727,9 @@ class GaussianMixture(object):
                 upper=I_sldc_scalar * p_sldc_lower_bound, 
                 lower=I_sldc_scalar * p_sldc_upper_bound))
 
+
+
+
             # Sometimes we don't predict the sum of the log of the determinants
             # of the covariance matrices.
             if p_sldc is not None \
@@ -719,7 +745,7 @@ class GaussianMixture(object):
                 # Predict log likelihood bounds for K values already trialled,
                 # and future Ks.
                 P = len(self._state_K)
-                K_all = np.hstack([self._state_K, K])
+                
                 ldc = np.hstack([
                     [np.min(np.log(ea)) for ea in self._state_det_covs],
                     np.ones_like(K) * np.min(log_det_covs)
@@ -727,11 +753,15 @@ class GaussianMixture(object):
 
 
                 # Predict the likely upper bound for log likelihood improvements
-                likely_upper_bound = _log_likelihood_bound(K_all, N, D, ldc, 
-                    aggregate_function=np.min)
+                #nll_theory_bound = self._lower_bounds_on_negative_log_likelihood_for_past_mixtures(N, D)
 
 
-                if self._state_K[-1] > 30:
+
+                
+
+                if self._state_K[-1] > 25 and False:
+
+
 
 
                     _approximate_log_likelihood(N, D, np.array(self._state_K),
@@ -883,7 +913,6 @@ class GaussianMixture(object):
 
 
 
-
     def  _predict_slogweights(self, target_K, N):
 
         slw_lower, slw_upper = _bound_sum_log_weights(target_K, N)
@@ -913,9 +942,82 @@ class GaussianMixture(object):
         return (pred, pred_err, slw_lower, slw_upper)
 
 
+    def _predict_negative_log_likelihood(self, K, N, D):
+
+        # Fractionally, how close are we to uniform mixtures?
+        K = np.atleast_1d(K)
+        Kp = np.array(self._state_K)
+        upper = lambda K: N * np.log(K)
+        lower = lambda K: N * np.log(N) - (N - K + 1) * np.log(N - K + 1)
+
+        nswlw = - N * np.array([np.sum(w * np.log(w)) for w in self._state_weights])
+
+        fractions = (nswlw - lower(Kp))/(upper(Kp) - lower(Kp))
+
+        # TODO: Revisit this.
+        # Just take the most recent fraction.
+        # TODO: Should this default be zero of 1.0? What is more conservative?
+        f = fractions[-1] if np.isfinite(fractions[-1]) else 1.0
+
+        # What is the minimum log determinant of a covariance matrix observed to
+        # date?
+
+        # Draw some values from log|C|
+        # TODO: Draw from 
+
+        nll = 0.5 * N * D * np.log(2 * np.pi) \
+            + lower(K) + f * (upper(K) - lower(K))
 
 
-    def _predict_log_likelihoods(self, target_K):
+        if len(self._state_det_covs) > 1:
+            kernel = scipy.stats.gaussian_kde(np.log(self._state_det_covs[-1]))
+            # TODO: This assumes uniform weights but we know that might not be
+            # true.
+            for i, k in enumerate(K):
+                w = 1.0/k
+                nll -= N * np.sum(w * kernel(k))
+
+        else:
+            nll -= N * np.log(self._state_det_covs[0][0])
+
+        return nll
+
+
+
+
+
+    def _predict_lower_bounds_on_negative_log_likelihood(self, K, N, D, 
+        obs_logdetcov_function=np.min):
+
+        K = np.atleast_1d(K)
+
+        # The two bounds for -N\sum^{K}w_{k}\log{w_{k}} are:
+        #   (1): -N\sum^{K}w_{k}\log{w_{k}} = N\log{K}
+        #   (2): -N\sum^{K}w_{k}\log{w_{k}} = N\log{N} - (N - K + 1)\log{N - K + 1}
+
+        # Assuming N > K, (1) > (2) so (2) gives us the lower bound.
+
+        nll = 0.5 * N * D * np.log(2 * np.pi) \
+            + N * np.log(N) - (N - K + 1) * np.log(N - K + 1) 
+
+        logdetcovs = np.log(np.hstack(self._state_det_covs))
+        nll_bound_theory = nll - N * np.max(logdetcovs)
+        nll_bound_obs = nll - N * obs_logdetcov_function(logdetcovs)
+
+        return (nll_bound_theory, nll_bound_obs)
+
+
+    def _lower_bounds_on_negative_log_likelihood_for_past_mixtures(self, N, D):
+
+        sumwwldc = N * np.array([np.sum(w * (np.log(dc) + np.log(w))) \
+            for w, dc in zip(self._state_weights, self._state_det_covs)])
+
+        return 0.5 * N * D * np.log(2 * np.pi) - sumwwldc
+
+
+
+
+    def _old_predict_log_likelihoods(self, target_K):
 
         x = np.array(self._state_K)
         y = np.array(self._state_slog_likelihoods)

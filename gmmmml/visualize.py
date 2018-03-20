@@ -334,24 +334,22 @@ class VisualizationHandler(object):
                 self.ax_slogdet.plot(K, upper, **upper_plot_kwds)[0]
             ])
 
-        elif kind == "predict_ll":
+        elif kind == "predict_nll":
 
             if clear_previous:
                 self._update_previous_predict_lls()
 
             K = params["K"]
-            p_ll = params["p_ll"]#/self._reference_ll
-            p_ll_pos_err = params.get("p_ll_pos_err", 0)#/self._reference_ll
-            p_ll_neg_err = params.get("p_ll_neg_err", 0)
+            p_nll = params["p_nll"]#/self._reference_ll
 
             kwds = dict(c=self._color_prediction, zorder=-1, alpha=0.5)
             kwds.update(plotting_kwds)
 
             self._predict_ll.extend([
-                self.ax_sll.plot(K, -p_ll, **kwds)[0],
-                self.ax_sll.fill_between(
-                    K, -(p_ll + p_ll_pos_err), -(p_ll + p_ll_neg_err),
-                    facecolor=self._color_prediction, alpha=0.25, zorder=-1)
+                self.ax_sll.plot(K, p_nll, **kwds)[0],
+                #self.ax_sll.fill_between(
+                #    K, -(p_ll + p_ll_pos_err), -(p_ll + p_ll_neg_err),
+                #    facecolor=self._color_prediction, alpha=0.25, zorder=-1)
             ])
 
             #    self.ax_sll.fill_between(
@@ -359,29 +357,40 @@ class VisualizationHandler(object):
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
-            self.ax_sll.set_xlim(0, max(K))
+            self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
 
 
 
-        elif kind == "predict_ll_bounds":
+        elif kind == "predict_nll_bounds":
 
-            K = params["K"]
-            likely_lower_bound = params["likely_upper_bound"]
+            #K_obs, nll_obs_bound = params["nll_obs_bound"]
+            K_theory, nll_theory_bound = params["nll_theory_bound"]
 
-            upper_bound = self.ax_sll.get_ylim()[1] * np.ones_like(K)
+            # The theory bound is often so low that it is not useful, so we will
+            # store the current y limits.
+            ylim = self.ax_sll.get_ylim()
+
 
             if clear_previous:
                 self._clear_previous_items(self._predict_ll_bounds)
 
             self._predict_ll_bounds.extend([
-                self.ax_sll.fill_between(K, -likely_lower_bound, upper_bound,
+                self.ax_sll.fill_between(
+                    K_theory, nll_theory_bound, ylim[1] * np.ones_like(K_theory),
                     facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_sll.plot(K, -likely_lower_bound, c="#666666", linestyle="-.",
-                    zorder=-10, linewidth=0.5)[0]
-                ])
+                self.ax_sll.plot(K_theory, nll_theory_bound, 
+                    c="#666666", linestyle="-", zorder=-10, linewidth=0.5)[0],
+                #self.ax_sll.plot(K_obs, nll_obs_bound, c="#666666",
+                #    linestyle="-.", zorder=-10, linewidth=0.5)[0]
+            ])
 
-            self.ax_sll.set_xlim(0, max(K))
-            self.ax_sll.set_ylim(-likely_lower_bound[0], upper_bound[0])
+            self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
+
+            visible_bounds = nll_theory_bound
+            self.ax_sll.set_ylim(
+                min(visible_bounds) - 0.05 * (ylim[1] - min(visible_bounds)),
+                ylim[1]
+            )
             
 
         elif kind == "predict_slogdetcov":
