@@ -275,14 +275,13 @@ class VisualizationHandler(object):
 
 
 
-        elif kind == "predict_slw":
+        elif kind == "predict_I_slw":
 
             self._update_previous_predict_slws()
 
             K = params["K"]
-            D = params["D"]
-            p_slw = (0.25 * D * (D + 3) - 0.5) * params["p_slw"]
-            p_slw_err = (0.25 * D * (D + 3) - 0.5) * params["p_slw_err"]
+            p_slw = params["p_slw"]
+            p_slw_err = params["p_slw_err"]
             
             self._predict_slw.extend([
                 self.ax_slogw.plot(K, p_slw, 
@@ -292,16 +291,13 @@ class VisualizationHandler(object):
                     facecolor=self._color_prediction, alpha=0.5, zorder=-1),
             ])
 
-            self.ax_slogw.set_xlim(0, max(K))
+            self.ax_slogw.set_xlim(0, self.ax_slogw.get_xlim()[1])
 
-        elif kind == "slw_bounds":
+        elif kind == "I_slw_bounds":
 
             self._clear_previous_items(self._predict_slw_bounds)
 
             K, lower, upper = (params["K"], params["lower"], params["upper"])
-            D = params["D"]
-            lower = (0.25 * D * (D + 3) - 0.5) * lower
-            upper = (0.25 * D * (D + 3) - 0.5) * upper
             plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
                 linewidth=0.5)
 
@@ -357,7 +353,7 @@ class VisualizationHandler(object):
             #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
             #    ])
 
-            self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
+            self.ax_sll.set_xlim(0, max(K[-1], self.ax_sll.get_xlim()[1]))
 
 
 

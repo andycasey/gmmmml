@@ -574,9 +574,10 @@ class GaussianMixture(object):
             
             if kwds["visualization_handler"] is not None:
 
-                target_K = weight.size + np.arange(1, 25)
-                self._predict_message_length(target_K, cov, weight, y.shape[0], 
-                    ll, message_length, **kwds)
+                K_predict = np.arange(1, weight.size + 25)
+                self._predict_message_length(K_predict, N, D, **kwds)
+                #, weight, y.shape[0], 
+                #    ll, message_length, **kwds)
 
                 
 
@@ -639,6 +640,7 @@ class GaussianMixture(object):
 
                 target_K = weight.size + np.arange(1, 10)
 
+
                 self._predict_message_length(target_K, cov, weight, y.shape[0], ll, I, **kwds)
 
                 #visualization_handler.emit("predict", dict(model=self))
@@ -653,9 +655,12 @@ class GaussianMixture(object):
         raise a
 
 
-    def _predict_message_length(self, K, cov, weight, N, ll, I, **kwargs):
+
+
+
+    def _predict_message_length(self, K, N, D, **kwargs):
         """
-        Predict the message lengths of future mixtures.
+        Predict the message lengths of past or future mixtures.
 
         :param K:
             An array-like object of K-th mixtures to predict message lengths
@@ -663,23 +668,56 @@ class GaussianMixture(object):
         """
 
         K = np.atleast_1d(K)
-        K_bound = np.linspace(1, K.max(), 10).astype(int)
         
         # Predict the sum of the log of the weights.
-        p_slw, p_slw_err, slw_lower, slw_upper = self._predict_slogweights(K_bound, N)
+        p_slw, p_slw_err, slw_lower, slw_upper = self._predict_slogweights(K, N)
         
         # Predict sum of the log of the determinant of the covariance matrices.
         p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K)
 
         # Predict log-likelihoods.
-        #p_ll, p_ll_err = self._predict_log_likelihoods(K)
-        _, D, __ = cov.shape
         p_nll = self._predict_negative_log_likelihood(K, N, D)
 
+        # Calculate the other contributions to the message length.
+        _z = np.zeros_like(K)
+        _, I_parts = _mixture_message_length(K, N, D, _z, _z)
+        I_other = I_parts["I_mixtures"] + I_parts["I_parameters"]
 
         # Visualize predictions.
         visualization_handler = kwargs.get("visualization_handler", None)
         if visualization_handler is not None:
+
+            # Show the other contributions to the message length.
+            visualization_handler.emit("predict_I_other",
+                dict(K=K, I_other=I_other))
+
+            # Show the information contributions from the weights.
+            I_slw_c = (0.25 * D * (D + 3) - 0.5)
+            visualization_handler.emit("I_slw_bounds",
+                dict(K=K, lower=I_slw_c * slw_lower, upper=I_slw_c * slw_upper))
+
+            visualization_handler.emit("predict_I_slw",
+                dict(K=K, p_slw=I_slw_c * p_slw, p_slw_err=I_slw_c * p_slw_err))
+
+
+            # Show the information contributions from the sum of the log of the
+            # determinant of the covariance matrices.
+            I_sldc_c = -0.5 * (D + 2)
+            log_det_covs = np.log(np.hstack(self._state_det_covs))            
+            visualization_handler.emit("slogdetcov_bounds", dict(K=K,
+                upper=I_sldc_c * K * np.min(log_det_covs), 
+                lower=I_sldc_c * K * np.max(log_det_covs)))
+
+
+            if p_sldc is not None \
+            and np.all(np.isfinite(np.hstack([p_sldc, p_sldc_pos_err]))) \
+            and np.sum((p_sldc + p_sldc_pos_err) <= (K * np.max(log_det_covs))) >= (K.size - 2):
+                visualization_handler.emit("predict_slogdetcov",
+                    dict(K=K, p_slogdetcovs=I_sldc_c * p_sldc,
+                        p_slogdetcovs_pos_err=I_sldc_c * p_sldc_pos_err,
+                        p_slogdetcovs_neg_err=I_sldc_c * p_sldc_neg_err))
+
+
 
 
             visualization_handler.emit("predict_nll", dict(K=K, p_nll=p_nll))
@@ -697,35 +735,7 @@ class GaussianMixture(object):
             ))
 
 
-            # Show the other contributions to the message length.
-            _, D, __ = cov.shape
-            _ = np.zeros_like(K_bound)
-            _, I_parts = _mixture_message_length(K_bound, N, D, _, _)
-            visualization_handler.emit("predict_I_other", dict(K=K_bound, 
-                I_other=I_parts["I_mixtures"] + I_parts["I_parameters"]))
-
-            # Show the contributions from the weights.
-            visualization_handler.emit("slw_bounds",
-                dict(K=K_bound, D=D, lower=slw_lower, upper=slw_upper))
-            visualization_handler.emit("predict_slw",
-                dict(K=K_bound, D=D, p_slw=p_slw, p_slw_err=p_slw_err))
-
-
-            # New sumlogdetcov bounds:
-            # largest and smallest with increasing K.
-            log_det_covs = np.log(np.hstack(self._state_det_covs))
-            p_sldc_bounds = np.array([
-                K_bound * np.min(log_det_covs),
-                K_bound * np.max(log_det_covs)
-            ])
-            p_sldc_lower_bound = np.min(p_sldc_bounds, axis=0)
-            p_sldc_upper_bound = np.max(p_sldc_bounds, axis=0)
-
-            I_sldc_scalar = -0.5 * (D + 2)
             
-            visualization_handler.emit("slogdetcov_bounds", dict(K=K_bound, 
-                upper=I_sldc_scalar * p_sldc_lower_bound, 
-                lower=I_sldc_scalar * p_sldc_upper_bound))
 
 
 
@@ -737,10 +747,6 @@ class GaussianMixture(object):
             and np.all((p_sldc + p_sldc_pos_err) <= (K * np.max(log_det_covs))):
 
                 # Suitable to show predictions..
-                visualization_handler.emit("predict_slogdetcov",
-                    dict(K=K, p_slogdetcovs=I_sldc_scalar * p_sldc,
-                        p_slogdetcovs_pos_err=I_sldc_scalar * p_sldc_pos_err,
-                        p_slogdetcovs_neg_err=I_sldc_scalar * p_sldc_neg_err))
 
                 # Predict log likelihood bounds for K values already trialled,
                 # and future Ks.
