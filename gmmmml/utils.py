@@ -60,14 +60,19 @@ def generate_data(N=None, D=None, K=None, cluster_std=1.0,
 
     # TODO: REFACTOR
 
-    from .mixture_search import responsibility_matrix, _message_length
+    from .mixture_search import responsibility_matrix, _mixture_message_length
+
     
     responsibility, log_likelihood = responsibility_matrix(
         X, mean, cov, weight, full_output=True, covariance_type="full")
 
     nll = -np.sum(log_likelihood)
-    I, I_parts = _message_length(X, mean, cov, weight, responsibility, nll,
-        full_output=True, covariance_type="full")
+    #I, I_parts = _message_length(X, mean, cov, weight, responsibility, nll,
+    #    full_output=True, covariance_type="full")
+
+    _, slogdetcovs = np.linalg.slogdet(cov)
+    I, I_parts = _mixture_message_length(K, N, D, -nll, np.sum(slogdetcovs),
+        weights=[weight])
 
     target = dict(mean=mean, cov=cov, weight=weight, I=I, I_parts=I_parts,
         nll=nll)

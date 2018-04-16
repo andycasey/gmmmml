@@ -7,6 +7,7 @@ np.random.seed(11)
 
 # Seed 1100 is a fun one: K = 103, D = 5, N = 4249
 
+import logging
 
 for i in range(10):
 
@@ -15,11 +16,13 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            
             y, labels, target, kwds = utils.generate_data(K=30, D=10, center_box=(-1000, 1000))
 
         except:
-            continue
+          logging.exception("failed")
+          if j > 3:
+            raise 
+          continue 
 
         else:
           break
