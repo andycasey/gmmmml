@@ -375,22 +375,22 @@ class VisualizationHandler(object):
                 self._clear_previous_items(self._predict_ll_bounds)
 
             self._predict_ll_bounds.extend([
-                self.ax_sll.fill_between(
-                    K, nll_strict_bound, ylim[1] * np.ones_like(K),
-                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_sll.plot(K, nll_strict_bound, 
-                    c="#666666", linestyle="-", zorder=-10, linewidth=0.5)[0],
-                self.ax_sll.plot(K, nll_relaxed_bound, c="#666666",
-                    linestyle="-.", zorder=-10, linewidth=0.5)[0]
+                #self.ax_sll.fill_between(
+                #    K, nll_strict_bound, ylim[1] * np.ones_like(K),
+                #    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
+                #self.ax_sll.plot(K, nll_strict_bound, 
+                #    c="#666666", linestyle="-", zorder=-10, linewidth=0.5)[0],
+                #self.ax_sll.plot(K, nll_relaxed_bound, c="#666666",
+                #    linestyle="-.", zorder=-10, linewidth=0.5)[0]
             ])
 
             self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
 
-            visible_bounds = nll_relaxed_bound
-            self.ax_sll.set_ylim(
-                min(visible_bounds) - 0.05 * (ylim[1] - min(visible_bounds)),
-                ylim[1]
-            )
+            #visible_bounds = nll_relaxed_bound
+            #self.ax_sll.set_ylim(
+            #    min(visible_bounds) - 0.05 * (ylim[1] - min(visible_bounds)),
+            #    ylim[1]
+            #)
             
 
         elif kind == "predict_I_slogdetcov":
@@ -448,6 +448,11 @@ class VisualizationHandler(object):
 
 
             self._predict_I_bounds.extend([
+                self.ax_I.plot(K, p_I, **kwds)[0]
+            ])
+
+            """
+            self._predict_I_bounds.extend([
                 self.ax_I.fill_between(K, I_strict_bound,
                     np.ones(K.size) * ylim[1],
                     facecolor="#EEEEEE", linestyle=":", zorder=-10),
@@ -457,25 +462,9 @@ class VisualizationHandler(object):
                     linestyle="-.", zorder=-10, linewidth=0.5)[0],
                 self.ax_I.plot(K, p_I, **kwds)[0]
             ])
-
+            
             self.ax_I.set_ylim(self.ax_I.get_ylim()[0], ylim[1])
-
-
-
-        elif kind == "predict_message_length":
-
-            self._update_previous_predict_message_lengths()
-
-            K = params["K"]
-            p_I = params["p_I"]
-
-            self._predict_message_lengths.extend([
-                self.ax_I.plot(K, p_I, c='b', alpha=0.5)[0]
-            ])
-
-            #self.ax_I.relim()
-            #self.ax_I.autoscale_view()
-
+            """
 
 
         else:

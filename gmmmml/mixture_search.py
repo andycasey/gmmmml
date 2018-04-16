@@ -747,6 +747,9 @@ class GaussianMixture(object):
                      + p_nll \
                      - D * N * np.log(yerr)
 
+                index = np.argmin(I_prediction)
+                print("Prediction for best K = {}".format(K[index]))
+
             else:
                 I_prediction = np.nan * np.ones(K.size, dtype=float)
 
@@ -762,6 +765,9 @@ class GaussianMixture(object):
                 I_strict_bound=I_strict_lower_bound,
                 I_relaxed_bound=I_relaxed_lower_bound,
                 p_I=I_prediction))
+
+
+
 
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood):
@@ -831,6 +837,8 @@ class GaussianMixture(object):
         # TODO: Should this default be zero of 1.0? What is more conservative?
         f = fractions[-1] if np.isfinite(fractions[-1]) else 1.0
 
+        print("fraction {:.1f}".format(f))
+
         # What is the minimum log determinant of a covariance matrix observed to
         # date?
 
@@ -861,29 +869,29 @@ class GaussianMixture(object):
         # chisqs/K w.r.t K will follow a 1/K**2 relation
         # y = a*k**-2
 
-
-        if obs_nll.size >= 2:
+        if obs_nll.size >= 3:
 
             x = np.array(self._state_K)
+            y = chisqs
 
-            y = chisqs/x
+            coeff = np.polyfit(1.0/x, y, 2, w=x)
 
+            if obs_nll.size >= 20:
 
-            f = lambda x, a: a*np.array(x, dtype=float)**-2
+                import matplotlib.pyplot as plt
+                fig, ax = plt.subplots()
+                ax.scatter(x, chisqs)
 
-            op_params, op_cov = op.curve_fit(f, x, y, p0=[1], sigma=x.astype(float)**-2)
+                ax.plot(x, np.polyval(coeff, 1.0/x), c='r')
+            
+                raise a
 
-            """
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots()
-            ax.scatter(x, y)
-
-            ax.plot(x, f(x, 50), c='g')
-            ax.plot(x, f(x, *op_params), c='r')
-            """
 
             # predict chisq diff.
-            nll += 0.5 * N * D * K * f(K, *op_params)
+            pred_chisq = np.clip(np.polyval(coeff, 1.0/K), 0, np.max(chisqs))
+            nll += 0.5 * N * D * pred_chisq
+
+            #raise a
 
         return nll
 
