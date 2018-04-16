@@ -6,7 +6,40 @@ import matplotlib.pyplot as plt
 
 from matplotlib.patches import Ellipse
 from matplotlib.ticker import MaxNLocator
+import scipy.special
 
+def _total_parameters(K, D):
+    r"""
+    Return the total number of model parameters :math:`Q`, if a full 
+    covariance matrix structure is assumed.
+
+    .. math:
+
+        Q = \frac{K}{2}\left[D(D+3) + 2\right] - 1
+
+
+    :param K:
+        The number of Gaussian mixtures.
+
+    :param D:
+        The dimensionality of the data.
+
+    :returns:
+        The total number of model parameters, :math:`Q`.
+    """
+    return (0.5 * D * (D + 3) * K) + K - 1
+
+
+
+def _mixture_message_length_parts(K, N, D):
+
+    Q = _total_parameters(K, D)
+
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + scipy.special.gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+
+    return I_mixtures + I_parameters
 
 
 class VisualizationHandler(object):
@@ -41,11 +74,11 @@ class VisualizationHandler(object):
         self._reference_ll = None
 
 
-        self.fig, axes = plt.subplots(1, 6, figsize=(15.6 + 2.8, 2.8))
+        self.fig, axes = plt.subplots(1, 5, figsize=(15.6 + 2.8, 2.8))
         axes = np.array(axes).flatten()
         self._display = True
 
-        self.ax_data, self.ax_I_other, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I = axes
+        self.ax_data, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I = axes
 
         self._xyindex = (x_index, y_index)
 
@@ -62,15 +95,17 @@ class VisualizationHandler(object):
         self.ax_I.yaxis.set_major_locator(MaxNLocator(5))
 
         self.ax_slogw.set_xlabel(r"$K$")
-        self.ax_slogw.set_ylabel(r"$\left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
+        self.ax_slogw.set_ylabel(r"$I_\mathcal{M} + \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
         self.ax_slogw.xaxis.set_major_locator(MaxNLocator(5))
         self.ax_slogw.yaxis.set_major_locator(MaxNLocator(5))
 
+        """
         self.ax_I_other.set_xlabel(r"$K$")
         self.ax_I_other.set_ylabel(r"$I_{other}$ $[{\rm nats}]$")
         self.ax_I_other.xaxis.set_major_locator(MaxNLocator(5))
         self.ax_I_other.yaxis.set_major_locator(MaxNLocator(5))
         self._show_I_other_data = self.ax_I_other.plot([np.nan], [np.nan], c="#666666")[0]
+        """
 
         self.ax_slogdet.set_xlabel(r"$K$")
         self.ax_slogdet.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
@@ -96,8 +131,11 @@ class VisualizationHandler(object):
 
 
             D = target["mean"].shape[1]
+
+            I_other = _mixture_message_length_parts(K_target, y.shape[0], D)
+
             self.ax_slogw.scatter(
-                [K_target], [(0.25 * D * (D + 3) - 0.5) * np.sum(np.log(target["weight"]))], **target_kwds)
+                [K_target], [I_other + (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(target["weight"]))], **target_kwds)
 
             self.ax_slogdet.scatter(
                 [K_target],
@@ -229,8 +267,10 @@ class VisualizationHandler(object):
             slogdet_cov = - 0.5 * (D + 2) * np.sum(np.log(np.linalg.det(params["cov"])))
             log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
 
+            I_other = params["I_other"]
+
             self._data_slw.append([K, 
-                (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(params["weight"]))])
+                I_other + (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(params["weight"]))])
             self._show_slw_data.set_offsets(np.array(self._data_slw))
             self._show_slw_data.set_facecolor("k") # Needed to make them update.
             self._show_slw_data.set_sizes(5 * np.ones(len(self._data_slw)))
@@ -248,13 +288,15 @@ class VisualizationHandler(object):
 
         elif kind == "predict_I_other":
 
+            """
             K = params["K"]
             I_other = params["I_other"]
 
             self._show_I_other_data.set_data(np.array([K, I_other]))
             self.ax_I_other.set_xlim(0, max(K))
             self.ax_I_other.set_ylim(0, max(I_other))
-
+            """
+            print("ignoring I_other")
 
         elif kind == "expectation":
             self.ax_I.scatter(
@@ -287,9 +329,9 @@ class VisualizationHandler(object):
             self._predict_slw.extend([
                 self.ax_slogw.plot(K, p_slw, 
                     c=self._color_prediction, zorder=-1)[0],
-                self.ax_slogw.fill_between(
-                    K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
-                    facecolor=self._color_prediction, alpha=0.5, zorder=-1),
+                #self.ax_slogw.fill_between(
+                #    K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
+                #    facecolor=self._color_prediction, alpha=0.5, zorder=-1),
             ])
 
             self.ax_slogw.set_xlim(0, self.ax_slogw.get_xlim()[1])
@@ -447,9 +489,25 @@ class VisualizationHandler(object):
             kwds.update(plotting_kwds)
 
 
+
+
+
             self._predict_I_bounds.extend([
-                self.ax_I.plot(K, p_I, **kwds)[0]
+                self.ax_I.plot(K, p_I, **kwds)[0],
             ])
+
+
+            # find min.
+            try:
+                index = np.nanargmin(p_I)
+
+            except ValueError:
+                None
+
+            else:
+                self._predict_I_bounds.extend([
+                    self.ax_I.axvline(K[index], **kwds)
+                ])
 
             """
             self._predict_I_bounds.extend([

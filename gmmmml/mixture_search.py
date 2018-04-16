@@ -16,8 +16,10 @@ import scipy
 import scipy.misc
 import scipy.stats
 import scipy.optimize as op
+import warnings
 import os
 from sklearn import cluster
+from sklearn.utils import check_random_state
 from sklearn.utils.extmath import row_norms
 
 from collections import defaultdict
@@ -345,6 +347,16 @@ def _approximate_bound_sum_log_determinate_covariances(target_K, cov):
     return bounds
 
 
+def _mixture_message_length_parts(K, N, D):
+
+    Q = _total_parameters(K, D)
+
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + scipy.special.gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+
+    return I_mixtures + I_parameters
+
 
 def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None, 
     yerr=0.001):
@@ -419,6 +431,8 @@ def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None,
         axis=0) # [nats]
 
     return (I, I_parts)
+
+
 
 
 
@@ -526,6 +540,8 @@ class GaussianMixture(object):
         
         y = np.atleast_1d(y)
 
+
+
         N, D = y.shape
         K_max = N if K_max is None else K_max
 
@@ -533,23 +549,20 @@ class GaussianMixture(object):
 
             print("Running at K = {} / {}".format(K, K_max))
 
-            model = cluster.KMeans(n_clusters=K)
-            model.fit(y)
 
-            mu = model.cluster_centers_
-                
+            #model = cluster.KMeans(n_clusters=K)
+            #model.fit(y)
+            #mu = model.cluster_centers_
+            #labels = model.labels_
+
+            # Assign everything to the closest thing.            
+            mu = _initialize_with_kmeans_pp(y, K)
+            labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
+
             # generate repsonsibilities.
             responsibility = np.zeros((K, N))
-            responsibility[model.labels_, np.arange(N)] = 1.0
+            responsibility[labels, np.arange(N)] = 1.0
 
-            
-
-            # Just use k-means++ to initialize
-            """
-            x_squared_norms = row_norms(y, squared=True)
-            mu = cluster.k_means_._k_init(y, K, x_squared_norms=x_squared_norms)
-            """
-            
             # estimate covariance matrices.
             cov = _estimate_covariance_matrix_full(y, responsibility, mu)
 
@@ -714,15 +727,17 @@ class GaussianMixture(object):
         if visualization_handler is not None:
 
             # Show the other contributions to the message length.
-            visualization_handler.emit("predict_I_other",
-                dict(K=K, I_other=I_other))
+            #visualization_handler.emit("predict_I_other",
+            #    dict(K=K, I_other=I_other))
 
             # Show the information contributions from the weights.
-            visualization_handler.emit("I_slw_bounds",
-                dict(K=K, lower=I_slw_c * slw_lower, upper=I_slw_c * slw_upper))
+            visualization_handler.emit("I_slw_bounds", dict(K=K, 
+                lower=I_other + I_slw_c * slw_lower, 
+                upper=I_other + I_slw_c * slw_upper))
 
             visualization_handler.emit("predict_I_slw",
-                dict(K=K, p_slw=I_slw_c * p_slw, p_slw_err=I_slw_c * p_slw_err))
+                dict(K=K, p_slw=I_other + I_slw_c * p_slw, 
+                    p_slw_err=I_other + I_slw_c * p_slw_err))
 
 
             # Show the information contributions from the sum of the log of the
@@ -765,7 +780,6 @@ class GaussianMixture(object):
                 I_strict_bound=I_strict_lower_bound,
                 I_relaxed_bound=I_relaxed_lower_bound,
                 p_I=I_prediction))
-
 
 
 
@@ -869,30 +883,37 @@ class GaussianMixture(object):
         # chisqs/K w.r.t K will follow a 1/K**2 relation
         # y = a*k**-2
 
-        if obs_nll.size >= 3:
+        x = 1.0/(1. + np.array(self._state_K))
+        y = chisqs
 
-            x = np.array(self._state_K)
-            y = chisqs
+        with warnings.catch_warnings():
+            warnings.filterwarnings("error")
 
-            coeff = np.polyfit(1.0/x, y, 2, w=x)
+            try:
+                coeff = np.polyfit(x, y, 2, w=x)
 
-            if obs_nll.size >= 20:
+            except np.RankWarning:
+                pred_chisqs = np.max(y)
 
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots()
-                ax.scatter(x, chisqs)
+            else:
+                pred_chisqs = np.clip(np.polyval(coeff, 1.0/(1 + K)), 0, np.max(y))
 
-                ax.plot(x, np.polyval(coeff, 1.0/x), c='r')
-            
-                raise a
+        # predict chisq diff.
+        nll += 0.5 * N * D * pred_chisqs
 
 
-            # predict chisq diff.
-            pred_chisq = np.clip(np.polyval(coeff, 1.0/K), 0, np.max(chisqs))
-            nll += 0.5 * N * D * pred_chisq
+        if obs_nll.size >= 32:
 
-            #raise a
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.scatter(x, chisqs)
 
+            ax.plot(x, np.polyval(coeff, 1.0/(1 + x)), c='r')
+        
+            raise a
+
+        #if np.all(nll >= np.max(obs_nll)):
+        #    raise a
         return nll
 
 
@@ -1175,8 +1196,10 @@ class GaussianMixture(object):
                 message_length = b_ml
                 ll = b_meta["log_likelihood"]
 
+                I_other = _mixture_message_length_parts(weight.size, N, D)
+
                 visualization_logger.info("model",
-                    dict(mean=mu, cov=cov, weight=weight))
+                    dict(mean=mu, cov=cov, weight=weight, I_other=I_other))
                 visualization_logger.info("expectation",
                      dict(K=weight.size, message_length=message_length))
 
@@ -1457,6 +1480,16 @@ def _parameters_per_mixture(D, covariance_type):
         raise ValueError("unknown covariance type '{}'".format(covariance_type))
 
 
+def _initialize_with_kmeans_pp(y, K, random_state=None):
+
+    random_state = check_random_state(random_state)
+    squared_norms = row_norms(y, squared=True)
+    return cluster.k_means_._k_init(y, K, x_squared_norms=squared_norms,
+        random_state=random_state)
+
+
+
+
 def _initialize(y, covariance_type, covariance_regularization, **kwargs):
     r"""
     Return initial estimates of the parameters.
@@ -1491,7 +1524,9 @@ def _initialize(y, covariance_type, covariance_regularization, **kwargs):
 
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
-        visualization_handler.emit("model", dict(mean=mean, cov=cov, weight=weight))
+        I_other = _mixture_message_length_parts(weight.size, N, D)
+        visualization_handler.emit("model", dict(mean=mean, cov=cov, weight=weight,
+            I_other=I_other))
 
 
     return (mean, cov, weight)
@@ -1906,8 +1941,9 @@ def _maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
+        I_other = _mixture_message_length_parts(new_weight.size, N, D)
         visualization_handler.emit("model", dict(mean=new_mu, cov=new_cov, 
-            weight=new_weight))
+            weight=new_weight, I_other=I_other))
 
     return state 
 
