@@ -1,6 +1,6 @@
 
 import numpy as np
-from gmmmml import (gmm as mixture, visualize, utils)
+from gmmmml import (gmm as mixture, visualize_new as visualize, utils)
 import  scipy.optimize as op
 
 np.random.seed(11)
@@ -9,6 +9,7 @@ np.random.seed(11)
 
 import logging
 
+"""
 for i in range(10):
 
     j = 0
@@ -26,35 +27,24 @@ for i in range(10):
 
         else:
           break
+"""
+from sklearn.datasets import make_blobs
 
-    visualization_handler = visualize.VisualizationHandler(
-        y, target=target, figure_path="tmp/")
+y, assignments = make_blobs(
+  n_samples=10000, n_features=2, centers=100, random_state=42)
+#y = np.vstack([y, np.random.uniform(-10, 10, size=(10, y.shape[1]))])
 
-    search_model = mixture.GaussianMixture()
-    search_model.search_greedy_forgetful(y, K_max=kwds["centers"] + 25, 
-        visualization_handler=visualization_handler)
+#n_samples=100, n_features=2, centers=3, cluster_std=1.0, center_box=(-10.0, 10.0), shuffle=True, random_state=Non
+
+visualization_handler = visualize.VisualizationHandler(
+    y, target=None, figure_path="tmp/")
+
+search_model = mixture.GaussianMixture(
+  max_em_iterations=5, covariance_regularization=1e-10)
+search_model.search_greedy_forgetful(y, K_max=50, 
+    visualization_handler=visualization_handler)
 
 
-    K = np.array(search_model._state_K)
-
-    ke = int(np.ceil(K.size**0.5))
-    fig, axes = plt.subplots(ke, ke, sharex=True)
-    axes = np.array(axes).flatten()
-
-    for ax in axes:
-        ax.set_xticks([])
-        ax.set_yticks([])
-        
-
-    for i, (k, ax) in enumerate(zip(K, axes)):
-        ax.hist(np.log(search_model._state_det_covs[i]), facecolor="g", alpha=0.5)
-        ax.text(0.05, 0.95, "{:.0f}".format(k), transform=ax.transAxes,
-            verticalalignment="top")
-
-    fig.subplots_adjust(wspace=0, hspace=0, top=1.0, bottom=0.0, left=0, right=1)
-
-    
-    raise a
 
 
 

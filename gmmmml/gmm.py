@@ -39,7 +39,7 @@ class GaussianMixture(object):
     parameter_names = ("mean", "covariance", "weight")
 
     def __init__(self, covariance_type="full", covariance_regularization=0, 
-        threshold=1e-5, max_em_iterations=10000, **kwargs):
+        threshold=1e-3, max_em_iterations=1000, **kwargs):
 
         available = ("full", )
         covariance_type = covariance_type.strip().lower()
@@ -70,10 +70,6 @@ class GaussianMixture(object):
         self._state_sum_log_weights = []
         self._state_sum_log_likelihoods = []
 
-
-        #self._state_predictions_K = []
-        #self._state_predictions_slog_det_covs = []
-        #self._state_predictions_slog_likelihoods = []
         self._state_meta = {}
 
         return None
@@ -125,10 +121,10 @@ class GaussianMixture(object):
         """
 
         kwds = dict(
-            threshold=self._threshold, 
-            max_em_iterations=self._max_em_iterations,
+            threshold=self.threshold, 
+            max_em_iterations=self.max_em_iterations,
             covariance_type=self.covariance_type, 
-            covariance_regularization=self._covariance_regularization,
+            covariance_regularization=self.covariance_regularization,
             visualization_handler=None)
         kwds.update(kwargs)
         
@@ -138,28 +134,41 @@ class GaussianMixture(object):
         K_max = N if K_max is None else K_max
         K_predict = kwds.pop("K_predict", 25)
 
+        visualization_handler = kwargs.get("visualization_handler", None)
+            
         for K in range(1, K_max):
 
             # Initialise using k-means++.
-            mu, cov, weight, responsibility = em._initialise_by_kmeans_pp(
-                y, K, random_state=random_state)
+            mu, cov, weight, responsibility = em._initialise_by_kmeans_pp(y, K,
+                covariance_regularization=self.covariance_regularization,
+                random_state=random_state)
 
             # TODO: Will giving the same random state yield the same result
             #       on every iteration?
 
             # Do one E-M iteration.
-            R, ll, I = em.expectation(y, mu, cov, weight, **kwds)
+            prev_I = np.inf
+            for i in range(self.max_em_iterations):
+
+                R, ll, I = em.expectation(y, mu, cov, weight, **kwds)
+                mu, cov, weight = em.maximization(y, mu, cov, weight, R, **kwds)
+
+                change = prev_I - I
+                prev_I = I
+
+                if self.threshold > abs(change):
+                    break
 
             self._record_state(cov, weight, ll)
-
-            mu, cov, weight = em.maximization(y, mu, cov, weight, R, **kwds)
 
             # Make predictions for past and future mixtures.
             K_target = np.arange(1, weight.size + K_predict)
             predictions = self._predict_message_length(K_target, N, D, **kwds)
 
-            raise a
-
+            if visualization_handler is not None:
+                visualization_handler.emit("model", 
+                    dict(mu=mu, cov=cov, weight=weight, nll=-np.sum(ll), I=I))
+                visualization_handler.emit("prediction", predictions)
 
         raise a
 
@@ -222,9 +231,5 @@ class GaussianMixture(object):
         # faster (e.g., the optimization functions start from values closer to
         # the true value).
         self._state_meta.update(meta)
-
-        visualization_handler = kwargs.get("visualization_handler", None)
-        if visualization_handler is not None:
-            visualization_handler.emit("predictions", predictions)
 
         return predictions

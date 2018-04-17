@@ -431,14 +431,6 @@ def expectation(y, mu, cov, weight, **kwargs):
 
     I, I_parts = mixture_message_length(K, N, D, cov, weight, -nll, **kwargs)
 
-    visualization_handler = kwargs.get("visualization_handler", None)
-    if visualization_handler is not None:
-        print("No visualisation in E-step yet")
-
-        #visualization_handler.emit("expectation", dict(
-        #    K=weight.size, message_length=I, responsibility=responsibility,
-        #    log_likelihood=log_likelihood))
-
     return (responsibility, log_likelihood, I)
 
 
@@ -499,11 +491,5 @@ def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     assert np.all(np.isfinite(new_cov))
     assert np.all(np.isfinite(new_weight))
     
-    visualization_handler = kwargs.get("visualization_handler", None)
-    if visualization_handler is not None:
-        print("No visualisation in M-step yet")
-        #I_other = _mixture_message_length_parts(new_weight.size, N, D)
-        #visualization_handler.emit("model", dict(mean=new_mu, cov=new_cov, 
-        #    weight=new_weight, I_other=I_other))
 
     return state 

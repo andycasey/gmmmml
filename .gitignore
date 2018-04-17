@@ -1,6 +1,7 @@
 .gitignore
 .DS_Store
 
+*.pyc
 gmmmml/__pycache__/
 
 article/vc.tex

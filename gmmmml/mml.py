@@ -3,9 +3,11 @@
 Functions to calculate information of quantities.
 """
 
+import logging
 import numpy as np
 import warnings
 from collections import OrderedDict
+from scipy import optimize as op
 from scipy.special import gammaln
 from scipy.stats import gaussian_kde
 
@@ -266,9 +268,10 @@ def predict_sum_log_weights(K, N, previous_states=None):
 
     # Bound the prediction errors by the theoretical bounds.
     target_prediction_err = fraction_err * target_ptp
-    target_prediction_pos_err = np.min([target_upper,
+    target_prediction_pos_err = - target_prediction + np.min([target_upper,
         target_prediction + target_prediction_err], axis=0)
-    target_prediction_neg_err = np.max([target_lower,
+
+    target_prediction_neg_err = - target_prediction + np.max([target_lower,
         target_prediction - target_prediction_err], axis=0)
 
     target_prediction_err = \
@@ -312,7 +315,7 @@ def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
     """
 
     __failed_value = np.nan * np.ones(len(K))
-    __default_value = (__failed_value, __failed_value, dict())
+    __default_value = (__failed_value, (__failed_value, __failed_value), dict())
 
     print("Andy: update method for sum_log_det_covs to use a gaussian KDE")
 
@@ -348,7 +351,7 @@ def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
         for p_draw in np.random.multivariate_normal(p_opt, p_cov, size=draws)])
 
     prediction, p16, p84 = np.percentile(p_sldc, [50, 16, 84], axis=0)
-    prediction_err = (p84 - p50, p16 - p50)
+    prediction_err = (p84 - prediction, p16 - prediction)
 
     return (prediction, prediction_err, update_state)
 
@@ -402,7 +405,8 @@ def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
         print("STOP ASSUMING UNIFORMITY")
         for i, k in enumerate(K):
             w = 1.0/k
-            raise a 
+            
+            print("ANDY CHECK THIS")
             # check this.
             nll -= N * np.sum(w * kernel(k))
 
@@ -502,7 +506,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     # From these quantities, calculate the predicted parts of the message
     # lengths for the future mixtures.
-    I_other = _gmm_parameter_message_length(K, N, D)
+    I_mixtures, I_parameters = _gmm_parameter_message_length(K, N, D)
+    I_other = I_mixtures + I_parameters
 
     # Let's group things together that are bound by theory, or have analytic
     # expressions.
@@ -520,7 +525,9 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     # of the covariance matrices.
     sldc_scalar = -0.5 * (D + 2)
     p_I_slogdetcov = sldc_scalar * p_slogdetcov
-    p_I_slogdetcov_err = sldc_scalar * p_slogdetcov_err
+    p_slogdetcov_pos_err, p_slogdetcov_neg_err = p_slogdetcov_err
+    p_I_slogdetcov_pos_err = sldc_scalar * p_slogdetcov_pos_err
+    p_I_slogdetcov_neg_err = sldc_scalar * p_slogdetcov_neg_err
 
     # The predictions for the negative log-likelihood are already in units of
     # nats, so nothing needed there. But we do need to incorporate the errors
@@ -532,13 +539,16 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
 
     predictions = OrderedDict([
+        ("K", K),
         ("p_I_analytic", p_I_analytic),
         ("p_I_analytic_pos_err", p_I_analytic_pos_err),
         ("p_I_analytic_neg_err", p_I_analytic_neg_err),
         ("t_I_analytic_lower", t_I_analytic_lower),
         ("t_I_analytic_upper", t_I_analytic_upper),
         ("p_I_slogdetcov", p_I_slogdetcov),
-        ("p_I_slogdetcov_err", p_I_slogdetcov_err),
+        ("p_I_slogdetcov_pos_err", p_I_slogdetcov_pos_err),
+        ("p_I_slogdetcov_neg_err", p_I_slogdetcov_neg_err),
+        ("p_nll", p_nll),
         ("p_I_data", p_I_data),
         ("p_I", p_I)
     ])
