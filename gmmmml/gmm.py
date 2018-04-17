@@ -5,6 +5,10 @@ Model data with a mixture of gaussians.
 
 import logging
 import numpy as np
+import scipy
+from sklearn import cluster
+from sklearn.utils import check_random_state
+from sklearn.utils.extmath import row_norms
 
 
 logger = logging.getLogger(__name__)
@@ -102,9 +106,15 @@ class GaussianMixture(object):
         return self._max_em_iterations
 
 
-    def fit(self, y, K_max=None, **kwargs):
+    def search_greedy_forgetful(self, y, K_max=None, random_state=None,
+        **kwargs):
         r"""
-        Fit the data.
+        Fit the data using a greedy search algorithm, where we do not retain
+        information about previous mixtures in order to initialise the next
+        set of mixtures. Instead, each new trial of :math:`K` is initialised
+        using the K-means++ algorithm.
+
+
         """
 
         kwds = dict(
@@ -119,6 +129,21 @@ class GaussianMixture(object):
 
         N, D = y.shape
         K_max = N if K_max is None else K_max
+
+        for K in range(1, K_max):
+
+            # Initialise using k-means++.
+            mu, cov, weight, responsibility = _initialise_by_kmeans_pp(y, K,
+                random_state=random_state)
+
+            # TODO: Will giving the same random state yield the same result
+            #       on every iteration?
+
+
+            raise a
+
+
+
 
 
         raise a
@@ -139,6 +164,64 @@ class GaussianMixture(object):
         self._state_slog_likelihoods.append(np.sum(log_likelihood))
 
         return None
+
+
+
+
+
+def _initialise_by_kmeans_pp(y, K, random_state=None):
+    """
+    Initialise by k-means++ and assign hard responsibilities to the closest
+    centroid.
+
+    :param y:
+        The data :math:`y`.
+
+    :param K:
+    `   The number of Gaussian mixtures to initialise with.
+    
+    :param random_state: [optional]
+        The state to use for the random number generator.
+
+    :returns:
+        A four-length tuple containing:
+
+        (1) the initialised centroids :math:`\mu`;
+
+        (2) the initialsied covariance matrices :math:`C`;
+
+        (3) the initialised weights for each mixture :math:`w`;
+
+        (4) the responsibility matrix.
+    """
+
+    if 1 > K:
+        raise ValueError("the number of mixtures must be a positive integer")
+
+    K = int(K)
+    y = np.atleast_2d(y)
+    N, D = y.shape
+
+    random_state = check_random_state(random_state)
+    squared_norms = row_norms(y, squared=True)
+
+    mu = cluster.k_means_._k_init(y, K, x_squared_norms=squared_nroms,
+        random_state=random_state)
+
+    # Assign everything to the closest mixture.
+    labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
+
+    # Generate responsibility matrix.
+    responsibility = np.zeros((K, N))
+    responsibility[labels, np.arange(N)] = 1.0
+
+    # Calculate weights.
+    weight = np.sum(responsibility, axis=1)/N
+
+    # Estimate covariance matrices.
+    cov = _estimate_covariance_matrix_full(y, responsibility, mu)
+
+    return (mu, cov, weight, responsibility)
 
 
 
