@@ -726,6 +726,22 @@ class GaussianMixture(object):
             pred = function(target_K, *p_opt)
 
             if x_unique.size > 5:
+                import matplotlib.pyplot as plt
+                fig, axes = plt.subplots(2)
+                ax = axes[0]
+                ax.plot(x_unique, y_unique)
+                ax.plot(target_K, slw_lower)
+                ax.plot(target_K, slw_upper)
+
+                def normit(values):
+                    N = len(values)
+                    return (values - slw_lower[:N])/(slw_upper[:N] - slw_lower[:N])
+
+                ax = axes[1]
+                ax.plot(x_unique, normit(y_unique), c='b')
+                ax.plot(target_K, normit(slw_lower), c='r')
+                ax.plot(target_K, normit(slw_upper), c='g')
+
                 raise a
 
             if np.all(np.isfinite(p_cov)):
