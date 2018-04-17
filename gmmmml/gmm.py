@@ -137,7 +137,6 @@ class GaussianMixture(object):
         N, D = y.shape
         K_max = N if K_max is None else K_max
         K_predict = kwds.pop("K_predict", 25)
-        visualization_handler = kwargs.get("visualization_handler", None)
 
         for K in range(1, K_max):
 
@@ -155,16 +154,11 @@ class GaussianMixture(object):
 
             mu, cov, weight = em.maximization(y, mu, cov, weight, R, **kwds)
 
-            if visualization_handler is not None:
-
-                # Make predictions for past and future mixtures.
-                K_target = np.arange(1, weight.size + K_predict)
-                self._predict_message_length(K_target, N, D, **kwds)
+            # Make predictions for past and future mixtures.
+            K_target = np.arange(1, weight.size + K_predict)
+            predictions = self._predict_message_length(K_target, N, D, **kwds)
 
             raise a
-
-
-
 
 
         raise a
@@ -195,7 +189,6 @@ class GaussianMixture(object):
         self._state_weights.append(weight)
         self._state_sum_log_weights.append(np.sum(np.log(weight)))
 
-
         # Record log-likelihood.
         self._state_sum_log_likelihoods.append(np.sum(log_likelihood))
 
@@ -217,25 +210,21 @@ class GaussianMixture(object):
             The dimensionality of the data points.
         """
 
-        K = np.atleast_1d(K)
+        predictions, meta = mml.predict_message_length(K, N, D, 
+            previous_states=(
+                self._state_K,
+                self._state_sum_log_weights,
+                self._state_det_covs,
+                self._state_sum_log_likelihoods),
+            state_meta=self._state_meta)
 
-        # Predict the sum of the log of the weights.
-        p_slogw, p_slogw_err, t_slogw_lower, t_slogw_upper = \
-            mml.predict_sum_log_weights(K, N, 
-                previous_states=(self._state_K, self._state_sum_log_weights))
+        # Update the metadata of our state so that future predictions are 
+        # faster (e.g., the optimization functions start from values closer to
+        # the true value).
+        self._state_meta.update(meta)
 
-        # Predict the sum of the log of the determinant of the covariance
-        # matrices.
-        p_slogdetcov, p_slogdetcov_err, update_state = \
-            mml.predict_sum_log_det_covs(K, 
-                previous_states=(self._state_K, self._state_det_covs),
-                **self._state_meta)
-        self._state_meta.update(update_state)
+        visualization_handler = kwargs.get("visualization_handler", None)
+        if visualization_handler is not None:
+            visualization_handler.emit("predictions", predictions)
 
-
-
-
-
-        raise a
-
-
+        return predictions

@@ -429,7 +429,7 @@ def expectation(y, mu, cov, weight, **kwargs):
     N, D = y.shape
     nll = -np.sum(log_likelihood) # the negative log likelihood
 
-    I, I_parts = mixture_message_length(N, D, K, cov, weight, -nll, **kwargs)
+    I, I_parts = mixture_message_length(K, N, D, cov, weight, -nll, **kwargs)
 
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:

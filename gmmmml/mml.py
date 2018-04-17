@@ -4,7 +4,10 @@ Functions to calculate information of quantities.
 """
 
 import numpy as np
+import warnings
+from collections import OrderedDict
 from scipy.special import gammaln
+from scipy.stats import gaussian_kde
 
 from .utils import aggregate
 
@@ -31,19 +34,48 @@ def number_of_gmm_parameters(K, D):
     return (0.5 * D * (D + 3) * K) + K - 1
 
 
-def mixture_message_length(N, D, K, cov, weight, log_likelihood, yerr=0.001,
-    **kwargs):
-    r"""
-    Return the message length of a Gaussian mixture model. 
+def _gmm_parameter_message_length(K, N, D):
+    """
+    Retrun the message length required to encode some of the easier parameters
+    of the mixture.
+
+    # TODO: Update docs.
+
+    :param K:
+        The number of Gaussian components in the mixture.
 
     :param N:
         The number of data points.
 
     :param D:
         The dimensionality of the data.
+    """
+    print("update docs for _gmm_parameter_message_length")
+
+    Q = number_of_gmm_parameters(K, D)
+
+    # Calculate information required to encode the mixture parameters,
+    # regardless of the covariance matrices and the weights, etc.
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
+               + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+
+    return (I_mixtures, I_parameters)
+
+
+def mixture_message_length(K, N, D, cov, weight, log_likelihood, yerr=0.001,
+    **kwargs):
+    r"""
+    Return the message length of a Gaussian mixture model. 
 
     :param K:
         The number of Gaussian components in the mixture. 
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data.
 
     :param cov:
         The covariance matrices of the components in the mixture.
@@ -86,16 +118,10 @@ def mixture_message_length(N, D, K, cov, weight, log_likelihood, yerr=0.001,
     else:
         sum_log_weights = np.sum(np.log(weight))
 
+    I_mixtures, I_parameters = _gmm_parameter_message_length(K, N, D)
 
     I_yerr = -np.log(yerr) if yerr.size > 1 else - N * D * np.log(yerr)
 
-    Q = number_of_gmm_parameters(K, D)
-
-    # Calculate information required to encode the mixture parameters,
-    # regardless of the covariance matrices and the weights, etc.
-    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
-               + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
-    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
 
     I_data = -log_likelihood + I_yerr
     I_slogdetcovs = -0.5 * (D + 2) * sum_log_det_cov
@@ -185,7 +211,7 @@ def predict_sum_log_weights(K, N, previous_states=None):
         future mixtures.
 
     :returns:
-        A four-length tuple containing:
+        A six-length tuple containing:
 
         (1) the prediction of the sum of the log weights for the :math:`K`
             target mixtures;
@@ -197,8 +223,13 @@ def predict_sum_log_weights(K, N, previous_states=None):
             for the :math:`K` target mixtures;
 
         (4) the theoretical upper bound on the sum of the log of the weights
-            for the :math:`K` target mixtures.
+            for the :math:`K` target mixtures;
 
+        (5) the determined fraction between mixture uniformity (:math:`f = 1`)
+            and non-uniformity (:math:`f = 0`);
+
+        (6) the error on the fraction between mixture uniformity and 
+            non-uniformity.
     """
 
     K = np.atleast_1d(K)
@@ -209,9 +240,7 @@ def predict_sum_log_weights(K, N, previous_states=None):
         # We will fit some fractional value between these bounds.
         
         previous_K, previous_slogw = previous_states
-        previous_K = np.atleast_1d(previous_K)
-        previous_slogw = np.atleast_1d(previous_slogw)
-
+        
         if previous_K.size != previous_slogw.size:
             raise ValueError("number of previous K does not match number of "
                              "previous sum of the log of weights")
@@ -245,8 +274,8 @@ def predict_sum_log_weights(K, N, previous_states=None):
     target_prediction_err = \
         (target_prediction_pos_err, target_prediction_neg_err)
 
-    return \
-        (target_prediction, target_prediction_err, target_lower, target_upper)
+    return (target_prediction, target_prediction_err, target_lower,
+        target_upper, fraction, fraction_err)
 
 
 
@@ -282,17 +311,19 @@ def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
             to improve the optimization of future predictions.
     """
 
+    __failed_value = np.nan * np.ones(len(K))
+    __default_value = (__failed_value, __failed_value, dict())
+
     print("Andy: update method for sum_log_det_covs to use a gaussian KDE")
 
     previous_K, previous_det_cov = previous_states
-    previous_K = np.array(previous_K)
     previous_sldc = np.array([np.sum(np.log(dc)) for dc in previous_det_cov])
 
     previous_K_u, previous_sldc_u \
         = aggregate(previous_K, previous_sldc, np.median)
 
     if previous_K_u.size <= 3:
-        return (None, None, None)
+        return __default_value
 
     x, y = (previous_K_u, previous_sldc_u/previous_K_u)
 
@@ -306,7 +337,10 @@ def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
                                     sigma=x.astype(float)**-2)
 
     except RuntimeError:
-        return (None, None, None)
+        logging.exception(
+            "Failed to predict sum of the log of the determinant of the "\
+            "covariance matrices for future mixtures:")
+        return __default_value
 
     update_state = dict(_predict_sum_log_det_covs_p0=p_opt)
 
@@ -317,3 +351,196 @@ def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
     prediction_err = (p84 - p50, p16 - p50)
 
     return (prediction, prediction_err, update_state)
+
+
+def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
+    previous_states, **kwargs):
+    r"""
+    Predict the negative log likelihood for future (target) mixtures with
+    :math:`K` components.
+
+    :param K:
+        The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data points.
+
+    :param previous_states:
+        A four-length tuple containing:
+
+        (1) previous trialled :math:`K` values;
+
+        (2) the determinates of covariance matrices for previously-trialled
+            mixtures;
+
+        (3) the sum of the log likelihoods for previously-trialled mixtures.
+    """
+
+    K = np.atleast_1d(K)
+
+    _state_K, _state_det_covs, _state_sum_log_likelihoods = previous_states
+    
+    # Use the predicted uniformity fraction.
+    upper = lambda K: N * np.log(K)
+    lower = lambda K: N * np.log(N) - (N - K + 1) * np.log(N - K + 1)
+
+    # Calculate the first part of the negative log-likelihood.
+    nll = 0.5 * N * D * np.log(2 * np.pi) \
+        + lower(K) + uniformity_fraction * (upper(K) - lower(K))
+
+    # Draw some determinants..
+    print("EXTRACT THE STATES")
+    if len(_state_det_covs[-1]) > 1:
+        # Use a Gaussian KDE to estimate the determinants of covariance
+        # matrices for future mixtures.
+        kernel = gaussian_kde(np.log(_state_det_covs[-1]))
+
+        # TODO: This assumes uniform 
+        print("STOP ASSUMING UNIFORMITY")
+        for i, k in enumerate(K):
+            w = 1.0/k
+            raise a 
+            # check this.
+            nll -= N * np.sum(w * kernel(k))
+
+    else:
+        nll -= N * np.log(_state_det_covs[0][0])
+
+    # The current calculation of the negative log-likelihood is based on the
+    # ideal case where the mean chi-squared value is the limiting case of zero
+    # (e.g., a perfect fit).
+
+    # In practice this prediction is going to be wrong for earlier K than the
+    # true K value, because the chi-squared value is going to be non-zero.
+
+    # Let's compare our predicted negative log-likelihood values to that which
+    # was determined from previous trials, in order to see how quickly we are
+    # improving, and how we can adjust our prediction to take this improving
+    # fit into account.
+
+    # Compare to what is already observed.
+    obs_nll = -np.array(_state_sum_log_likelihoods)
+    pre_nll = nll[:len(obs_nll)] # assumes one trial per K.
+    print("stop assuming one trial per K")
+
+    # The difference between our observed negative log likelihoods and the
+    # predicted negative log-likelihoods is the mean chi-squared value for
+    # each observation (weighted over each of the mixtures).
+    chisqs = (obs_nll - pre_nll)/(0.5 * N * D)
+
+    x = 1.0/(1.0 + _state_K)
+    y = chisqs
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("error")
+
+        try:
+            coeff = np.polyfit(x, y, 2, w=x.astype(float))
+
+        except np.RankWarning:
+            pred_chisqs = np.max(y)
+
+        else:
+            pred_chisqs = np.clip(np.polyval(coeff, 1.0/(1.0 + K)), 0, np.max(y))
+
+    # Predict difference based on chi-sq improvement through increasing number
+    # of mixtures.
+    nll += 0.5 * N * D * pred_chisqs
+
+    return nll
+
+
+
+def predict_message_length(K, N, D, previous_states, yerr=0.001, 
+    state_meta=None, **kwargs):
+    """
+    Predict the message length of past or future mixtures.
+
+    :param K:
+        An array-like object of the :math:`K`-th mixtures to predict the
+        message elngths of.
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data points.
+    """
+
+    state_meta = state_meta or {}
+
+    print("UPDATE DOCS")
+
+
+    _state_K, _state_sum_log_weights, _state_det_covs, _state_sum_log_likelihoods = previous_states
+
+    _state_K = np.array(_state_K)
+    _state_sum_log_weights = np.array(_state_sum_log_weights)
+
+
+    K = np.atleast_1d(K)
+
+    # Predict the sum of the log of the weights.
+    p_slogw, p_slogw_err, t_slogw_lower, t_slogw_upper, uniformity_fraction, \
+        uniformity_fraction_err = predict_sum_log_weights(K, N, 
+            previous_states=(_state_K, _state_sum_log_weights))
+
+    # Predict the sum of the log of the determinant of the covariance
+    # matrices.
+    p_slogdetcov, p_slogdetcov_err, update_meta = predict_sum_log_det_covs(
+        K, previous_states=(_state_K, _state_det_covs), **state_meta)
+
+    p_nll = predict_negative_log_likelihood(K, N, D, uniformity_fraction, 
+        previous_states=(
+            _state_K, 
+            _state_det_covs,
+            _state_sum_log_likelihoods
+        ))
+
+    # From these quantities, calculate the predicted parts of the message
+    # lengths for the future mixtures.
+    I_other = _gmm_parameter_message_length(K, N, D)
+
+    # Let's group things together that are bound by theory, or have analytic
+    # expressions.
+    slw_scalar = 0.25 * D * (D + 3) - 0.5
+    p_I_analytic = I_other + slw_scalar * p_slogw
+
+    p_slogw_pos_err, p_slogw_neg_err = p_slogw_err
+    p_I_analytic_pos_err = slw_scalar * p_slogw_pos_err
+    p_I_analytic_neg_err = slw_scalar * p_slogw_neg_err
+
+    t_I_analytic_lower = I_other + slw_scalar * t_slogw_lower 
+    t_I_analytic_upper = I_other + slw_scalar * t_slogw_upper
+
+    # Now we will make predictions for the sum of the log of the determinant
+    # of the covariance matrices.
+    sldc_scalar = -0.5 * (D + 2)
+    p_I_slogdetcov = sldc_scalar * p_slogdetcov
+    p_I_slogdetcov_err = sldc_scalar * p_slogdetcov_err
+
+    # The predictions for the negative log-likelihood are already in units of
+    # nats, so nothing needed there. But we do need to incorporate the errors
+    # on y.
+
+    # TODO: better way to encode yerr?
+    p_I_data = p_nll - D * N * np.log(yerr)
+    p_I = p_I_analytic + p_I_slogdetcov + p_I_data
+
+
+    predictions = OrderedDict([
+        ("p_I_analytic", p_I_analytic),
+        ("p_I_analytic_pos_err", p_I_analytic_pos_err),
+        ("p_I_analytic_neg_err", p_I_analytic_neg_err),
+        ("t_I_analytic_lower", t_I_analytic_lower),
+        ("t_I_analytic_upper", t_I_analytic_upper),
+        ("p_I_slogdetcov", p_I_slogdetcov),
+        ("p_I_slogdetcov_err", p_I_slogdetcov_err),
+        ("p_I_data", p_I_data),
+        ("p_I", p_I)
+    ])
+
+    return (predictions, update_meta)
