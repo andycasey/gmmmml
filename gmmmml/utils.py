@@ -3,6 +3,47 @@ import numpy as np
 from sklearn import datasets
 
 
+
+
+
+def aggregate(x, y, function):
+    """
+    Group over arrays of :math:`x` and :math:`y` and apply an aggregate
+    function to all values at each unique :math:`x` entry.
+
+    :param x:
+        An array of x values.
+
+    :param y:
+        An array of y values, corresponding to the same length as `x`.
+
+    :param function:
+        An aggregate function to apply to all `y` values at each unique `x`
+        entry.
+
+    :returns:
+        An array of unique `x` values and the aggreggated `y` values for each
+        unique `x` value.
+    """
+
+    x = np.atleast_1d(x)
+    y = np.atleast_1d(y)
+
+    if x.size != y.size:
+        raise ValueError("x and y must be the same size")
+
+    x_unique = np.sort(np.unique(x))
+    y_aggregated = np.nan * np.ones_like(x_unique)
+
+    for i, xi in enumerate(x_unique):
+        match = (x == xi)
+        y_aggregated[i] = function(y[match])
+
+    return (x_unique, y_aggregated)
+
+
+
+
 # TODO: REPEATED CODE MOVE THIS
 def _estimate_covariance_matrix_full(y, responsibility, mean, 
     covariance_regularization=0):

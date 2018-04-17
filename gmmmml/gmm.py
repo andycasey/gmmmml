@@ -10,6 +10,7 @@ from sklearn import cluster
 from sklearn.utils import check_random_state
 from sklearn.utils.extmath import row_norms
 
+from . import em
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,8 @@ class GaussianMixture(object):
             # TODO: Will giving the same random state yield the same result
             #       on every iteration?
 
+            # Do one E-M step.
+            R, ll, I = em.expectation(y, mu, cov, weight, **kwds)
 
             raise a
 
@@ -167,9 +170,9 @@ class GaussianMixture(object):
 
 
 
-
-
-def _initialise_by_kmeans_pp(y, K, random_state=None):
+# TODO: Should this be moved to em.py?
+def _initialise_by_kmeans_pp(y, K, covariance_regularization=0, 
+    random_state=None):
     """
     Initialise by k-means++ and assign hard responsibilities to the closest
     centroid.
@@ -182,6 +185,9 @@ def _initialise_by_kmeans_pp(y, K, random_state=None):
     
     :param random_state: [optional]
         The state to use for the random number generator.
+
+    :param covariance_regularization: [optional]
+
 
     :returns:
         A four-length tuple containing:
@@ -219,9 +225,9 @@ def _initialise_by_kmeans_pp(y, K, random_state=None):
     weight = np.sum(responsibility, axis=1)/N
 
     # Estimate covariance matrices.
-    cov = _estimate_covariance_matrix_full(y, responsibility, mu)
+    cov = em.estimate_covariance_matrix_full(y, responsibility, mu, 
+        covariance_regularization=covariance_regularization)
 
     return (mu, cov, weight, responsibility)
-
 
 
