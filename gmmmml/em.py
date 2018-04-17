@@ -433,9 +433,11 @@ def expectation(y, mu, cov, weight, **kwargs):
 
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
-        visualization_handler.emit("expectation", dict(
-            K=weight.size, message_length=I, responsibility=responsibility,
-            log_likelihood=log_likelihood))
+        print("No visualisation in E-step yet")
+
+        #visualization_handler.emit("expectation", dict(
+        #    K=weight.size, message_length=I, responsibility=responsibility,
+        #    log_likelihood=log_likelihood))
 
     return (responsibility, log_likelihood, I)
 
@@ -489,7 +491,7 @@ def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
         new_mu[m] = np.sum(w_responsibility[m] * y.T, axis=1) \
                   / w_effective_membership[m]
 
-    new_cov = _estimate_covariance_matrix(y, responsibility, new_mu, **kwargs)
+    new_cov = estimate_covariance_matrix(y, responsibility, new_mu, **kwargs)
 
     state = (new_mu, new_cov, new_weight)
 
@@ -499,8 +501,9 @@ def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
-        I_other = _mixture_message_length_parts(new_weight.size, N, D)
-        visualization_handler.emit("model", dict(mean=new_mu, cov=new_cov, 
-            weight=new_weight, I_other=I_other))
+        print("No visualisation in M-step yet")
+        #I_other = _mixture_message_length_parts(new_weight.size, N, D)
+        #visualization_handler.emit("model", dict(mean=new_mu, cov=new_cov, 
+        #    weight=new_weight, I_other=I_other))
 
     return state 

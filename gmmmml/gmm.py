@@ -7,7 +7,7 @@ import logging
 import numpy as np
 import scipy
 
-from . import em
+from . import (em, mml)
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +67,13 @@ class GaussianMixture(object):
         self._state_K = []
         self._state_det_covs = []
         self._state_weights = []
-        self._state_slog_weights = []
-        self._state_slog_likelihoods = []
+        self._state_sum_log_weights = []
+        self._state_sum_log_likelihoods = []
 
-        self._state_predictions_K = []
-        self._state_predictions_slog_det_covs = []
-        self._state_predictions_slog_likelihoods = []
+
+        #self._state_predictions_K = []
+        #self._state_predictions_slog_det_covs = []
+        #self._state_predictions_slog_likelihoods = []
         self._state_meta = {}
 
         return None
@@ -135,6 +136,8 @@ class GaussianMixture(object):
 
         N, D = y.shape
         K_max = N if K_max is None else K_max
+        K_predict = kwds.pop("K_predict", 25)
+        visualization_handler = kwargs.get("visualization_handler", None)
 
         for K in range(1, K_max):
 
@@ -148,6 +151,16 @@ class GaussianMixture(object):
             # Do one E-M iteration.
             R, ll, I = em.expectation(y, mu, cov, weight, **kwds)
 
+            self._record_state(cov, weight, ll)
+
+            mu, cov, weight = em.maximization(y, mu, cov, weight, R, **kwds)
+
+            if visualization_handler is not None:
+
+                # Make predictions for past and future mixtures.
+                K_target = np.arange(1, weight.size + K_predict)
+                self._predict_message_length(K_target, N, D, **kwds)
+
             raise a
 
 
@@ -158,19 +171,71 @@ class GaussianMixture(object):
 
 
 
-    def _record_state(self, covs, weights, log_likelihood):
+    def _record_state(self, cov, weight, log_likelihood):
+        r"""
+        Record the state of the model to make better predictions for the
+        message lengths of future mixtures.
 
-        self._state_K.append(weights.size)
+        :param cov:
+            The covariance matrices of the current mixture.
+
+        :param weight:
+            The relative weights of the current mixture.
+
+        :param log_likelihood:
+            The log-likelihood of the current mixture.
+        """
+
+        self._state_K.append(weight.size)
 
         # Record determinant of covariance matrices.
-        self._state_det_covs.append(np.linalg.det(covs))
+        self._state_det_covs.append(np.linalg.det(cov))
 
         # Record weights.
-        self._state_weights.append(weights)
+        self._state_weights.append(weight)
+        self._state_sum_log_weights.append(np.sum(np.log(weight)))
+
 
         # Record log-likelihood.
-        self._state_slog_likelihoods.append(np.sum(log_likelihood))
+        self._state_sum_log_likelihoods.append(np.sum(log_likelihood))
 
         return None
+
+
+    def _predict_message_length(self, K, N, D, **kwargs):
+        """
+        Predict the message length of past or future mixtures.
+
+        :param K:
+            An array-like object of the :math:`K`-th mixtures to predict the
+            message elngths of.
+
+        :param N:
+            The number of data points.
+
+        :param D:
+            The dimensionality of the data points.
+        """
+
+        K = np.atleast_1d(K)
+
+        # Predict the sum of the log of the weights.
+        p_slogw, p_slogw_err, t_slogw_lower, t_slogw_upper = \
+            mml.predict_sum_log_weights(K, N, 
+                previous_states=(self._state_K, self._state_sum_log_weights))
+
+        # Predict the sum of the log of the determinant of the covariance
+        # matrices.
+        p_slogdetcov, p_slogdetcov_err, update_state = \
+            mml.predict_sum_log_det_covs(K, 
+                previous_states=(self._state_K, self._state_det_covs),
+                **self._state_meta)
+        self._state_meta.update(update_state)
+
+
+
+
+
+        raise a
 
 
