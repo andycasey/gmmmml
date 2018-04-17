@@ -6,9 +6,6 @@ Model data with a mixture of gaussians.
 import logging
 import numpy as np
 import scipy
-from sklearn import cluster
-from sklearn.utils import check_random_state
-from sklearn.utils.extmath import row_norms
 
 from . import em
 
@@ -115,7 +112,15 @@ class GaussianMixture(object):
         set of mixtures. Instead, each new trial of :math:`K` is initialised
         using the K-means++ algorithm.
 
+        :param y:
+            The data :math:`y`.
 
+        :param K_max: [optional]
+            The maximum number of Gaussian components to consider in the
+            mixture (defaults to the number of data points).
+
+        :param random_state: [optional]
+            The state to provide to the random number generator.
         """
 
         kwds = dict(
@@ -134,13 +139,13 @@ class GaussianMixture(object):
         for K in range(1, K_max):
 
             # Initialise using k-means++.
-            mu, cov, weight, responsibility = _initialise_by_kmeans_pp(y, K,
-                random_state=random_state)
+            mu, cov, weight, responsibility = em._initialise_by_kmeans_pp(
+                y, K, random_state=random_state)
 
             # TODO: Will giving the same random state yield the same result
             #       on every iteration?
 
-            # Do one E-M step.
+            # Do one E-M iteration.
             R, ll, I = em.expectation(y, mu, cov, weight, **kwds)
 
             raise a
@@ -167,67 +172,5 @@ class GaussianMixture(object):
         self._state_slog_likelihoods.append(np.sum(log_likelihood))
 
         return None
-
-
-
-# TODO: Should this be moved to em.py?
-def _initialise_by_kmeans_pp(y, K, covariance_regularization=0, 
-    random_state=None):
-    """
-    Initialise by k-means++ and assign hard responsibilities to the closest
-    centroid.
-
-    :param y:
-        The data :math:`y`.
-
-    :param K:
-    `   The number of Gaussian mixtures to initialise with.
-    
-    :param random_state: [optional]
-        The state to use for the random number generator.
-
-    :param covariance_regularization: [optional]
-
-
-    :returns:
-        A four-length tuple containing:
-
-        (1) the initialised centroids :math:`\mu`;
-
-        (2) the initialsied covariance matrices :math:`C`;
-
-        (3) the initialised weights for each mixture :math:`w`;
-
-        (4) the responsibility matrix.
-    """
-
-    if 1 > K:
-        raise ValueError("the number of mixtures must be a positive integer")
-
-    K = int(K)
-    y = np.atleast_2d(y)
-    N, D = y.shape
-
-    random_state = check_random_state(random_state)
-    squared_norms = row_norms(y, squared=True)
-
-    mu = cluster.k_means_._k_init(y, K, x_squared_norms=squared_nroms,
-        random_state=random_state)
-
-    # Assign everything to the closest mixture.
-    labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
-
-    # Generate responsibility matrix.
-    responsibility = np.zeros((K, N))
-    responsibility[labels, np.arange(N)] = 1.0
-
-    # Calculate weights.
-    weight = np.sum(responsibility, axis=1)/N
-
-    # Estimate covariance matrices.
-    cov = em.estimate_covariance_matrix_full(y, responsibility, mu, 
-        covariance_regularization=covariance_regularization)
-
-    return (mu, cov, weight, responsibility)
 
 

@@ -5,6 +5,71 @@ Functions related to expectation-maximization steps.
 
 import numpy as np
 import scipy
+from sklearn import cluster
+from sklearn.utils import check_random_state
+from sklearn.utils.extmath import row_norms
+
+from .mml import mixture_message_length
+
+
+def _initialise_by_kmeans_pp(y, K, covariance_regularization=0, 
+    random_state=None):
+    """
+    Initialise by k-means++ and assign hard responsibilities to the closest
+    centroid.
+
+    :param y:
+        The data :math:`y`.
+
+    :param K:
+    `   The number of Gaussian mixtures to initialise with.
+    
+    :param random_state: [optional]
+        The state to use for the random number generator.
+
+    :param covariance_regularization: [optional]
+
+
+    :returns:
+        A four-length tuple containing:
+
+        (1) the initialised centroids :math:`\mu`;
+
+        (2) the initialsied covariance matrices :math:`C`;
+
+        (3) the initialised weights for each mixture :math:`w`;
+
+        (4) the responsibility matrix.
+    """
+
+    if 1 > K:
+        raise ValueError("the number of mixtures must be a positive integer")
+
+    K = int(K)
+    y = np.atleast_2d(y)
+    N, D = y.shape
+
+    random_state = check_random_state(random_state)
+    squared_norms = row_norms(y, squared=True)
+
+    mu = cluster.k_means_._k_init(y, K, x_squared_norms=squared_norms,
+        random_state=random_state)
+
+    # Assign everything to the closest mixture.
+    labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
+
+    # Generate responsibility matrix.
+    responsibility = np.zeros((K, N))
+    responsibility[labels, np.arange(N)] = 1.0
+
+    # Calculate weights.
+    weight = np.sum(responsibility, axis=1)/N
+
+    # Estimate covariance matrices.
+    cov = _estimate_covariance_matrix_full(y, responsibility, mu, 
+        covariance_regularization=covariance_regularization)
+
+    return (mu, cov, weight, responsibility)
 
 
 def _compute_log_det_cholesky(cholesky_matrices, covariance_type, n_features):
@@ -235,7 +300,7 @@ def _estimate_covariance_matrix_full(y, responsibility, mu,
 
 
 def estimate_covariance_matrix(y, responsibility, mu, covariance_type,
-    covariance_regularization=0):
+    covariance_regularization=0, **kwargs):
     """
     Estimate the covariance matrix for the given data and mixtures.
 
@@ -360,16 +425,11 @@ def expectation(y, mu, cov, weight, **kwargs):
 
     responsibility, log_likelihood = responsibility_matrix(y, mu, cov, weight,
                                                            **kwargs)
-
-    nll = -np.sum(log_likelihood)
-
     K = weight.size
     N, D = y.shape
-    slogdetcov = np.sum(np.linalg.slogdet(cov)[1])
-    raise a
+    nll = -np.sum(log_likelihood) # the negative log likelihood
 
-    I, I_parts = _mixture_message_length(K, N, D, -nll, slogdetcov, 
-        weights=[weight])
+    I, I_parts = mixture_message_length(N, D, K, cov, weight, -nll, **kwargs)
 
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
@@ -429,8 +489,7 @@ def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
         new_mu[m] = np.sum(w_responsibility[m] * y.T, axis=1) \
                   / w_effective_membership[m]
 
-    new_cov = _estimate_covariance_matrix(y, responsibility, new_mu,
-        kwargs["covariance_type"], kwargs["covariance_regularization"])
+    new_cov = _estimate_covariance_matrix(y, responsibility, new_mu, **kwargs)
 
     state = (new_mu, new_cov, new_weight)
 

@@ -4,7 +4,7 @@ Functions to calculate information of quantities.
 """
 
 import numpy as np
-
+from scipy.special import gammaln
 
 def number_of_gmm_parameters(K, D):
     r"""
@@ -156,3 +156,83 @@ def predict_sum_log_weights(K, N, previous_states=None):
 
     return \
         (target_prediction, target_prediction_err, target_lower, target_upper)
+
+
+
+def mixture_message_length(N, D, K, cov, weight, log_likelihood, yerr=0.001,
+    **kwargs):
+    r"""
+    Return the message length of a Gaussian mixture model. 
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data.
+
+    :param K:
+        The number of Gaussian components in the mixture. 
+
+    :param cov:
+        The covariance matrices of the components in the mixture.
+
+    :param weight:
+        The relative weights of the components in the mixture.
+
+    :param log_likelihood:
+        The sum of the log likelihood for the data, given the model.
+
+    :param yerr: [optional]
+        The errors in each dimension for each of the data points. If an array
+        is given then it must have the same size as `(N, D)`.
+
+    :returns:
+        A two-length tuple containing the total message length (in units of
+        nats), and a dictionary containing the message length of different
+        constitutents (all in units of nats).
+    """
+
+    K, N, D = np.array([K, N, D], dtype=int)
+
+    yerr = np.atleast_1d(yerr)
+    if yerr.size > 1 and yerr.size != (N * D):
+        raise ValueError("yerr size does not match what is expected")
+
+    # Allow for the sum of the log of the determinant of the covariance 
+    # matrices to be directly given, to avoid duplicate computing
+    if cov is None:
+        sum_log_det_cov = kwargs["__slogdetcov"]
+    else:
+        _, log_det_cov = np.linalg.slogdet(cov)
+        assert np.all(_ > 0), \
+               "Unstable covariance matrices: negative log determinants"
+        sum_log_det_cov = np.sum(log_det_cov)
+
+    # Same for the weight.
+    if weight is None:
+        sum_log_weights = kwargs["__slogw"]
+    else:
+        sum_log_weights = np.sum(np.log(weight))
+
+
+    I_yerr = -np.log(yerr) if yerr.size > 1 else - N * D * np.log(yerr)
+
+    Q = number_of_gmm_parameters(K, D)
+
+    # Calculate information required to encode the mixture parameters,
+    # regardless of the covariance matrices and the weights, etc.
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
+               + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+
+    I_data = -log_likelihood + I_yerr
+    I_slogdetcovs = -0.5 * (D + 2) * sum_log_det_cov
+    I_weights = (0.25 * D * (D + 3) - 0.5) * sum_log_weights
+
+    I_parts = dict(
+        I_mixtures=I_mixtures, I_parameters=I_parameters, I_data=I_data,
+        I_slogdetcovs=I_slogdetcovs, I_weights=I_weights)
+
+    I = I_mixtures + I_parameters + I_data + I_slogdetcovs + I_weights #[nats]
+
+    return (I, I_parts)
