@@ -70,6 +70,7 @@ class GaussianMixture(object):
         self._state_weights = []
         self._state_sum_log_weights = []
         self._state_sum_log_likelihoods = []
+        self._state_message_lengths = []
 
         self._state_meta = {}
 
@@ -160,7 +161,7 @@ class GaussianMixture(object):
                 if self.threshold > abs(change):
                     break
 
-            self._record_state(cov, weight, ll)
+            self._record_state(cov, weight, ll, I)
 
             # Make predictions for past and future mixtures.
             K_target = np.arange(1, weight.size + K_predict)
@@ -177,7 +178,7 @@ class GaussianMixture(object):
 
 
 
-    def _record_state(self, cov, weight, log_likelihood):
+    def _record_state(self, cov, weight, log_likelihood, message_length):
         r"""
         Record the state of the model to make better predictions for the
         message lengths of future mixtures.
@@ -190,6 +191,9 @@ class GaussianMixture(object):
 
         :param log_likelihood:
             The log-likelihood of the current mixture.
+
+        :param message_length:
+            The length of the message required to encode the current state.
         """
 
         self._state_K.append(weight.size)
@@ -203,6 +207,9 @@ class GaussianMixture(object):
 
         # Record log-likelihood.
         self._state_sum_log_likelihoods.append(np.sum(log_likelihood))
+
+        # Record message length.
+        self._state_message_lengths.append(message_length)
 
         return None
 
@@ -240,5 +247,14 @@ class GaussianMixture(object):
         # faster (e.g., the optimization functions start from values closer to
         # the true value).
         self._state_meta.update(meta)
+
+        # Say something about K_max.
+        indices = np.where(
+            predictions["t_I_lower"] >= np.min(self._state_message_lengths))[0]
+
+        if any(indices):
+            print("K_true < {0:.0f}".format(1 + K[indices[0]]))
+            
+
 
         return predictions
