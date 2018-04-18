@@ -1,4 +1,7 @@
 
+"""
+Visualize the search progress for a gaussian mixture model.
+"""
 
 import os
 import numpy as np
@@ -6,548 +9,404 @@ import matplotlib.pyplot as plt
 
 from matplotlib.patches import Ellipse
 from matplotlib.ticker import MaxNLocator
-import scipy.special
 
-def _total_parameters(K, D):
-    r"""
-    Return the total number of model parameters :math:`Q`, if a full 
-    covariance matrix structure is assumed.
-
-    .. math:
-
-        Q = \frac{K}{2}\left[D(D+3) + 2\right] - 1
-
-
-    :param K:
-        The number of Gaussian mixtures.
-
-    :param D:
-        The dimensionality of the data.
-
-    :returns:
-        The total number of model parameters, :math:`Q`.
-    """
-    return (0.5 * D * (D + 3) * K) + K - 1
-
-
-
-def _mixture_message_length_parts(K, N, D):
-
-    Q = _total_parameters(K, D)
-
-    I_mixtures = K * np.log(2) * (1 - D/2.0) + scipy.special.gammaln(K) \
-        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
-    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
-
-    return I_mixtures + I_parameters
+from . import mml
 
 
 class VisualizationHandler(object):
 
-    def __init__(self, y, target=None, x_index=0, y_index=1,
-        figure_path=None, **kwargs):
+    def __init__(self, y, data_projection_indices=(0, 1), figure_path=None,
+        target=None, **kwargs):
+        r"""
+        Initialize a visualisation handler to show the search progress and the
+        predictions of future mixtures.
 
-        figure_path = "" if figure_path is None else figure_path
+        :param y:
+            The data :math:`y`.
 
-        self._color_model = "r"
-        self._color_prediction = "b"
-        self._color_target = "g"
+        :param data_projection_indices: [optional]
+            A two-length tuple containing the indices to use when plotting the
+            :math:`x` and :math:`y` projections of the data.
 
-        self._model = []
-        self._expectation_iter = 1
+        :param figure_path: [optional]
+            The local path to store any figures generated during the search.
+
+        :param target: [optional]
+            The target message length components (e.g., for generated data).
+        """
+
+        self._y_shape = y.shape
+        self._data_projection_indices = data_projection_indices
+
+        self._figure_path = "" if figure_path is None else figure_path
         self._figure_iter = 1
-        self._figure_prefix = os.path.join(
-            figure_path, "iter_{}".format(int(np.random.uniform(0, 1000))))
+        self._figure_prefix = os.path.join(self._figure_path,
+            "iter_{:.0f}".format(np.random.uniform(0,  10000)))
 
-        self._predict_slw = []
-        self._predict_ll = []
-        self._predict_slogdetcovs = []
-        self._predict_message_lengths = []
-        self._predict_slw_bounds = []
-        self._predict_slogdetcov_bounds = []
-        self._predict_ll_bounds = []
-        self._predict_I_bounds = []
-
-        self._data_slw = []
-        self._data_slogdetcov = []
-
-        self._reference_ll = None
-
-
-        self.fig, axes = plt.subplots(1, 5, figsize=(15.6 + 2.8, 2.8))
-        axes = np.array(axes).flatten()
-        self._display = True
-
-        self.ax_data, self.ax_slogw, self.ax_slogdet, self.ax_sll, self.ax_I = axes
-
-        self._xyindex = (x_index, y_index)
-
-        self.ax_data.scatter(y.T[x_index], y.T[y_index], facecolor="k", s=1, alpha=0.5)
-        self.ax_data.set_xlabel(r"$x_{{{0}}}$".format(x_index))
-        self.ax_data.set_ylabel(r"$x_{{{0}}}$".format(y_index))
-        self.ax_data.xaxis.set_major_locator(MaxNLocator(2))
-        self.ax_data.yaxis.set_major_locator(MaxNLocator(2))
-
-
-        self.ax_I.set_xlabel(r"$K$")
-        self.ax_I.set_ylabel(r"$I$ $[{\rm nats}]$")
-        self.ax_I.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_I.yaxis.set_major_locator(MaxNLocator(5))
-
-        self.ax_slogw.set_xlabel(r"$K$")
-        self.ax_slogw.set_ylabel(r"$I_\mathcal{M} + \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
-        self.ax_slogw.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_slogw.yaxis.set_major_locator(MaxNLocator(5))
-
-        """
-        self.ax_I_other.set_xlabel(r"$K$")
-        self.ax_I_other.set_ylabel(r"$I_{other}$ $[{\rm nats}]$")
-        self.ax_I_other.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_I_other.yaxis.set_major_locator(MaxNLocator(5))
-        self._show_I_other_data = self.ax_I_other.plot([np.nan], [np.nan], c="#666666")[0]
-        """
-
-        self.ax_slogdet.set_xlabel(r"$K$")
-        self.ax_slogdet.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
-        self.ax_slogdet.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_slogdet.yaxis.set_major_locator(MaxNLocator(5))
-
-        #x = np.arange(1, 50)
-        #self.ax_slogdet.plot(x, -0.5 * (y.shape[1] + 2) * x * 124.55, c="r")
-
-        self._show_slw_data = self.ax_slogw.scatter(
-            [np.nan], [np.nan], facecolor="k", s=5)
-        self._show_slogdetcov_data = self.ax_slogdet.scatter([np.nan], [np.nan], facecolor="k", s=5)
-
-        self.ax_sll.set_xlabel(r"$K$")
-        self.ax_sll.set_ylabel(r"$-\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
-        self.ax_sll.xaxis.set_major_locator(MaxNLocator(5))
-        self.ax_sll.yaxis.set_major_locator(MaxNLocator(5))
-
-        if target is not None:
-            K_target = target["weight"].size
-                
-            target_kwds = dict(facecolor=self._color_target, s=5, zorder=100)
-
-
-            D = target["mean"].shape[1]
-
-            I_other = _mixture_message_length_parts(K_target, y.shape[0], D)
-
-            self.ax_slogw.scatter(
-                [K_target], [I_other + (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(target["weight"]))], **target_kwds)
-
-            self.ax_slogdet.scatter(
-                [K_target],
-                [-0.5 * (D + 2) * np.sum(np.linalg.slogdet(target["cov"])[1])],
-                **target_kwds)
-
-            self.ax_sll.scatter(
-                [K_target],
-                [target["nll"]],
-                **target_kwds)
-
-        for ax in axes:
-            ax.autoscale(enable=True)
-
-        self.fig.tight_layout()
-
-        self.savefig()
-
-
-    def _clear_model(self):
-
-        L = len(self._model)
-        for l in range(L):
-            item = self._model.pop(0)
-            item.set_visible(False)
-            del item
-
-
-    def _update_previous_predict_slws(self):
-        L = len(self._predict_slw)
-        for l in range(L):
-            item = self._predict_slw.pop(0)
+        self._fig, axes = plt.subplots(1, 5, figsize=(15.6 + 2.8, 2.8))
             
-            # TODO: delete or just change/color etc.
-            #item.set_alpha(0.1)
-
-            item.set_visible(False)
-            del item
-
-
-    def _clear_previous_items(self, items):
-
-        L = len(items)
-        for l in range(L):
-            item = items.pop(0)
-            try:
-                item.set_data([], [])
-            except AttributeError:
-                None
-            item.set_visible(False)
-            del item
-
-
-    def _update_previous_predict_lls(self):
-        L = len(self._predict_ll)
-        for l in range(L):
-            item = self._predict_ll.pop(0)
-            try:
-                item.set_data([], [])
-            except AttributeError:
-                None
-            item.set_visible(False)
-            del item
-
-
-    def _update_previous_predict_slogdetcovs(self):
-        L = len(self._predict_slogdetcovs)
-        for l in range(L):
-            item = self._predict_slogdetcovs.pop(0)
-            try:
-                item.set_data([], [])
-            except AttributeError:
-                None
-            item.set_visible(False)
-            del item
-
-    def _update_previous_predict_message_lengths(self):
-        L = len(self._predict_message_lengths)
-        for l in range(L):
-            item  = self._predict_message_lengths.pop(0)
-            try:
-                item.set_data([], [])
-            except AttributeError:
-                None
-            item.set_visible(False)
-            del item
-
-
-
-
-    def emit(self, kind, params, save=True, clear_previous=True,
-        plotting_kwds=None):
-
-        plotting_kwds = dict() if plotting_kwds is None else plotting_kwds
-
-        if kind == "model":
-
-            self._clear_model()
-
-            # Update view of the model.
-            K = params["weight"].size
-
-            x_index, y_index = self._xyindex
-            if x_index != 0 or y_index != 1:
-                raise NotImplementedError
-
-            for k in range(K):
-                mean = params["mean"][k][:2]
-                cov = params["cov"][k]
-
-                vals, vecs = np.linalg.eigh(cov[:2, :2])
-                order = vals.argsort()[::-1]
-                vals = vals[order]
-                vecs = vecs[:,order]
-
-                theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
-
-                # Show 2 standard deviations
-                width, height = 2 * 2 * np.sqrt(vals)
-                ellip = Ellipse(xy=mean, width=width, height=height, angle=theta,
-                    facecolor="r", alpha=0.1)
-
-                self._model.append(self.ax_data.add_artist(ellip))
-                self._model.append(self.ax_data.scatter([mean[0]], [mean[1]], facecolor="r", s=1))
-
-            
-            K = params["weight"].size
-            D = params["mean"].shape[1]
-            slogdet_cov = - 0.5 * (D + 2) * np.sum(np.log(np.linalg.det(params["cov"])))
-            log_mean_det_cov = np.log(np.mean(np.linalg.det(params["cov"])))
-
-            I_other = params["I_other"]
-
-            self._data_slw.append([K, 
-                I_other + (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(params["weight"]))])
-            self._show_slw_data.set_offsets(np.array(self._data_slw))
-            self._show_slw_data.set_facecolor("k") # Needed to make them update.
-            self._show_slw_data.set_sizes(5 * np.ones(len(self._data_slw)))
-
-            self._data_slogdetcov.append([K, slogdet_cov])
-            self._show_slogdetcov_data.set_offsets(np.array(self._data_slogdetcov))
-            self._show_slogdetcov_data.set_facecolor("k") # Needed to make them update.
-            self._show_slogdetcov_data.set_sizes(5 * np.ones(len(self._data_slogdetcov)))
-
-            #self.ax_slogdet.scatter([K], [slogdet_cov], facecolor="k", s=1)
-
-            #sum_log_weights = np.sum(np.log(params["weight"]))
-            #self.ax_slogw.scatter([K], [sum_log_weights], facecolor="k", s=1)
-
-
-        elif kind == "predict_I_other":
-
-            """
-            K = params["K"]
-            I_other = params["I_other"]
-
-            self._show_I_other_data.set_data(np.array([K, I_other]))
-            self.ax_I_other.set_xlim(0, max(K))
-            self.ax_I_other.set_ylim(0, max(I_other))
-            """
-            print("ignoring I_other")
-
-        elif kind == "expectation":
-            self.ax_I.scatter(
-                [params["K"]], [params["message_length"]],
-                facecolor="k", s=5)
-            self._expectation_iter += 1
-
-            # plot LL as well
-            K = params["K"]
-            ll = np.sum(params["log_likelihood"])
-
-            if self._reference_ll is None:
-                self._reference_ll = ll
-
-            # /self._reference_ll
-            self.ax_sll.scatter([K], [-ll], facecolor="k", s=5)
-
-
-
-
-
-        elif kind == "predict_I_slw":
-
-            self._update_previous_predict_slws()
-
-            K = params["K"]
-            p_slw = params["p_slw"]
-            p_slw_err = params["p_slw_err"]
-            
-            self._predict_slw.extend([
-                self.ax_slogw.plot(K, p_slw, 
-                    c=self._color_prediction, zorder=-1)[0],
-                #self.ax_slogw.fill_between(
-                #    K, p_slw_err[0] + p_slw, p_slw_err[1] + p_slw, 
-                #    facecolor=self._color_prediction, alpha=0.5, zorder=-1),
-            ])
-
-            self.ax_slogw.set_xlim(0, self.ax_slogw.get_xlim()[1])
-
-        elif kind == "I_slw_bounds":
-
-            self._clear_previous_items(self._predict_slw_bounds)
-
-            K, lower, upper = (params["K"], params["lower"], params["upper"])
-            plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
-                linewidth=0.5)
-
-            self._predict_slw_bounds.extend([
-                self.ax_slogw.fill_between(K, lower, upper,
-                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_slogw.plot(K, lower, **plot_kwds)[0],
-                self.ax_slogw.plot(K, upper, **plot_kwds)[0]
-            ])
-
-        elif kind == "I_sldc_bounds":
-
-            self._clear_previous_items(self._predict_slogdetcov_bounds)
-
-            K, lower, upper = (params["K"], params["lower"], params["upper"])
-
-            bounds = np.array([lower, upper])
-            lower = np.min(bounds, axis=0)
-            upper = np.max(bounds, axis=0)
-
-
-            plot_kwds = dict(c="#666666", linestyle="-", zorder=-10,
-                linewidth=0.5)
-            upper_plot_kwds = plot_kwds.copy()
-            upper_plot_kwds["linestyle"] = "-."
-            self._predict_slogdetcov_bounds.extend([
-                self.ax_slogdet.fill_between(K, lower, upper,
-                    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                self.ax_slogdet.plot(K, lower, **plot_kwds)[0],
-                self.ax_slogdet.plot(K, upper, **upper_plot_kwds)[0]
-            ])
-
-        elif kind == "predict_nll":
-
-            if clear_previous:
-                self._update_previous_predict_lls()
-
-            K = params["K"]
-            p_nll = params["p_nll"]#/self._reference_ll
-
-            kwds = dict(c=self._color_prediction, zorder=-1, alpha=0.5)
-            kwds.update(plotting_kwds)
-
-            self._predict_ll.extend([
-                self.ax_sll.plot(K, p_nll, **kwds)[0],
-                #self.ax_sll.fill_between(
-                #    K, -(p_ll + p_ll_pos_err), -(p_ll + p_ll_neg_err),
-                #    facecolor=self._color_prediction, alpha=0.25, zorder=-1)
-            ])
-
-            #    self.ax_sll.fill_between(
-            #        K, p_ll_err[0] + p_ll, p_ll_err[1] + p_ll,
-            #        facecolor=self._color_prediction, alpha=0.5, zorder=-1)
-            #    ])
-
-            self.ax_sll.set_xlim(0, max(K[-1], self.ax_sll.get_xlim()[1]))
-
-
-
-        elif kind == "predict_nll_bounds":
-
-            #K_obs, nll_obs_bound = params["nll_obs_bound"]
-            #K_theory, nll_theory_bound = params["nll_theory_bound"]
-            K = params["K"]
-            nll_strict_bound = params["nll_strict_bound"]
-            nll_relaxed_bound = params["nll_relaxed_bound"]
-
-            # The theory bound is often so low that it is not useful, so we will
-            # store the current y limits.
-            ylim = self.ax_sll.get_ylim()
-
-
-            if clear_previous:
-                self._clear_previous_items(self._predict_ll_bounds)
-
-            self._predict_ll_bounds.extend([
-                #self.ax_sll.fill_between(
-                #    K, nll_strict_bound, ylim[1] * np.ones_like(K),
-                #    facecolor="#EEEEEE", zorder=-100, linestyle=":"),
-                #self.ax_sll.plot(K, nll_strict_bound, 
-                #    c="#666666", linestyle="-", zorder=-10, linewidth=0.5)[0],
-                #self.ax_sll.plot(K, nll_relaxed_bound, c="#666666",
-                #    linestyle="-.", zorder=-10, linewidth=0.5)[0]
-            ])
-
-            self.ax_sll.set_xlim(0, self.ax_sll.get_xlim()[1])
-
-            #visible_bounds = nll_relaxed_bound
-            #self.ax_sll.set_ylim(
-            #    min(visible_bounds) - 0.05 * (ylim[1] - min(visible_bounds)),
-            #    ylim[1]
-            #)
-            
-
-        elif kind == "predict_I_slogdetcov":
-
-            self._update_previous_predict_slogdetcovs()
-
-            K = params["K"]
-            p_slogdetcovs = params["p_slogdetcovs"]
-            p_slogdetcovs_pos_err = params["p_slogdetcovs_pos_err"]
-            p_slogdetcovs_neg_err = params["p_slogdetcovs_neg_err"]
-
-            self._predict_slogdetcovs.extend([
-                self.ax_slogdet.plot(K, p_slogdetcovs, c=self._color_prediction)[0],
-                self.ax_slogdet.fill_between(K,
-                    p_slogdetcovs + p_slogdetcovs_neg_err,
-                    p_slogdetcovs + p_slogdetcovs_pos_err,
-                    facecolor=self._color_prediction, alpha=0.5, zorder=-1)
-            ])
-
-            self.ax_slogdet.autoscale_view()
-            self.ax_slogdet.relim()
-            plt.draw()
-            
-            self.ax_slogdet.set_xlim(0, max(K))
-            # Only show y-limits of the data.
-            y = np.array(self._data_slogdetcov).T[1]
-            ylimits = np.hstack([min(y), max(y),
-                min(p_slogdetcovs + p_slogdetcovs_neg_err),
-                max(p_slogdetcovs + p_slogdetcovs_pos_err),
-            ]).flatten()
-            ylimits = (np.min(ylimits), max(ylimits))
-
-            frac = 0.05 * np.ptp(ylimits) 
-            #self.ax_slogdet.set_ylim(min(ylimits), max(ylimits))
-            
-            self.ax_slogdet.set_ylim(ylimits[0] - frac, ylimits[1] + frac)
-
-
-            #if min(K) > 8:
-            #    raise a
-
-        elif kind == "predict_I_bounds":
-            K = params["K"]
-            I_strict_bound = params["I_strict_bound"]
-            I_relaxed_bound = params["I_relaxed_bound"]
-            p_I = params["p_I"]
-
-            if clear_previous:
-                self._clear_previous_items(self._predict_I_bounds)
-
-            ylim = self.ax_I.get_ylim()
-
-            kwds = dict(c=self._color_prediction, zorder=-1, alpha=0.5)
-            kwds.update(plotting_kwds)
-
-
-
-
-
-            self._predict_I_bounds.extend([
-                self.ax_I.plot(K, p_I, **kwds)[0],
-            ])
-
-
-            # find min.
-            try:
-                index = np.nanargmin(p_I)
-
-            except ValueError:
-                None
-
-            else:
-                self._predict_I_bounds.extend([
-                    self.ax_I.axvline(K[index], **kwds)
-                ])
-
-            """
-            self._predict_I_bounds.extend([
-                self.ax_I.fill_between(K, I_strict_bound,
-                    np.ones(K.size) * ylim[1],
-                    facecolor="#EEEEEE", linestyle=":", zorder=-10),
-                self.ax_I.plot(K, I_strict_bound, c="#666666",
-                    linestyle="-", zorder=-10, linewidth=0.5)[0],
-                self.ax_I.plot(K, I_relaxed_bound, c="#666666",
-                    linestyle="-.", zorder=-10, linewidth=0.5)[0],
-                self.ax_I.plot(K, p_I, **kwds)[0]
-            ])
-            
-            self.ax_I.set_ylim(self.ax_I.get_ylim()[0], ylim[1])
-            """
-
-
-        else:
-            print("Ignoring emit kind: {}".format(kind))
-            #raise ValueError("what you tryin' to tell me?!")
-
-        # Only save on model update.
-        if save:
-            self.savefig()
+        self._init_axes(y, target)
+        self.snapshot()
+
+        # lists for plotting
+        self._plot_model_items = []
+        self._plot_prediction_items = []
 
         return None
 
 
-    def savefig(self):
+    def _init_axes(self, y, target=None):
+        """
+        Initialize the axes in the figure.
+
+        :param y:
+            The data :math:`y`.
+
+        :param target:
+            The target distribution (e.g.,  in the case of generated data).
+        """
+
+        scatter_data_kwds = dict(facecolor="k", s=1)
+        scatter_progress_kwds = scatter_data_kwds.copy()
+        scatter_progress_kwds.update(dict(s=5))
+
+        x_index, y_index = self._data_projection_indices
+
+        ax = self._ax("data")
+        ax.scatter(y.T[x_index], y.T[y_index], **scatter_data_kwds)
+        ax.set_xlabel(r"$x_{{{0}}}$".format(x_index))
+        ax.set_ylabel(r"$x_{{{0}}}$".format(y_index))
+        ax.xaxis.set_major_locator(MaxNLocator(3))
+        ax.yaxis.set_major_locator(MaxNLocator(3))
+        
+        ax = self._ax("slogw")
+        ax.set_xlabel(r"$K$")
+        ax.set_ylabel(r"$I_\mathcal{M} + \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
+        ax.xaxis.set_major_locator(MaxNLocator(5))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._slogw_data = []
+        self._scatter_slogw_data = ax.scatter([np.nan], [np.nan],
+                                              **scatter_progress_kwds)
+
+        ax = self._ax("slogdet")
+        ax.set_xlabel(r"$K$")
+        ax.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
+        ax.xaxis.set_major_locator(MaxNLocator(5))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._slogdet_data = []
+        self._scatter_slogdet_data = ax.scatter([np.nan], [np.nan],
+                                                **scatter_progress_kwds)
+        
+        ax = self._ax("nll")
+        ax.set_xlabel(r"$K$")
+        ax.set_ylabel(r"$-\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
+        ax.xaxis.set_major_locator(MaxNLocator(5))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._nll_data  = []
+        self._scatter_nll_data = ax.scatter([np.nan], [np.nan],
+                                            **scatter_progress_kwds)
+
+        ax = self._ax("I")
+        ax.set_xlabel(r"$K$")
+        ax.set_ylabel(r"$I$ $[{\rm nats}]$")
+        ax.xaxis.set_major_locator(MaxNLocator(5))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._I_data = []
+        self._scatter_I_data = ax.scatter([np.nan], [np.nan],
+                                          **scatter_progress_kwds)
+
+        if target is not None:
+            print("no target  implemented  yet")
+
+            #raise NotImplementedError("not  dun yet")
+
+        for ax in self._fig.axes:
+            ax.autoscale(enable=True)
+
+        self._fig.tight_layout()
+
+        return None
+
+
+
+    def _ax(self, descriptor):
+        r"""
+        Return the correct axes given a descriptor.
+        """
+
+        axes = np.array(self._fig.axes).flatten()
+        index = ["data", "slogw", "slogdet", "nll", "I"].index(descriptor)
+        return axes[index]
+
+
+    def snapshot(self, **kwargs):
+        """
+        Save a snapshot (figure) of the current progress and predictions.
+        """
+
         plt.draw()
-        self.fig.tight_layout()
+        self._fig.tight_layout()
         path = "{0:s}_{1:05d}.png".format(self._figure_prefix, self._figure_iter)
-        self.fig.savefig(path)
+        self._fig.savefig(path, **kwargs)
         print("Created {}".format(path))
         self._figure_iter += 1
 
+        return None
 
-    def create_movie(self, cleanup=True):
 
-        os.system('ffmpeg -y -i "{}_%05d.png" output.m4v'.format(self._figure_prefix))
+    def _clear_items(self, items):
+        """
+        Hide items from a figure.
 
-        if cleanup:
-            os.system("rm -fv {}_*.png".format(self._figure_prefix))
+        :param items:
+            A list of items plotted on an axis.
+        """
+
+        L = len(items)
+        for l in range(L):
+            item = items.pop(0)
+            item.set_visible(False)
+            del item
+
+        return None
+
+
+    def emit(self, kind, params, snapshot=True):
+        r"""
+        Handler for events.
+        """
+
+        if kind == "model":
+
+            self._clear_items(self._plot_model_items)
+
+            ax = self._ax("data")
+            
+            x_index, y_index = self._data_projection_indices
+
+            N, D = self._y_shape
+            K = params["weight"].size
+
+            cov_mask = np.zeros((D, D), dtype=bool)
+            cov_mask[y_index, x_index] = True
+            cov_mask[x_index, y_index] = True
+            cov_mask[x_index, x_index] = True
+            cov_mask[y_index, y_index] = True
+
+            for k in range(K):
+                mu = params["mu"][k][[x_index, y_index]]
+                cov = params["cov"][k][cov_mask].reshape((2, 2))
+
+                vals, vecs = np.linalg.eigh(cov)
+                order = vals.argsort()[::-1]
+                vals = vals[order]
+                vecs = vecs[:, order]
+
+                theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
+
+                # Show 2 standard deviations.
+                width, height = 2 * 2 * np.sqrt(vals)
+                ellipse = Ellipse(xy=mu, width=width, height=height, angle=theta,
+                    facecolor="r", alpha=0.25)
+
+                self._plot_model_items.append(ax.add_artist(ellipse))
+                self._plot_model_items.append(ax.scatter(
+                    [mu[x_index]], [mu[y_index]], facecolor="r", s=5))
+
+
+            # Show the values in the other windows.
+            # TODO: we shouldn't be including MML terms in this function...
+            I_mixture, I_parameters = mml._gmm_parameter_message_length(K, N, D)
+            I_other = I_mixture + I_parameters
+
+            I_slogw = I_other \
+                    + (0.25 * D * (D + 3) - 0.5) * np.sum(np.log(params["weight"]))
+            I_sldc = -0.5 * (D + 2) * np.sum(np.linalg.slogdet(params["cov"])[1])
+
+            updates = [
+                ("slogw", self._slogw_data, self._scatter_slogw_data, I_slogw),
+                ("slogdet", self._slogdet_data, self._scatter_slogdet_data, I_sldc),
+                ("nll", self._nll_data, self._scatter_nll_data, params["nll"]),
+                ("I", self._I_data, self._scatter_I_data, params["I"])
+            ]
+
+            for descriptor, data, scatter, new_datum in updates:
+                data.append([K, new_datum])
+
+                da = np.array(data)
+                scatter.set_offsets(da)
+                scatter.set_facecolor("k")
+                scatter.set_sizes(30 * np.ones(len(data)))
+                scatter.set_zorder(100)
+
+
+        elif kind == "prediction":
+
+            self._clear_items(self._plot_prediction_items)
+
+            pred_color = "b"
+
+            pred_fill_kwds = dict(facecolor=pred_color, alpha=0.5, zorder=-1)
+            pred_plot_kwds = dict(lw=2, c=pred_color, zorder=0)
+            theory_fill_kwds = dict(facecolor="#cccccc", zorder=-10)
+            theory_plot_kwds = dict(c="#666666", zorder=-5)
+
+            # Show slogw bounds first.
+            ax = self._ax("slogw")
+            self._plot_prediction_items.extend([
+                ax.plot(
+                    params["K"], params["p_I_analytic"], 
+                    **pred_plot_kwds)[0],
+                ax.fill_between(
+                    params["K"],
+                    params["p_I_analytic"] + params["p_I_analytic_pos_err"],
+                    params["p_I_analytic"] + params["p_I_analytic_neg_err"],
+                    **pred_fill_kwds),
+                ax.fill_between(
+                    params["K"],
+                    params["t_I_analytic_lower"],
+                    params["t_I_analytic_upper"],
+                    **theory_fill_kwds),
+                ax.plot(
+                    params["K"], params["t_I_analytic_lower"],
+                    **theory_plot_kwds)[0],
+                ax.plot(
+                    params["K"], params["t_I_analytic_upper"],
+                    **theory_plot_kwds)[0]
+            ])
+            _rescale_based_on_data(ax, params["K"], np.hstack(
+                [params["t_I_analytic_upper"], params["t_I_analytic_lower"]]))
+
+
+            # Show slogdetcov predictions.
+            ax = self._ax("slogdet")
+            self._plot_prediction_items.extend([
+                ax.plot(
+                    params["K"], params["p_I_slogdetcov"],
+                    **pred_plot_kwds)[0],
+                ax.fill_between(
+                    params["K"],
+                    params["p_I_slogdetcov"] + params["p_I_slogdetcov_pos_err"],
+                    params["p_I_slogdetcov"] + params["p_I_slogdetcov_neg_err"],
+                    **pred_fill_kwds),
+                ax.fill_between(
+                    params["K"],
+                    params["t_I_slogdetcov_lower"],
+                    params["t_I_slogdetcov_upper"],
+                    **theory_fill_kwds),
+                ax.plot(
+                    params["K"], params["t_I_slogdetcov_lower"], 
+                    **theory_plot_kwds)[0],
+                ax.plot(
+                    params["K"], params["t_I_slogdetcov_upper"],
+                    linestyle=".-", **theory_plot_kwds)[0]
+                ])
+            _rescale_based_on_data(ax, params["K"], 
+                np.hstack([
+                    params["t_I_slogdetcov_upper"], 
+                    params["t_I_slogdetcov_lower"]
+                ]))
+
+
+            # Show nll predictions.
+            ax = self._ax("nll")
+            ylim_max = np.max(params["p_nll"])
+            self._plot_prediction_items.extend([
+                ax.plot(params["K"], params["p_nll"], **pred_plot_kwds)[0],
+                ax.fill_between(params["K"], params["t_nll_lower"], ylim_max,
+                    **theory_fill_kwds),
+                ax.plot(params["K"], params["t_nll_lower"],
+                    **theory_plot_kwds)[0]
+            ])
+            _rescale_based_on_data(ax, params["K"], 
+                np.hstack([np.min(params["t_nll_lower"]), params["p_nll"]]))
+            ax.set_ylim(ax.get_ylim()[0], ylim_max)
+
+            ax = self._ax("I")
+            self._plot_prediction_items.extend([
+                ax.plot(params["K"], params["p_I"], **pred_plot_kwds)[0],
+            ])
+            # Show the saddle point.
+            #if np.any(np.isfinite(params["p_I"])):
+            #    index = np.nanargmin(params["p_I"])
+            #    self._plot_prediction_items.append(
+            #        ax.axvline(params["K"][index], lw=1, linestyle=":", c=color))
+
+            _rescale_based_on_data(ax, params["K"], params["p_I"])
+            
+            ylim = ax.get_ylim()
+            self._plot_prediction_items.extend([
+                ax.fill_between(
+                    params["K"], params["t_I_lower"], ylim[1],
+                    **theory_fill_kwds),
+                ax.plot(
+                    params["K"], params["t_I_lower"],
+                    **theory_plot_kwds)[0]
+            ])
+            _rescale_based_on_data(
+                ax, params["K"], [ylim[1], np.min(params["t_I_lower"])])
+            ax.set_ylim(ax.get_ylim()[0], ylim[1])
+
+
+        else:
+            raise NotImplementedError("unknown event kind")
+
+        if snapshot:
+            self.snapshot()
+
+        return None
+
+
+
+    def create_movie(self, output_path, remove_snapshots=False):
+        r"""
+        Create a movie of the search progress and save it to `output_path`.
+
+        :param output_path:
+            A local path on disk to save the movie to.
+
+        :param remove_snapshots: [optional]
+            Remove the individual figures (snapshots) used to create the movie.
+        """
+
+        # TODO: DOCS
+
+        os.system("ffmpeg -y -i \"{0}_iter_%05d.png\" {0}.m4v".format(
+            self._figure_path))
+
+        if remove_snapshots:
+            os.system("rm -fv {0}_iter_*.png".format(self._figure_path))
+
+        return True
+
+
+def _rescale_based_on_data(ax, x, y, y_percent_edge=5):
+    """
+    Re-scale a figure axis based on the given data.
+
+    :param ax:
+        The figure axes.
+
+    :param x:
+        An array-like object of the x-values.
+
+    :param y:
+        An array-like object of the y-values.
+
+    :param y_percent_edge: [optional]
+        The percentage of the peak-to-peak y-range to show either end of the
+        range of `y` values.
+    """
+
+    if np.sum(np.isfinite(np.unique(x))) > 1:
+        ax.set_xlim(np.nanmin(x), np.nanmax(x))
+
+    y_finite = np.array(y)[np.isfinite(y)]
+    if y_finite.size > 1:
+        y_ptp = np.ptp(y_finite)
+        ax.set_ylim(
+            np.min(y_finite) - y_percent_edge/100.0 * y_ptp,
+            np.max(y_finite) + y_percent_edge/100.0 * y_ptp
+        )
+
+    return None

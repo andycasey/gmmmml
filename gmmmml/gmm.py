@@ -172,8 +172,7 @@ class GaussianMixture(object):
                     dict(mu=mu, cov=cov, weight=weight, nll=-np.sum(ll), I=I))
                 visualization_handler.emit("prediction", predictions)
 
-            if K >= 8:
-                raise a
+
         raise a
 
 

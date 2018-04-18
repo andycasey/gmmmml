@@ -31,7 +31,7 @@ for i in range(10):
 from sklearn.datasets import make_blobs
 
 y, assignments = make_blobs(
-  n_samples=1000, n_features=2, centers=30, random_state=42)
+  n_samples=1000, n_features=2, centers=500, random_state=4234)
 #y = np.vstack([y, np.random.uniform(-10, 10, size=(10, y.shape[1]))])
 
 #n_samples=100, n_features=2, centers=3, cluster_std=1.0, center_box=(-10.0, 10.0), shuffle=True, random_state=Non

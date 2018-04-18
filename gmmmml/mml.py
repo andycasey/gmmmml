@@ -392,38 +392,6 @@ def predict_sum_log_det_covs(K, N, previous_states, draws=100, **kwargs):
 
     return (p_sldc, (lower_sum_log_det_cov, upper_sum_log_det_cov), {})
 
-    """
-
-    # Predict the log determinants of covariance matrices based on a Gaussian
-    # KDE.
-    kernel = gaussian_kde(np.log(previous_det_cov[-1]))
-
-    # If we are assuming that those determinants are representative, then we
-    # can do one big resample.
-    log_det_covs = kernel.resample(np.sum(K)).flatten()
-
-    if len(previous_det_cov) > 25:
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.hist(np.log(previous_det_cov[-1]), normed=True)
-        ax.hist(log_det_covs, edgecolor="b", alpha=0.5, normed=True)
-
-        raise a
-
-    # Calculate the predicted sum of the log of the determinant of the 
-    # covariance matrices for each target K.
-    offset = 0
-    p_sldc = np.zeros(K.size, dtype=float)
-    p_sldc_err = K * np.std(log_det_covs)
-
-    for i, k in enumerate(K):
-        print(i, k, offset)
-        p_sldc[i] = np.sum(log_det_covs[offset:offset + k + 1])
-        offset += k
-
-    return (p_sldc, (p_sldc_err, -p_sldc_err), {})
-    """
 
 
 
@@ -650,7 +618,6 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         K, N, log_max_det, log_min_det)
 
 
-
     p_slogdetcov, p_slogdetcov_err, update_meta = _deprecated_predict_sum_log_det_covs(
         K, N=N, previous_states=(_state_K, _state_det_covs), **state_meta)
 
@@ -685,8 +652,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     p_slogdetcov_pos_err, p_slogdetcov_neg_err = p_slogdetcov_err
     p_I_slogdetcov_pos_err = sldc_scalar * p_slogdetcov_pos_err
     p_I_slogdetcov_neg_err = sldc_scalar * p_slogdetcov_neg_err
-    t_I_slogdetcov_lower = sldc_scalar * t_slogdetcov_lower
-    t_I_slogdetcov_upper = sldc_scalar * t_slogdetcov_upper
+    t_I_slogdetcov_upper = sldc_scalar * t_slogdetcov_lower
+    t_I_slogdetcov_lower = sldc_scalar * t_slogdetcov_upper
 
     # The predictions for the negative log-likelihood are already in units of
     # nats, so nothing needed there. But we do need to incorporate the errors
@@ -697,12 +664,11 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     t_I_data_lower = t_nll_lower - D * N * np.log(yerr)
     p_I = p_I_analytic + p_I_slogdetcov + p_I_data
 
-    t_I_lower = I_other + t_I_analytic_lower + t_I_slogdetcov_lower \
-              + t_I_data_lower
+    t_I_lower = t_I_analytic_lower + t_I_slogdetcov_lower + t_I_data_lower
 
     assert np.all(t_I_analytic_lower <= t_I_analytic_upper)
     if np.isfinite(t_I_slogdetcov_upper).all():
-        assert np.all(t_I_slogdetcov_upper <= t_I_slogdetcov_lower)
+        assert np.all(t_I_slogdetcov_upper >= t_I_slogdetcov_lower)
 
     predictions = OrderedDict([
         ("K", K),
@@ -711,10 +677,14 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         ("p_I_analytic_neg_err", p_I_analytic_neg_err),
         ("t_I_analytic_lower", t_I_analytic_lower),
         ("t_I_analytic_upper", t_I_analytic_upper),
+        ("t_I_slogdetcov_lower", t_I_slogdetcov_lower),
+        ("t_I_slogdetcov_upper", t_I_slogdetcov_upper),
         ("p_I_slogdetcov", p_I_slogdetcov),
         ("p_I_slogdetcov_pos_err", p_I_slogdetcov_pos_err),
         ("p_I_slogdetcov_neg_err", p_I_slogdetcov_neg_err),
         ("p_nll", p_nll),
+        ("t_nll_lower", t_nll_lower),
+        ("t_I_data", t_I_data_lower),
         ("p_I_data", p_I_data),
         ("p_I", p_I),
         ("t_I_lower", t_I_lower)
