@@ -299,7 +299,7 @@ class VisualizationHandler(object):
                     **theory_plot_kwds)[0],
                 ax.plot(
                     params["K"], params["t_I_slogdetcov_upper"],
-                    linestyle=".-", **theory_plot_kwds)[0]
+                    linestyle="-.", **theory_plot_kwds)[0]
                 ])
             _rescale_based_on_data(ax, params["K"], 
                 np.hstack([
