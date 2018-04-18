@@ -281,8 +281,156 @@ def predict_sum_log_weights(K, N, previous_states=None):
         target_upper, fraction, fraction_err)
 
 
+def bounds_of_sum_log_det_covs(K, N, log_max_det, log_min_det, **kwargs):
+    r"""
+    Predict the theoretical bounds on the sum of the log of the determinant of
+    the covariance matrices for future (target) mixtures with :math:`K`
+    components.
 
-def predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
+    :param K:
+        The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :param log_max_det:
+        The logarithm of the determinant of the covariance matrix for the
+        :math:`K = 1` mixture, which represents the largest amount of 
+        (co-)variance that needs to be captured by the model.
+
+    :param log_min_det:
+        An estimate of the logarithm of the minimum determinant of a covariance
+        matrix for some mixture, as determined by the smallest pair-wise
+        distance between two points.
+
+        # TODO improve docs here.
+
+    """
+
+    # This is the limiting case when the log_max_det must be ~uniformly
+    # distributed over K mixtures. This represents the *lower* bound on the
+    # information required to encode it (or the upper bound on the sum of the
+    # log of the determinant of the covariance matrices).
+    upper_bound = K * log_max_det - K * np.log(K)
+
+    # This is the limiting case when every K-th mixture has a very small
+    # covariance matrix. 
+    lower_bound = K * log_min_det
+
+    return (lower_bound, upper_bound)
+
+
+def predict_sum_log_det_covs(K, N, previous_states, draws=100, **kwargs):
+    r"""
+    Predict the sum of the log of the determinant of covariance matrices for
+    future (target) mixtures with :math:`K` components.
+
+    :param K:
+        The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :param previous_states:
+        A two-length tuple containing the previous :math:`K` trials, and the
+        determinant of the covariance matrices for each of those :math:`K`
+        trials.
+
+    :param draws: [optional]
+        The number of error draws to make when predicting the sum of the log
+        of the determinant of covariance matrices of future mixtures.
+
+    :returns:
+        A three-length tuple containing:
+
+        (1) the predicted sum of the log of the determinant of covariance
+            matrices for future (target) mixtures with :math:`K` components;
+
+        (2) the error (positive, negative) on the predicted sum of the log of
+            the determinant of covariance matrices for future (target) 
+            mixtures with :math:`K` components;
+
+        (3) a dictionary containing recommended entries to use to update the
+            state of the metadata for the gaussian mixture model, in order
+            to improve the optimization of future predictions.
+    """
+
+    K = np.atleast_1d(K)
+
+    __failed_value = np.nan * np.ones(len(K))
+    __default_value = (__failed_value, (__failed_value, __failed_value), dict())
+
+    previous_K, previous_det_cov = previous_states
+    
+    # TODO: Assume the most recent previous_det_cov is representative of what
+    #       we want to target. This won't be the case if we are jumping around
+    #       between very different mixtures.
+    
+    if len(previous_det_cov[-1]) < 2:
+        return __default_value
+
+    # Let's predict the upper bound on this quantity.
+    # TODO: move elsewhere if it works.
+
+    # The upper bound is when the maximal sample variance is distributed 
+    # among the different mixtures.
+    log_max_det = np.log(previous_det_cov[0][0])
+    
+    # Case 1: Uniform spread in variance.
+    #         This provides the true lower limit for the information content,
+    #         because I = -\frac{(D + 2)}{2}\sum\log{|C_k|}
+    upper_sum_log_det_cov = K * log_max_det - K * np.log(K)
+
+    # Case 2: Non-uniform spread in variance, where the variance follows the
+    #         weights.
+    lower_sum_log_det_cov = K * log_max_det - K * np.log(N) + np.log(N - K + 1)
+
+
+    raise a
+
+    p_sldc = np.zeros(K.size)
+
+    return (p_sldc, (lower_sum_log_det_cov, upper_sum_log_det_cov), {})
+
+    """
+
+    # Predict the log determinants of covariance matrices based on a Gaussian
+    # KDE.
+    kernel = gaussian_kde(np.log(previous_det_cov[-1]))
+
+    # If we are assuming that those determinants are representative, then we
+    # can do one big resample.
+    log_det_covs = kernel.resample(np.sum(K)).flatten()
+
+    if len(previous_det_cov) > 25:
+
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.hist(np.log(previous_det_cov[-1]), normed=True)
+        ax.hist(log_det_covs, edgecolor="b", alpha=0.5, normed=True)
+
+        raise a
+
+    # Calculate the predicted sum of the log of the determinant of the 
+    # covariance matrices for each target K.
+    offset = 0
+    p_sldc = np.zeros(K.size, dtype=float)
+    p_sldc_err = K * np.std(log_det_covs)
+
+    for i, k in enumerate(K):
+        print(i, k, offset)
+        p_sldc[i] = np.sum(log_det_covs[offset:offset + k + 1])
+        offset += k
+
+    return (p_sldc, (p_sldc_err, -p_sldc_err), {})
+    """
+
+
+
+
+
+
+def _deprecated_predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs):
     r"""
     Predict the sum of the log of the determinant of covariance matrices for
     future (target) mixtures with :math:`K` components.
@@ -452,14 +600,15 @@ def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
 
     # Predict difference based on chi-sq improvement through increasing number
     # of mixtures.
+    nll_lower_bound = nll.copy()
     nll += 0.5 * N * D * pred_chisqs
 
-    return nll
+    return (nll, nll_lower_bound)
 
 
 
 def predict_message_length(K, N, D, previous_states, yerr=0.001, 
-    state_meta=None, **kwargs):
+    min_mean_pairwise_distance=np.nan, state_meta=None, **kwargs):
     """
     Predict the message length of past or future mixtures.
 
@@ -494,11 +643,19 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     # Predict the sum of the log of the determinant of the covariance
     # matrices.
-    p_slogdetcov, p_slogdetcov_err, update_meta = predict_sum_log_det_covs(
-        K, previous_states=(_state_K, _state_det_covs), **state_meta)
+    log_max_det = np.log(_state_det_covs[0][0])
+    log_min_det = np.log(min_mean_pairwise_distance)
 
-    p_nll = predict_negative_log_likelihood(K, N, D, uniformity_fraction, 
-        previous_states=(
+    t_slogdetcov_lower, t_slogdetcov_upper = bounds_of_sum_log_det_covs(
+        K, N, log_max_det, log_min_det)
+
+
+
+    p_slogdetcov, p_slogdetcov_err, update_meta = _deprecated_predict_sum_log_det_covs(
+        K, N=N, previous_states=(_state_K, _state_det_covs), **state_meta)
+
+    p_nll, t_nll_lower = predict_negative_log_likelihood(
+        K, N, D, uniformity_fraction, previous_states=(
             _state_K, 
             _state_det_covs,
             _state_sum_log_likelihoods
@@ -528,6 +685,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     p_slogdetcov_pos_err, p_slogdetcov_neg_err = p_slogdetcov_err
     p_I_slogdetcov_pos_err = sldc_scalar * p_slogdetcov_pos_err
     p_I_slogdetcov_neg_err = sldc_scalar * p_slogdetcov_neg_err
+    t_I_slogdetcov_lower = sldc_scalar * t_slogdetcov_lower
+    t_I_slogdetcov_upper = sldc_scalar * t_slogdetcov_upper
 
     # The predictions for the negative log-likelihood are already in units of
     # nats, so nothing needed there. But we do need to incorporate the errors
@@ -535,8 +694,15 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     # TODO: better way to encode yerr?
     p_I_data = p_nll - D * N * np.log(yerr)
+    t_I_data_lower = t_nll_lower - D * N * np.log(yerr)
     p_I = p_I_analytic + p_I_slogdetcov + p_I_data
 
+    t_I_lower = I_other + t_I_analytic_lower + t_I_slogdetcov_lower \
+              + t_I_data_lower
+
+    assert np.all(t_I_analytic_lower <= t_I_analytic_upper)
+    if np.isfinite(t_I_slogdetcov_upper).all():
+        assert np.all(t_I_slogdetcov_upper <= t_I_slogdetcov_lower)
 
     predictions = OrderedDict([
         ("K", K),
@@ -550,7 +716,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         ("p_I_slogdetcov_neg_err", p_I_slogdetcov_neg_err),
         ("p_nll", p_nll),
         ("p_I_data", p_I_data),
-        ("p_I", p_I)
+        ("p_I", p_I),
+        ("t_I_lower", t_I_lower)
     ])
 
     return (predictions, update_meta)

@@ -6,6 +6,7 @@ Model data with a mixture of gaussians.
 import logging
 import numpy as np
 import scipy
+from scipy.spatial.distance import pdist
 
 from . import (em, mml)
 
@@ -132,7 +133,7 @@ class GaussianMixture(object):
 
         N, D = y.shape
         K_max = N if K_max is None else K_max
-        K_predict = kwds.pop("K_predict", 25)
+        K_predict = kwds.pop("K_predict", 50)
 
         visualization_handler = kwargs.get("visualization_handler", None)
             
@@ -163,13 +164,15 @@ class GaussianMixture(object):
 
             # Make predictions for past and future mixtures.
             K_target = np.arange(1, weight.size + K_predict)
-            predictions = self._predict_message_length(K_target, N, D, **kwds)
+            predictions = self._predict_message_length(K_target, y, **kwds)
 
             if visualization_handler is not None:
                 visualization_handler.emit("model", 
                     dict(mu=mu, cov=cov, weight=weight, nll=-np.sum(ll), I=I))
                 visualization_handler.emit("prediction", predictions)
 
+            if K >= 8:
+                raise a
         raise a
 
 
@@ -204,7 +207,7 @@ class GaussianMixture(object):
         return None
 
 
-    def _predict_message_length(self, K, N, D, **kwargs):
+    def _predict_message_length(self, K, y, **kwargs):
         """
         Predict the message length of past or future mixtures.
 
@@ -212,12 +215,17 @@ class GaussianMixture(object):
             An array-like object of the :math:`K`-th mixtures to predict the
             message elngths of.
 
-        :param N:
-            The number of data points.
-
-        :param D:
-            The dimensionality of the data points.
+        :param y:
+            The data :math:`y`.
         """
+
+        N, D = y.shape
+
+        mmpwd = self._state_meta.get("min_mean_pairwise_distance", None)
+
+        if mmpwd is None:
+            mmpwd = np.min(pdist(y))/(2.0 * D)
+            self._state_meta["min_mean_pairwise_distance"] = mmpwd
 
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
@@ -225,7 +233,8 @@ class GaussianMixture(object):
                 self._state_sum_log_weights,
                 self._state_det_covs,
                 self._state_sum_log_likelihoods),
-            state_meta=self._state_meta)
+            state_meta=self._state_meta,
+            min_mean_pairwise_distance=mmpwd)
 
         # Update the metadata of our state so that future predictions are 
         # faster (e.g., the optimization functions start from values closer to

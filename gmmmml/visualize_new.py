@@ -310,6 +310,16 @@ class VisualizationHandler(object):
                     ax.axvline(params["K"][index], lw=1, linestyle=":", c=color))
 
             _rescale_based_on_data(ax, params["K"], params["p_I"])
+            
+            ylim = ax.get_ylim()
+            self._plot_prediction_items.extend([
+                ax.fill_between(params["K"], params["t_I_lower"], ylim[1],
+                    facecolor="#CCCCCC", zorder=-10),
+                ax.plot(params["K"], params["t_I_lower"],
+                        c="#666666", zorder=-5)[0]
+            ])
+            _rescale_based_on_data(
+                ax, params["K"], [ylim[1], np.min(params["t_I_lower"])])
 
 
         else:
@@ -345,11 +355,32 @@ class VisualizationHandler(object):
 
 
 def _rescale_based_on_data(ax, x, y, y_percent_edge=5):
+    """
+    Re-scale a figure axis based on the given data.
 
-    ax.set_xlim(np.min(x) - 0.5, np.max(x) + 0.5)
-    y_ptp = np.ptp(y)
-    ax.set_ylim(
-        np.min(y) - y_percent_edge/100.0 * y_ptp,
-        np.max(y) + y_percent_edge/100.0 * y_ptp
-    )
+    :param ax:
+        The figure axes.
 
+    :param x:
+        An array-like object of the x-values.
+
+    :param y:
+        An array-like object of the y-values.
+
+    :param y_percent_edge: [optional]
+        The percentage of the peak-to-peak y-range to show either end of the
+        range of `y` values.
+    """
+
+    if np.sum(np.isfinite(np.unique(x))) > 1:
+        ax.set_xlim(np.nanmin(x) - 0.5, np.nanmax(x) + 0.5)
+
+    y_finite = np.array(y)[np.isfinite(y)]
+    if y_finite.size > 1:
+        y_ptp = np.ptp(y_finite)
+        ax.set_ylim(
+            np.min(y_finite) - y_percent_edge/100.0 * y_ptp,
+            np.max(y_finite) + y_percent_edge/100.0 * y_ptp
+        )
+
+    return None
