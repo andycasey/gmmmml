@@ -54,6 +54,7 @@
 \newcommand{\Cspaceno}{$\mathcal{C}$-space}
 % Common terms
 \newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
+\renewcommand{\vec}[1]{\vect{#1}}
 
 \def\teff{T_{\rm eff}}
 \def\logg{\log{g}}
@@ -89,7 +90,8 @@
     \begin{frontmatter}
 %       \title{Searching for the Origins of the Galaxy with the Minimum Message Length}
 %       \title{Searching for the Origins of the Galaxy with Minimum Message Length mixture modelling}
-        \title{Reconstructing the Origins of the Galaxy with Minimum Message Length mixture modelling and new search techniques}
+%        \title{Reconstructing the Origins of the Galaxy with Minimum Message Length mixture modelling and new search techniques}
+        \title{Search techniques for gaussian mixture modelling with Minimum Message Length, with applications to the origin of our Galaxy}
         
 %% Group authors per affiliation:
 \author[fit]{Aldeida Aleti\corref{mycorrespondingauthor}}
@@ -103,6 +105,7 @@
 
         
         \begin{abstract}
+
         
         \end{abstract}
         
@@ -124,131 +127,260 @@ The contributions of this paper are:
 \section{Galactic Archaeology}
 % "Galaxy produces ‘molecular forests’"
 % https://CosmosMagazine.com/space/galaxy-produces-molecular-forests
-Galactic Archaeology~\cite{freeman2002new} aims at reconstructing the history of our Galaxy by identifying the remains of a) ancient star formation events and b) smaller galaxies accreted by our own Galaxy during its youth. This is possible because stars form in clusters of 10s to 1000s at a time, all sharing the same composition, being that of the gas cloud from which they formed. This composition is due to the action of previous generations of stars in fusing light elements into heavy ones, and leads an improved understanding of nuclear processes in stars.
-%and which stars they operate in.
+Galactic Archaeology~\cite{freeman2002new} aims at reconstructing the history 
+of our Galaxy by identifying ancient star formation events. Most stars are 
+born in clusters (of order $10^0$ to $10^6$ stars at a time), and all approximately
+share the same chemical composition of the gas cloud that they form from.
+Stars in clusters often do not remain gravitationally bound, and disperse 
+throughout the disk of our Galaxy within about $10^9\,{\rm yr}$. %citation needed.
+As a consequence, where a star is now does not reflect its formation site, 
+complicating our understanding of galaxy formation and evolution. However, the
+observable chemical composition of a star remains largely the same throughout
+that star's lifetime, providing an immutable marker (a chemical tag, or
+`fingerprint') that carries with it information about where and when star
+formed.
 
-The idea of Galactic Archaeology relies on identifying stars born together based on their composition. Internal mechanisms change the abundance of the lighter elements, but the heavier ones remain mostly unchanged. These provide a ``chemical tag'' or a ``stellar DNA'' that can be used to identify the stars. 
 
-Observations have shown that each star cluster has a uniform and distinct chemical fingerprint~\cite{pancino2010chemical}. Our aim is to identify stars with the same composition, as these
-% were
-are widely believed to have been
-almost certainly
-formed at the same time in the same cluster. We expect this cluster has now dispersed, but the tell-tale chemical tags will be present and will allow us to identify the groups of stars that are the relics of ancient star forming activity.
+Observations reveal that stars in surviving clusters show very little scatter
+in their chemical composition~\cite{pancino2010chemical}, and that star
+clusters can be identified solely on the basis of stellar chemical
+abundances~\cite{hogg2016kmeans}. Astronomers have precisely measured the
+chemical composition for nearly one million stars in the disk of our galaxy,
+where the natal formation site for most stars is not known~\cite{galah}.
+Indeed, from those data it is not known how many star formation sites we might
+expect to be able to detect, and we do not know the number of stars that we
+might to observe from each cluster (the so-called stellar mass function).
+Theoretical simulations can provide a guide to these quantities (e.g., of the
+order X star forming sites that have total masses less than Y), but the
+predictions have a large variance.
 
-Little work  has been done to address this problem so far, apart from the work of \cite{mitschang2014quantitative}, who used the \emph{Manhattan distance} metric to  quantify the chemical difference between any two stars, and as a result estimate the level of homogeneity expected within a cluster. This metric calculates the mean weighted absolute difference of abundance levels, $\sigma_C$, between two stars $S^a$ and $S^b$ as follows:
-% Given that $\sigma$ is so widely used to mean standard deviation, this notation (to follow) seems a bit unfortunate
-$\sigma_C = \sum_{c \in C}w_c|S^a_c-S^b_c|/||C||$, where $C$ is the set of chemical species, $S^a_c$ is the chemical abundance of element $c$ in star $S^a$, $w_c$ is the weight given to species $c$, 
-%which is considered 1 for all elements in the current work, 
-and $||C||$ is the total number of chemical species. The Manhattan distance values are high for stars from different clusters, and low for stars from the same cluster. Note that this metric is not particularly robust or versatile; for example it is not even invariant to a simple rotation of the co-ordinate axes
+
+These facts conspire to produce a challenging parameter estimation and model
+selection problem that is analagous to mixture modelling, where the true number 
+of mixtures is unknown. Little work has been done to address this problem so 
+far, apart from the work of \cite{mitschang2014quantitative}, who used the 
+\emph{Manhattan distance} metric to quantify the chemical difference between 
+any two stars, and estimate the level of homogeneity expected within a cluster. 
+This metric calculates the mean weighted absolute difference of abundance 
+levels, $\sigma_C$, between two stars $S^a$ and $S^b$ as follows:
+% Given that $\sigma$ is so widely used to mean standard deviation, this notation 
+% (to follow) seems a bit unfortunate
+$\sigma_C = \sum_{c \in C}w_c|S^a_c-S^b_c|/||C||$, where $C$ is the set of 
+chemical species, $S^a_c$ is the chemical abundance of element $c$ in star $
+S^a$, $w_c$ is the weight given to species $c$, and $||C||$ is the total 
+number of chemical species\footnote{Here we describe the work of Mitschang et
+al. (2014)~\cite{mitschang2014quantitative} using their notation, but we 
+caution that we use similar notation in this work with very different 
+terminology and meaning.}. The Manhattan distance values are high for stars 
+from different clusters, and low for stars from the same cluster. Note that 
+this metric is not particularly robust or versatile; for example it is not 
+invariant even to a simple rotation of the co-ordinate axes.
 % - and nor does it take into account that a difference between two stars of (say) 0.01\% in a rare element might be
 % vastly more significant than the same difference in a vastly more abundant element
 % Retraction.  It does endeavour to take that into account, via the weights, $w_c$, but not by setting them all to 1.
-An important issue is how to set the weights for each chemical species $w_c$, and how they affect 
-the results (Mitschang et al.~\cite{mitschang2014quantitative} used $w_c=1$). Another issue is setting the boundary between clusters. It is not clear what a high and low Manhattan distance is; at the moment 
-these values are largely subjective. In this paper, we express the problem in terms of mixture modelling and infer the number of clusters, their mixing proportions (or relative abundances) and each cluster's statistical distribution using Minimum Message Length (MML) and two novel search techniques.  
+An important issue is how to set the weights for each chemical species $w_c$, 
+and how they affect the results (Mitschang et al.~\cite{mitschang2014quantitative} 
+used $w_c=1$). Another issue is setting the boundary between clusters. It is 
+not clear what a high and low Manhattan distance is; these values are subjective. 
+In this paper, we express the problem in terms of mixture modelling and infer 
+the number of clusters, their mixing proportions (or relative abundances) and 
+each cluster's statistical distribution using Minimum Message Length (MML) and 
+novel search techniques that are readily applicable to the large data sets
+being accumulated by astronomers worldwide.
+
+
+% Not clear how many star formation sites, etc...
+
+%and using that as a reflection from the gas cloud that those stars
+%formed. Through successive generations of star formation, each fusing light
+%elements into heavy ones and releasing them into the interstellar medium,
+%the chemical composition of a star-forming gas cloud reflects the lives and
+%deaths of previous generations of stars. 
+
+% accreted by our own Galaxy during its youth. This is possible because stars form in clusters of 10s to 1000s at a time, all sharing the same composition, being that of the gas cloud from which they formed. This composition is due to the action of previous generations of stars in fusing light elements into heavy ones, and leads an improved understanding of nuclear processes in stars.
+%and which stars they operate in.
+
+%The idea of Galactic Archaeology relies on identifying stars born together based on their composition. Internal mechanisms change the abundance of the lighter elements, but the heavier ones remain mostly unchanged. These provide a ``chemical tag'' or a ``stellar DNA'' that can be used to identify the stars. 
+
+%Observations have shown that each star cluster has a uniform and distinct chemical fingerprint~\cite{pancino2010chemical}. Our aim is to identify stars with the same composition, as these
+% were
+%are widely believed to have been
+%almost certainly
+%formed at the same time in the same cluster. We expect this cluster has now dispersed, but the tell-tale chemical tags will be present and will allow us to identify the groups of stars that are the relics of ancient star forming activity.
+
+%Little work  has been done to address this problem so far, apart from the work of \cite{mitschang2014quantitative}, who used the \emph{Manhattan distance} metric to  quantify the chemical difference between any two stars, and as a result estimate the level of homogeneity expected within a cluster. This metric calculates the mean weighted absolute difference of abundance levels, $\sigma_C$, between two stars $S^a$ and $S^b$ as follows:
+%% Given that $\sigma$ is so widely used to mean standard deviation, this notation (to follow) seems a bit unfortunate
+%$\sigma_C = \sum_{c \in C}w_c|S^a_c-S^b_c|/||C||$, where $C$ is the set of chemical species, $S^a_c$ is the chemical abundance of element $c$ in star $S^a$, $w_c$ is the weight given to species $c$, 
+%which is considered 1 for all elements in the current work, 
+%and $||C||$ is the total number of chemical species. The Manhattan distance values are high for stars from different clusters, and low for stars from the same cluster. Note that this metric is not particularly robust or versatile; for example it is not even invariant to a simple rotation of the co-ordinate axes
+% - and nor does it take into account that a difference between two stars of (say) 0.01\% in a rare element might be
+% vastly more significant than the same difference in a vastly more abundant element
+% Retraction.  It does endeavour to take that into account, via the weights, $w_c$, but not by setting them all to 1.
+%An important issue is how to set the weights for each chemical species $w_c$, and how they affect 
+%the results (Mitschang et al.~\cite{mitschang2014quantitative} used $w_c=1$). Another issue is setting the boundary between clusters. It is not clear what a high and low Manhattan distance is; at the moment 
+%these values are largely subjective. In this paper, we express the problem in terms of mixture modelling and infer the number of clusters, their mixing proportions (or relative abundances) and each cluster's statistical distribution using Minimum Message Length (MML) and two novel search techniques.  
 
 \section{Related Work in Mixture Modelling}
 
-Mixture modelling is composed of three main parts: (i) an estimator of component parameters of a mixture, (ii) an objective functions that scores a mixture, and (iii) a search strategy which identifies the best number of components and their weights. 
+\noindent{}Mixture modelling is composed of three main parts:
+\begin{itemize}
+    \item an estimator of component parameters of a mixture,
+    \item an objective functions that scores a mixture, and 
+    \item a search strategy which identifies the best number of components and
+          their relative weights.
+\end{itemize}
 
-Different criteria for estimating component parameters have been used in the literature, with traditional methods using maximum likelihood estimation (MLE)
+Different criteria for estimating component parameters have been used in the 
+literature, with traditional methods using maximum likelihood estimation (MLE)
 % Perhaps because ML could refer to many things (e.g., machine learning), maximum likelihood is often (I think usually) called MLE
 ~\cite{akaike1971determination} or maximum a posteriori probability (MAP)~\cite{shimony1994finding}.
-% I re-write the draft below.
-% Traditional methods, such as ML or MAP, have not been designed to consider the complexity of the model, but only focus on the goodness-of-fit. They have to be modified with ad-hoc principles in order to ensure that the data is not over-fitted. This is a very important property for astrophysical applications. 
+These methods do not consider the complexity of the model, but only focus on
+the goodness-of-fit, and require modification to minimise the risk of
+over-fitting. In this work, we focus on the Bayesian information-theoretic 
+Minimum Message Length (MML) principle~\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a, Wallace05}.
+Unlike MLE or MAP estimators, the MML principle is invariant under non-linar
+data transformations, and can seemlessly incorporate different probability
+distributions.
+
+
+
+%have not been designed to consider the complexity of the model, but only focus on the goodness-of-fit. They have to be modified with ad-hoc principles in order to ensure that the data is not over-fitted. This is a very important property for astrophysical applications. 
 %
 % In this work, we focus on the Bayesian Minimum Message Length Principle~\cite{Wallace05}, which unlike MAP estimators, are invariant under non-linear data transformations.
 %, and different from MLE, can be used with different probability distributions.  
-In this work, we focus on the Bayesian information-theoretic Minimum Message Length (MML) principle~\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a, Wallace05}.
 %
-The MML principle states that the best explanation of the data is the one that leads to the shortest two-part message~\cite{Wallace05}, where a \textit{message} takes into account both the complexity of the model and its explanatory power (corresponding respectively to the lengths of the first and second parts of the message).
-MML has been shown to perform well on a variety of empirical analyses (see, e.g., \cite{viswanathan1999finding,fitzgibbon2004minimum}, with
-% further examples and
-references to further examples in \cite{Wallace05,dowe2007bayes,Dowe2008a,Dowe2011a}.
-Arguments about the statistical consistency
-(i.e.,~as the number of data points increases the distributions of the estimates become increasingly concentrated near the true value)
-of MML are given in
-\cite{DoweWallace1997a,Dowe2011a}.
-Unlike the rival Bayesian approach MAP, for continuous parameters MML is a statistically invariant (meaning that $1$-to-$1$ transformations of co-ordinates, such as polar $(r, \theta)$ to Cartesian $(x, y)$, leave the answer unchanged) Bayesian approach~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}. It allows the modelling of prior beliefs in the calculation of the best model parameters. If one has a particular reason to expect one value rather than another, a prior probability can be chosen to represent that belief. Of course, we can also model the data as objectively as Bayesianism permits. 
+The classically-described princple of MML is that the best explanation of the
+data is the one that leads to the shortest so-called two-part message~\cite{Wallace05}, 
+where a \textit{message} takes into account both the complexity of the model 
+and its explanatory power. The complexity of the model is described through
+the first part of the message, and the second part of the message describes
+its explanatory power. The \emph{length} of each message part is quantified
+(or measured) using information theory, allowing for a fair evaluation between
+different models of varying complexity or explanatory power. MML has been 
+shown to perform well on a variety of empirical analyses (see, e.g., 
+\cite{viswanathan1999finding,fitzgibbon2004minimum}, with references to 
+further examples in \cite{Wallace05,dowe2007bayes,Dowe2008a,Dowe2011a}).
 
-Two other well-known methods based on information theory are the Akaike Information Criterion (AIC)~\cite{akaike1974} and Bayesian Information Criterion
-(BIC)~\cite{schwarz1978estimating}, both of which endeavour to temper Maximum Likelihood's tendency to over-fit and under-estimate the noise.
-% Unlike Maximum Likelihood, MML takes into account model complexity - and, unlike MAP, it is invariant under non-linear continuous transformations.
-In MML terms, Maximum Likelihood can be thought of as MML without paying for the first part of the message.
 
-AIC~\cite{akaike1974} chooses a model 
-% that minimizes
-with the motivation of minimizing
-the Kullback-Leibler
-% distance
-divergence
-between
+% ARC: Not sure if this paragraph should be here...
+Arguments about the statistical consistency (i.e.,~as the number of data 
+points increases the distributions of the estimates become increasingly 
+concentrated near the true value) of MML are given in \cite{DoweWallace1997a,Dowe2011a}.
+The MML principle requires that we explicitly specify our prior beliefs on the
+model parameters, providing a Bayesian optimisation approach which can be
+applied across entire classes of models.
+
+%Unlike the rival Bayesian approach MAP, for continuous parameters MML is a statistically invariant (meaning that $1$-to-$1$ transformations of co-ordinates, such as polar $(r, \theta)$ to Cartesian $(x, y)$, leave the answer unchanged) Bayesian approach~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}. It allows the modelling of prior beliefs in the calculation of the best model parameters. If one has a particular reason to expect one value rather than another, a prior probability can be chosen to represent that belief. Of course, we can also model the data as objectively as Bayesianism permits. 
+
+Two other well-known methods based on information theory are the Akaike 
+Information Criterion (AIC)~\cite{akaike1974} and Bayesian Information Criterion
+(BIC)~\cite{schwarz1978estimating}, both of which endeavour to temper maximum 
+likelihood's tendency to over-fit and under-estimate the noise. Unlike maximum
+likelihood, MML accounts for model complexity, and for this reason maximum
+likelihood can be thought of as MML without including the first part of the
+message that describes the model complexity. AIC~\cite{akaike1974} chooses a 
+model with the motivation of minimizing the Kullback-Leibler divergence 
+between the model and the truth:
 % KL divergence is generally asymmetric
-the model and the truth, and is defined as:
-
 \begin{equation}
-AIC = -2 (\ln ( f(\vec{x} | \vec{\theta} )) + 2 k
+    AIC = -2 \log_{e}f(\vec{x} | \vec{\theta}) + 2 k
 \end{equation}
-where the likelihood $f(\vec{x} | \vec{\theta})$ is the probability of the data $\vec{x}$ given a model parameterised by $\vec{\theta}$,
-and $k$ is the number of free parameters in the model. 
+\noindent{}where the likelihood $f(\vec{x} | \vec{\theta})$ is the probability 
+of the data $\vec{x}$ given a model parameterised by $\vec{\theta}$, and $k$ 
+is the number of free parameters in the model. BIC~\cite{schwarz1978estimating} 
+uses a constant penalty equal to $\frac{1}{2}\log{N}$ for each free parameter in the 
+model, where $N$ is the number of data points. Minimum Description Length (MDL)
+~\cite{rissanen1978modeling} is a similar approach to BIC~\cite{schwarz1978estimating},
+and has close (albeit also distinct) ties to MML \cite{WallaceBoulton1968}.
+AIC and BIC/MDL associate parameter costs (or model complexity) with the number 
+of free parameters, not the values of those parameters or the variance that
+can be explained by those parameters. As a result, when using AIC or BIC/MDL
+formalisms, all models of a particular probability distribution share the same
+cost, regardless of their respective means, covariance matrices, or the
+Fisher information, which could bias inferences.
 
-BIC~\cite{schwarz1978estimating} uses a constant penalty equal to $(\log N)/2$ for each free parameter in the model,
-where $N$ is the number of data points.
-Minimum Description Length (MDL)~\cite{rissanen1978modeling} was independently introduced in the same year (1978) as BIC with a very similar formula, a decade after MML \cite{WallaceBoulton1968}.
-Both AIC and BIC/MDL associate parameter costs with the number of free parameters and not their values. In this case, all models of a particular probability distribution have the same cost, regardless of the respective means, covariance matrices and Fisher information,
-which may hinder accurate inference.   
 
 % Comparisons of MML to other methods
 % clearly indicate MML's theoretical and empirical superiority.
 % Let's not overly annoy the reviewers and readers.
-Examples of MML's promise against rival methods include comparisons with AIC~\cite{dowe2007bayes}, BIC \cite{agusta2002mml}, MDL~\cite{viswanathan1999finding} and MLE~\cite{dowe2007bayes} - and also in statistical econometric time series autoregression \cite{fitzgibbon2004minimum}, machine learning problems \cite{viswanathan1999finding},
-angular data \cite{WallaceDowe1993,DoweOliverWallace1996}
-and using this modelling \cite{WallaceDowe1993} to infer the order in which various parts of a protein fold~\cite{edgoose1998mml}. 
-%
-A further example is the problem of deciding whether or not some 1-dimensional data generated uniformly in the interval $[ 0, 1 ]$ has a gap in it. Curiously, even when there is clearly no gap, AIC infers that there is a gap, whereas MML gives the right answer \cite{dowe2007bayes}. 
+%Examples of MML's promise against rival methods include comparisons with AIC~\cite{dowe2007bayes}, BIC \cite{agusta2002mml}, MDL~\cite{viswanathan1999finding} and MLE~\cite{dowe2007bayes} - and also in statistical econometric time series autoregression \cite{fitzgibbon2004minimum}, machine learning problems \cite{viswanathan1999finding},
+%angular data \cite{WallaceDowe1993,DoweOliverWallace1996}
+%and using this modelling \cite{WallaceDowe1993} to infer the order in which various parts of a protein fold~\cite{edgoose1998mml}. 
 
-Very importantly, the MML message structure enables us to robustly deal with missing data \cite{WallaceDowe1994b,WallaceDowe1997,WallaceDowe2000}. Other methods often replace missing values with the mean - in turn, reducing the true standard deviation - or various other imputed methods. In MML, on the other hand, missing data can easily be left out from the calculations from modelling done so far, simply encoding the missing data as missing \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}, which is very useful when modelling astrophysical data, where missing observations are quite common.
+%A further example is the problem of deciding whether or not some 1-dimensional data generated uniformly in the interval $[ 0, 1 ]$ has a gap in it. Curiously, even when there is clearly no gap, AIC infers that there is a gap, whereas MML gives the right answer \cite{dowe2007bayes}. 
 
-The parameters of a mixture model can be estimated using Expectation-Maximisation (EM)~\cite{dempster1977maximum}. The EM algorithm has been used with MML to infer Gaussian mixtures under different simplifying assumptions, such as assuming that the covariance matrices are diagonal~\cite{WallaceDowe1994b, WallaceDowe1997a, WallaceDowe2000} (where it is sometimes called an `adjust cycle') and \cite{oliver1996unsupervised}, or approximating the probabilities of mixture parameters~\cite{figueiredo2002unsupervised,roberts1998bayesian}. 
+%Very importantly, the MML message structure enables us to robustly deal with missing data \cite{WallaceDowe1994b,WallaceDowe1997,WallaceDowe2000}. Other methods often replace missing values with the mean - in turn, reducing the true standard deviation - or various other imputed methods. In MML, on the other hand, missing data can easily be left out from the calculations from modelling done so far, simply encoding the missing data as missing \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}, which is very useful when modelling astrophysical data, where missing observations are quite common.
 
-The search algorithm employed in the majority of these approaches is based on running EM iteratively for different numbers of components~\cite{WallaceDowe1994b, WallaceDowe1997a, WallaceDowe2000, oliver1996unsupervised,roberts1998bayesian,biernacki2000assessing}. The search method proposed by Figueiredo and Jain~\cite{figueiredo2002unsupervised}, on the other hand, starts with a large number of components, and iteratively deletes components. An extension of this method was proposed by Kasarapu and Allison~\cite{kasarapu2015minimum}, which starts with one components, and selectively splits, deletes, or merges components in an attempt to minimise the message length. While this method removes the overhead introduces by the search algorithm of Figueiredo and Jain~\cite{figueiredo2002unsupervised}, the search remains greedy, and can be prone to premature convergence in suboptimal solutions. The search methods introduced in this paper, incorporate a perturbation step which encourages explorations of new local optima.
+The parameters of a mixture model can be estimated using Expectation-Maximisation 
+(EM)~\cite{dempster1977maximum}. The EM algorithm has been used with MML to 
+infer Gaussian mixtures under different simplifying assumptions, such as 
+assuming that the covariance matrices are diagonal~\cite{WallaceDowe1994b, WallaceDowe1997a, WallaceDowe2000} 
+(where it is sometimes called an `adjust cycle') and \cite{oliver1996unsupervised},
+or approximating the probabilities of mixture parameters~\cite{figueiredo2002unsupervised,roberts1998bayesian}. 
+The search algorithm employed in the majority of these approaches is based on 
+running EM iteratively for different numbers of components~\cite{WallaceDowe1994b, 
+WallaceDowe1997a, WallaceDowe2000, oliver1996unsupervised,roberts1998bayesian,
+biernacki2000assessing}. The search method proposed by Figueiredo and Jain
+~\cite{figueiredo2002unsupervised}, on the other hand, starts with a large 
+number of components, and iteratively deletes components. A mirror extension 
+of this method was proposed by Kasarapu and Allison~\cite{kasarapu2015minimum}, 
+which starts with one components, and selectively splits, deletes, or merges 
+components in an attempt to minimise the message length. While this method 
+removes the overhead introduced by the search algorithm of Figueiredo and Jain
+~\cite{figueiredo2002unsupervised}, the search remains greedy, and can be 
+prone to premature convergence in suboptimal solutions. The search methods 
+introduced in this paper, incorporate a perturbation step which encourages 
+explorations of new local optima.
 
-{\color{blue}References that we/you seem to be missing include
-\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a}
-% these three above are probably the three most-cited MML papers
-and
-WallaceDowe1993,WallaceDowe1994b,DoweOliverWallace1996,
+%{\color{blue}References that we/you seem to be missing include
+%\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a}
+%% these three above are probably the three most-cited MML papers
+%and
+%WallaceDowe1993,WallaceDowe1994b,DoweOliverWallace1996,
 % these three works above are the earliest MML works on angular data and mixture modelling with angular data
-DoweWallace1997
-% the above is a work about MML statistical consistency
-WallaceDowe1997,WallaceDowe2000
+%DoweWallace1997
+%% the above is a work about MML statistical consistency
+%WallaceDowe1997,WallaceDowe2000
 % these two papers above are MML mixture modelling papers
-Dowe2008a,Dowe2011a
+%Dowe2008a,Dowe2011a
 % these two papers above are MML survey pieces
 
-Things that could also be added include
-ConwaySloane1988
+%Things that could also be added include
+%ConwaySloane1988
 % the above is a book on lattices and lattice constants
-EdwardsDowe1998
+%EdwardsDowe1998
 % this was (and still is) a work on single latent factors in mixture modelling with application to astro' data
-McLachlanPeel2000
+%McLachlanPeel2000
 % this is quite a popular book on finite mixture models
-}
-\section{Minimum Message Length (MML)}
-A complex model is not an optimal one, unless its complexity is justifiable by the added explanatory power. There is an established connection between simplicity and truth, as beautifully elucidated by the Occam's Razor principle. MML is a statistical technique that formalizes and quantifies this principle.
+%}
 
-The basic idea is to consider the transmission of a set of data and a model that describes it. Clearly one can make increasingly complex models to obtain better fits -- think of epicycles in the solar system. Suppose we try to best represent N data points. 
+\section{Minimum Message Length (MML) for mixture modelling}
+A complex model is not an optimal one, unless its complexity is justifiable by 
+the added explanatory power. There is an established connection between 
+simplicity and truth, as beautifully elucidated by the Occam's Razor principle. 
+MML is a statistical technique that formalizes and quantifies this principle.
 
-Traditional curve fitting methods would give a polynomial of degree N-1, which is perhaps the most precise, but it is also the most complex, and the one that most models the noise, by spuriously {\it over-fitting non-existing patterns.\/}
+%The basic idea is to consider the transmission of a set of data and a model that describes it. Clearly one can make increasingly complex models to obtain better fits -- think of epicycles in the solar system. Suppose we try to best represent N data points. 
 
-Over-fitting can result in a model that may be far from the truth. MML will only consider a more complex model if the encoding of the complex model and the data is more efficient  than the less complex model, i.e. it finds the minimum message length needed to transmit the data and the model. It is this \textit{true} model that MML aims to find.
+%Traditional curve fitting methods would give a polynomial of degree N-1, which is perhaps the most precise, but it is also the most complex, and the one that most models the noise, by spuriously {\it over-fitting non-existing patterns.\/}
 
-The MML principle states that the best explanation of the data is the one that leads to the shortest message~\cite{Wallace05}, 
-where a \textit{message} takes into account both the complexity of the model, and its explanatory power. 
+%Over-fitting can result in a model that may be far from the truth. MML will only consider a more complex model if the encoding of the complex model and the data is more efficient  than the less complex model, i.e. it finds the minimum message length needed to transmit the data and the model. It is this \textit{true} model that MML aims to find.
 
-In essence, MML infers the most concise way of encoding the model, $\theta$, and the data, $x$, given the model, $x|\theta$. A complex model will produce a longer first part of the message than a simple model, since more quantities must be stated. On the other hand, the length of the second part of the message decreases with more accurate and complex models, since less data has to be described fully.
+%The MML principle states that the best explanation of the data is the one that leads to the shortest message~\cite{Wallace05}, 
+%where a \textit{message} takes into account both the complexity of the model, and its explanatory power. 
 
-The \textit{message} must encode two parts: the model, and the data. The encoding of the message is based on Shannon's information theory. According to Shannon, the information we gain from an event $e$ is $h(e) = - \log_2 p(e)$, where $p(e)$ is the probability of that event. The information content is biggest for the improbable outcomes, and smallest for outcomes that we are almost certain about. An outcome that has a probability close to one has close to zero information content, since we don't learn anything new from it, whereas the rarer events have much higher information content. 
+%In essence, MML infers the most concise way of encoding the model, $\theta$, and the data, $x$, given the model, $x|\theta$. A complex model will produce a longer first part of the message than a simple model, since more quantities must be stated. On the other hand, the length of the second part of the message decreases with more accurate and complex models, since less data has to be described fully.
+
+The \textit{message} must encode two parts: the model, and the data given the
+model. The encoding of the message is based on Shannon's information theory~\cite{shannon}. 
+The information gained from an event $e$ occurring, where $p(e)$ is the
+probability of that event, is $h(e) = -\log_{2}{p(e)}$. The information content
+is largest for improbable outcomes, and smallest for outcomes that we are 
+almost certain about. In other words, an outcome that has a probability close
+to unity has zero information content because nothing new is learned from it,
+whereas rarer events convey a much higher information content.
+
+%According to Shannon, the information we gain from an event $e$ is $h(e) = - \log_2 p(e)$, where $p(e)$ is the probability of that event. The information content is biggest for the improbable outcomes, and smallest for outcomes that we are almost certain about. An outcome that has a probability close to one has close to zero information content, since we don't learn anything new from it, whereas the rarer events have much higher information content. 
 
 %%%% This section below looks like a variant of a lift-out from the ARC DP16 grant proposal.
 %%%% One problem with the presented text is that 4 does not equal 6.
@@ -264,51 +396,161 @@ The \textit{message} must encode two parts: the model, and the data. The encodin
 % and hence is a better description than the shorter model.
 %%%% As per above comment, I think that the text from the above comment to here can all go.
 
-Formally, the length of the first part of the message is $- \log_2 h(\vec{\theta})$, and that of the second part is $- \log_2 f(\vec{x}|\vec{\theta})$, where $h(\theta)$ is the prior probability of model $\theta$, and $f(x|\theta)$ is the likelihood of data $x$ assuming a model parameterised by $\vec{\theta}$. The total message length is the sum of the two parts, i.e. $- \log_2 h(\vec{\theta}) - \log_2f(\vec{x} | \vec{\theta})$, which is minimised precisely when $h(\vec{\theta}) f(\vec{x}| \vec{\theta})$ is maximised.
-The multiplication of the prior and the likelihood is proportional to the posterior {\em probability} $g(\theta|x)$. An important but often misunderstood subtle point is that we are quantising (or rounding off in) parameter space, and so $h(\theta)$ corresponds to a {\em probability} and {\em not} a density. Thus, the MML estimate can in some sense be thought of as maximising $h(\theta)f(x|\theta)$ and in turn (in some sense) equal to the posterior mode. This is similar in spirit to the (Bayesian) Maximum A Posteriori (MAP) posterior mode, but
-(partly because both terms $- \log_2h(\vec{\theta})$ and $\log_2 f(\vec{x}|\vec{\theta})$ here correspond to probabilities)
-with the benefit of statistical invariance under re-parameterisation
-- for further discussion, see, e.g., ~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes} or immediately below.
+
+Formally, the length of the first part of the message is
+    $-\log_{2}h(\vec{\theta})$, 
+and that of the second part is 
+    $-\log_{2}f(\vec{x}|\vec{\theta})$, 
+where $h(\vec{\theta})$ is the prior probability of model described with 
+parameters $\vec{\theta}$, and 
+    $f(\vec{x}|\vec{\theta})$ 
+is the likelihood of data $\vec{x}$ given a model parameterised by $\vec{\theta}$. 
+The total message length is the sum of the two parts, i.e. 
+    $-\log_{2} h(\vec{\theta}) - \log_{2}f(\vec{x} | \vec{\theta})$, 
+which is minimised precisely when $h(\vec{\theta}) f(\vec{x}|\vec{\theta})$
+is maximised. The multiplication of the prior and the likelihood is 
+proportional to the posterior {\em probability} $g(\vec{\theta}|\vec{x})$. 
+An important but subtle point is that, within the MML framework, we are 
+quantising (or rounding off in) parameter space, and so 
+$h(\vec{\theta})$ corresponds to a {\em probability} and {\em not} 
+a density. Thus, the MML estimate can in some sense be thought of as maximising 
+    $h(\vec{\theta})f(\vec{x}|\vec{\theta})$ 
+and in turn (in some sense) equal to the posterior mode. This is similar in 
+spirit to the (Bayesian) Maximum A Posteriori (MAP) posterior mode, partly 
+because both terms 
+    $-\log_{2}h(\vec{\theta})$
+and 
+    $\log_{2} f(\vec{x}|\vec{\theta})$ 
+here correspond to probabilities, but with the benefit of statistical 
+invariance under re-parameterisation (e.g., ~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}).
 
 
-\section{MML for Mixture Modelling}
-MML is used to identify groups (also known as ``classes'') of stars with the  same composition. Mixture modelling enables the partitioning of the data into overlapping groups. 
+\subsection{Component message lengths}
 
-In MML we model this by constructing a two-part message, with the first part describing the mixture model (or hypothesis, $\theta$) and the second part representing the encoded data ($x$) given the hypothesis. The MML \textit{message} contains the following components: 
+Mixture modelling allows for the partitioning of data into overlapping groups.
+The MML principle requires that we encode everything required to reconstruct 
+the message, including our prior beliefs on the model parameters. Consider 
+that we have $N$ data points each with $D$ dimensions which are to be modelled 
+by a finite number of $K$ Gaussian mixtures. Within the context of using the 
+MML principle for mixture modelling, the \emph{message} would have to 
+specifically encode:
 
 \begin{itemize}
-\item[\textbf{1a)}] A statement of the number of groups (or classes, or Gaussian mixture components), $K$. Each class is assumed to have the same prior probability, equal to $2^{-K}$. The length of this part is equal to the negative logarithm of the prior, i.e. $K$. 
-\item[\textbf{1b)}] The relative abundances (or relative weights or mixing proportions) of the amount(s) of data in each group.
-Only $(K - 1)$ weights need be encoded because $\sum_{k=1}^{K}\weight_k = 1$.
-The length of this part is equal (within a small constant) to the negative log of the multiplication of the prior probabilities of each group ($h(\vec{p})$) divided by the square root of the expected
-Fisher information ($\sqrt{F(\vec{p_k})}$). 
-        The Fisher information matrix contains the expected second-order partial derivatives of the log-likelihood function, and quantifies how sharply the likelihood function peaks, and as a result how precisely the parameters should be stated.
-    
-    In the case of uniform prior probabilities $h(\vec{p}) = (K-1)!$, and the Fisher information $F(\vec{p}) = N^{K-1} / (\prod_{k=1}^{K} p_k)$. It follows that the length of this part is equal to $- \log( h(\vec{p}) \times (1 / \sqrt{{\kappa_K}^K F(\vec{p})}) ) = - \log((K-1)!) + (K/2) \log(\kappa_K) + ((K-1)/2) \log(N) - (1/2) \sum_{k=1}^{K} \log(p_k)$, where $\kappa_K$ is a lattice constant (varying between $1/12$ and $1/(2 \pi e)$).
+    \item[\textbf{(1)}] \textbf{The model}
+    \item[\textbf{a.}]  The number of mixture components (or groups) $K$.
+    \item[\textbf{b.}]  The relative weight $w_k$ (or contribution, or mixing 
+                        proportion) of the amount(s) of data in each group. 
 
-\item[\textbf{1c)}]  The component parameters $\vecmean$ and $\veccov$ for all $K$ Gaussian components.
+%    The relative abundances (or relative weights or mixing proportions) of the amount(s) of data in each group.
 
-\item[\textbf{2)}] The data given the model and its parameters.
+    \item[\textbf{c.}]  The parameters of each component, specifically the mean
+                        $\vecmean_k$ and covariance matrix $\veccov_k$ for all 
+                        $K$ Gaussian components.
+
+    \item[\textbf{(2)}] \textbf{The data given the model} -- the likelihood --
+                        where the probability density function $f$ for a
+                        multivariate normal distribution with $D$ dimensions
+                        is given by
+                        \begin{equation}
+                            f(\vec{x}|\vec{\theta}) = \frac{1}{\sqrt{(2\pi)^{D}|\veccov|}}\exp{\left[-\frac{1}{2}(\vec{x} - \vecmean)^\intercal\veccov^{-1}(\vec{x}-\vecmean)\right]}
+                        \end{equation}
+                        \noindent{}and for a mixture of $K$ gaussian mixtures
+                        this becomes
+                        \begin{equation}
+                            f(\vec{x}|\vec{\theta}) = \sum_{k=1}^{K}\weight_{k}f(\vec{x}|\vec{\theta}_{k}) \quad .
+                        \end{equation}
+
+%\item[\textbf{2)}] The data given the model and its parameters.
 % , whose cost is the well-known statistical log-likelihood. In the case of a Normal distribution, this % would appear to a first approximation to equal 
 %   $$-\log (p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}).$$
-To a first approximation, this would appear to be
-$ \min_{k} -\log (p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) \rm{,}$
-minimising (over cluster indices $k$) $ -\log (p_k(x)) $ (which is the cost of encoding the particular cluster, $k$) plus the negative log-likelihood given cluster $k$'s parameters.
-However, as per \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}\cite[sec. 6.8]{Wallace05}, the cost can be reduced to
-$ -\log ( \Sigma_{k=1}^{K} p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) $
+%To a first approximation, this would appear to be
+%$ \min_{k} -\log (p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) \rm{,}$
+%minimising (over cluster indices $k$) $ -\log (p_k(x)) $ (which is the cost of encoding the particular cluster, $k$) plus the negative log-likelihood given cluster $k$'s parameters.
+%However, as per \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}\cite[sec. 6.8]{Wallace05}, the cost can be reduced to
+%$ -\log ( \Sigma_{k=1}^{K} p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) $
 \end{itemize}
 
-Parts 1a, 1b and 1c encode the parameters from the clustering process, and part 2 encodes the likelihood (the data given the hypothesis), which represents the goodness-of-fit. 
 
-The estimation of the multinomial parameters from part 1b is done by quantifying the trade-off between stating the parameters imprecisely, so as to have higher prior probability in the relevant uncertainty region and keep the first part of the message short, and the goodness of fit to the data, which is typically better if we state the parameter estimates more precisely. 
+%A statement of the number of groups (or classes, or Gaussian mixture components), $K$. Each class is assumed to have the same prior probability, equal to $2^{-K}$. The length of this part is equal to the negative logarithm of the prior, i.e. $K$. 
 
-Quantitatively, this is done by minimising the sum of the lengths of the three components (1a, 1b, 1c and 2 above). If MML finds that the data for a specific element do not affect the selection of groups, then it will {\it ignore that element.\/} This could tell us something important - such as that there is a large random component for that element or that there are significant observational errors ruining the usefulness of that measurement. These are significant insights into the data that are, importantly, quantified by the MML method.
+A common question arising from listing the components above is that we have
+expliticly encoded the model parameters, but we have not encoded `the model'
+in the sense that we have not described how these encoded parameters relate 
+to each other, nor we do not spell out `\texttt{gaussian}'. This is implicit,
+and justified if we are evaluating and comparing models within the same 
+class (e.g., gaussian mixture models), and is analogous to the probability
+being written as $p(\vec{x}|\vec{\theta})$ rather than what is implied:
+$p(\vec{x}|\vec{\theta},\vec{\mathcal{M}})$, the probability of the data given 
+the model parameters $\vec{\theta}$ and class of model $\vec{\mathcal{M}}$.
+Whatever the message length to encode to class of model $\vec{\mathcal{M}}$,
+it would be a constant added to the message length. Here we provide the 
+message length of each component above in full, and the prior beliefs on those 
+components, before describing our full objective function.
+
+\subsubsection{The number of mixture components (or groups) $K$}
+
+We assume a prior on the number of mixtures $K$ of $\prior{K} \propto 2^{-K}$
+\cite[e.g., see p279, sec. 6.8.2, of ][]{Wallace05} such that the length of the 
+optimal lossless message to encode $K$ is 
+\begin{equation}
+    I(K) = -\log{\prior{K}} = K\log{2} + \textrm{constant} \quad .
+\end{equation}
+This prior expresses our belief that, in general, there ought to be fewer 
+mixtures.
 
 
-\subsection{Message Length}
+
+\subsubsection{The relative weight $w_k$ of each mixture}
+
+We assume a uniform prior on the individual weights $\weight_{k}$. The weights
+$\weights$ are drawn from a multinomial distribution, such that only $K - 1$
+weights need to be encoded because $\sum_{k=1}^{K}\weight_k = 1$.
+
+The length of this component is equal (within a small constant) to the 
+negative log of the product of the prior probabilities of each group 
+($\prior{w}$) divided by the square root of the expected Fisher information
+($\sqrt{F(\vec{w_k})}$), where the Fisher information matrix contains the
+\emph{expected} second-order partial derivatives of the log-likelihood
+function. This describes how sharply the likelihood function peaks, and as a
+result it quantifies how precisely the parameters should be stated. This
+estimation of the multinomial parameters quantifies the trade-off between
+stating the parameters $\vec{\weights}$ imprecisely, so as to place higher
+prior probability in the relevant uncertainty region and to keep the first
+part of the message short, and the goodness-of-fit to the data, which is
+typically better if we state the estimates of the parameters more precisely.
+
+\noindent{}In the case of uniform prior probabilities,
+\begin{equation}
+    \prior{w} = (K - 1)! \quad ,
+\end{equation}
+\noindent{}and the Fisher information is
+\begin{equation}
+F(\vec{w}) = \frac{N^{K - 1}}{\prod_{k=1}^{K} w_k} \quad ,
+\end{equation}
+\noindent{}which gives the message length of this part to be
+\begin{eqnarray}
+I(\vec{w}) &=& -\log\left(\frac{\prior{\vec{w}}}{\sqrt{{\kappa_K}^K F(\vec{w})}}\right)  \nonumber \\
+I(\vec{w}) &=& -\log{(K - 1)!} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{\weight_k} \nonumber \\
+I(\vec{w}) &=& -\log{\Gamma(K)} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{\weight_k}
+\end{eqnarray}
+\noindent{}where $\kappa_K$ is a lattice constant that varies between $1/12$
+and $1/(2\pi e)$ \cite{BoultonWallace1969}.
 
 
-The MML principle requires that we encode everything required to reconstruct the message, including our prior beliefs on the model parameters. Consider that we have $N$ data points each with $D$ dimensions which are to be modelled by a finite number of Gaussian mixtures. Therefore the message for a finite number of Gaussian mixtures must encode:
+
+\subsubsection{The mean $\vecmean_k$ and covariance matrix $\veccov_k$ for all
+               $K$ Gaussian components}
+test
+
+%Parts 1a, 1b and 1c encode the parameters from the clustering process, and part 2 encodes the likelihood (the data given the hypothesis), which represents the goodness-of-fit. 
+
+%The estimation of the multinomial parameters from part 1b is done by quantifying the trade-off between stating the parameters imprecisely, so as to have higher prior probability in the relevant uncertainty region and keep the first part of the message short, and the goodness of fit to the data, which is typically better if we state the parameter estimates more precisely. 
+
+%Quantitatively, this is done by minimising the sum of the lengths of the three components (1a, 1b, 1c and 2 above). If MML finds that the data for a specific element do not affect the selection of groups, then it will {\it ignore that element.\/} This could tell us something important - such as that there is a large random component for that element or that there are significant observational errors ruining the usefulness of that measurement. These are significant insights into the data that are, importantly, quantified by the MML method.
+
+
+
+
 
 % \begin{enumerate}
 % k has been used previously in describing AIC and BIC.
@@ -325,25 +567,6 @@ The MML principle requires that we encode everything required to reconstruct the
 %  \item The lattice quantisation constant $\kappa(Q)$ for the number of model       parameters $Q$.
 % \end{enumerate}
 
-We provide the message length of each component in turn before outlining our
-full objective function. We assume a prior on the number of mixtures $K$ of
-% $\prior{K} \propto 2^{-K}$
-$\prior{K} = 2^{-K}$
-\cite[p279, sec. 6.8.2, (a)]{Wallace05} such that the length of the 
-optimal lossless message to encode $K$ is 
-\begin{equation}
-    I(K) = -\log{\prior{K}} = K\log{2} + \textrm{constant}.
-\end{equation}
-
-We assume a uniform prior on the individual weights $\weight_{k}$. The weights
-$\weights$ are drawn from a multinomial distribution such that they can be 
-optimally encoded in a message with length~\todo{\cite{someone}}:
-\begin{equation}
-  I(\weights) 
-    = \frac{K - 1}{2}\log{N} 
-    - \frac{1}{2}\sum_{k=1}^{K}\log\weight_k 
-    - \log{\Gamma{\left(K\right)}} \quad .
-\end{equation}
 
 
 In order to properly encode the means $\vecmean$ and covariance matrices
