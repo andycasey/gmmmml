@@ -35,6 +35,7 @@
     % \marginpar{\fbox{\bfseries\sffamily#1}}
 }
 \newcommand{\alda}[1]{\nbb{Aldeida}{#1}}
+\newcommand{\andy}[1]{\nbb{Andy}{#1}}
 
 
 % Define commands
@@ -61,7 +62,8 @@
 
 % Have some maaaath.
 \def\infinity{\rotatebox{90}{8}}
-\def\veccov{\vect{C}}
+\def\cov{C}
+\def\veccov{\vect{\cov}}
 \def\vecmean{\vect{\mu}}
 \def\vectheta{\vect{\theta}}
 \def\weight{w}
@@ -283,10 +285,10 @@ model with the motivation of minimizing the Kullback-Leibler divergence
 between the model and the truth:
 % KL divergence is generally asymmetric
 \begin{equation}
-    AIC = -2 \log_{e}f(\vec{x} | \vec{\theta}) + 2 k
+    AIC = -2 \log_{e}f(\vec{\data} | \vec{\theta}) + 2 k
 \end{equation}
-\noindent{}where the likelihood $f(\vec{x} | \vec{\theta})$ is the probability 
-of the data $\vec{x}$ given a model parameterised by $\vec{\theta}$, and $k$ 
+\noindent{}where the likelihood $f(\vec{\data} | \vec{\theta})$ is the probability 
+of the data $\vec{\data}$ given a model parameterised by $\vec{\theta}$, and $k$ 
 is the number of free parameters in the model. BIC~\cite{schwarz1978estimating} 
 uses a constant penalty equal to $\frac{1}{2}\log{N}$ for each free parameter in the 
 model, where $N$ is the number of data points. Minimum Description Length (MDL)
@@ -374,7 +376,7 @@ MML is a statistical technique that formalizes and quantifies this principle.
 The \textit{message} must encode two parts: the model, and the data given the
 model. The encoding of the message is based on Shannon's information theory~\cite{shannon}. 
 The information gained from an event $e$ occurring, where $p(e)$ is the
-probability of that event, is $h(e) = -\log_{2}{p(e)}$. The information content
+probability of that event, is $I(e) = -\log_{2}{p(e)}$. The information content
 is largest for improbable outcomes, and smallest for outcomes that we are 
 almost certain about. In other words, an outcome that has a probability close
 to unity has zero information content because nothing new is learned from it,
@@ -398,29 +400,29 @@ whereas rarer events convey a much higher information content.
 
 
 Formally, the length of the first part of the message is
-    $-\log_{2}h(\vec{\theta})$, 
+    $-\log_{2}\prior{\vec{\theta}}$, 
 and that of the second part is 
-    $-\log_{2}f(\vec{x}|\vec{\theta})$, 
-where $h(\vec{\theta})$ is the prior probability of model described with 
+    $-\log_{2}f(\vec{\data}|\vec{\theta})$, 
+where $\prior{\vec{\theta}}$ is the prior probability of model described with 
 parameters $\vec{\theta}$, and 
-    $f(\vec{x}|\vec{\theta})$ 
-is the likelihood of data $\vec{x}$ given a model parameterised by $\vec{\theta}$. 
+    $f(\vec{\data}|\vec{\theta})$ 
+is the likelihood of data $\vec{\data}$ given a model parameterised by $\vec{\theta}$. 
 The total message length is the sum of the two parts, i.e. 
-    $-\log_{2} h(\vec{\theta}) - \log_{2}f(\vec{x} | \vec{\theta})$, 
-which is minimised precisely when $h(\vec{\theta}) f(\vec{x}|\vec{\theta})$
+    $-\log_{2} \prior{\vec{\theta}} - \log_{2}f(\vec{\data} | \vec{\theta})$, 
+which is minimised precisely when $\prior{\vec{\theta}} f(\vec{\data}|\vec{\theta})$
 is maximised. The multiplication of the prior and the likelihood is 
-proportional to the posterior {\em probability} $g(\vec{\theta}|\vec{x})$. 
+proportional to the posterior {\em probability} $g(\vec{\theta}|\vec{\data})$. 
 An important but subtle point is that, within the MML framework, we are 
 quantising (or rounding off in) parameter space, and so 
-$h(\vec{\theta})$ corresponds to a {\em probability} and {\em not} 
+$\prior{\vec{\theta}}$ corresponds to a {\em probability} and {\em not} 
 a density. Thus, the MML estimate can in some sense be thought of as maximising 
-    $h(\vec{\theta})f(\vec{x}|\vec{\theta})$ 
+    $\prior{\vec{\theta}}f(\vec{\data}|\vec{\theta})$ 
 and in turn (in some sense) equal to the posterior mode. This is similar in 
 spirit to the (Bayesian) Maximum A Posteriori (MAP) posterior mode, partly 
 because both terms 
-    $-\log_{2}h(\vec{\theta})$
+    $-\log_{2}\prior{\vec{\theta}}$
 and 
-    $\log_{2} f(\vec{x}|\vec{\theta})$ 
+    $\log_{2} f(\vec{\data}|\vec{\theta})$ 
 here correspond to probabilities, but with the benefit of statistical 
 invariance under re-parameterisation (e.g., ~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}).
 
@@ -452,13 +454,18 @@ specifically encode:
                         multivariate normal distribution with $D$ dimensions
                         is given by
                         \begin{equation}
-                            f(\vec{x}|\vec{\theta}) = \frac{1}{\sqrt{(2\pi)^{D}|\veccov|}}\exp{\left[-\frac{1}{2}(\vec{x} - \vecmean)^\intercal\veccov^{-1}(\vec{x}-\vecmean)\right]}
+                            f(\vec{\data}|\vec{\theta}) = \frac{1}{\sqrt{(2\pi)^{D}|\veccov|}}\exp{\left[-\frac{1}{2}(\vec{\data} - \vecmean)^\intercal\veccov^{-1}(\vec{\data}-\vecmean)\right]}
                         \end{equation}
                         \noindent{}and for a mixture of $K$ gaussian mixtures
                         this becomes
                         \begin{equation}
-                            f(\vec{x}|\vec{\theta}) = \sum_{k=1}^{K}\weight_{k}f(\vec{x}|\vec{\theta}_{k}) \quad .
+                            f(\vec{\data}|\vec{\theta}) = \sum_{k=1}^{K}\weight_{k}f(\vec{\data}|\vec{\theta}_{k}) \quad .
                         \end{equation}
+                        \noindent{}Such that the log-likelihood $\log\likelihood(\vec{\data}|\vec{\theta})$ is
+                        \begin{equation}
+                            \log\likelihood(\vec{\data}|\vec{\theta}) = \sum_{n=1}^{N}\log\sum_{k=1}^{K}\weight_{k}f(\vec{\data}_{n}|\vecmean_{k},\veccov_{k}) \quad .
+                        \end{equation}
+
 
 %\item[\textbf{2)}] The data given the model and its parameters.
 % , whose cost is the well-known statistical log-likelihood. In the case of a Normal distribution, this % would appear to a first approximation to equal 
@@ -473,63 +480,83 @@ specifically encode:
 
 %A statement of the number of groups (or classes, or Gaussian mixture components), $K$. Each class is assumed to have the same prior probability, equal to $2^{-K}$. The length of this part is equal to the negative logarithm of the prior, i.e. $K$. 
 
-A common question arising from listing the components above is that we have
-expliticly encoded the model parameters, but we have not encoded `the model'
+Calculating the length of the message can be a non-trivial task, especially
+if the model is reasonably complex. This makes the MML principle intractable
+(or uncomputable) in most cases, and forces us to make approximations when 
+calculating the message length. Using a Taylor expansion, a generalised scheme
+can be derived to estimate the parameter vector $\vec{\theta}$ that minimises
+the message length expression\cite{WallaceFreeman1987}:
+
+\begin{equation}
+    I(\vec{\theta}, \vec{\data}) = \frac{Q}{2}\log{\kappa(Q)} - \log\left(\frac{\prior{\vec{\theta}}}{\sqrt{|\fisher{\vec{\theta}}|}}\right) - \log\likelihood\left(\vec{\data}|\vec{\theta}\right) + \frac{Q}{2} \quad .
+    \label{eq:taylor}
+\end{equation}
+
+Here $\prior{\vec{\theta}}$ is the prior, $Q$ is the number of free parameters
+in the model, $\kappa(Q)$ is a function to approximate the lattice quantisation
+constant for $Q$ free parameters\cite{ConwaySloane1984}, and $|\fisher{\vec{\theta}}|$
+is the determinant of the \emph{expected} Fisher information matrix (the second
+order partial derivatives of the negative log-likelihood function $-\log\likelihood\left(\vec{\data}|\vec{\theta}\right)$).
+A common that arises after listing the components above is that although we
+have expliticly encoded the model parameters, we have not encoded `the model'
 in the sense that we have not described how these encoded parameters relate 
-to each other, nor we do not spell out `\texttt{gaussian}'. This is implicit,
-and justified if we are evaluating and comparing models within the same 
-class (e.g., gaussian mixture models), and is analogous to the probability
-being written as $p(\vec{x}|\vec{\theta})$ rather than what is implied:
-$p(\vec{x}|\vec{\theta},\vec{\mathcal{M}})$, the probability of the data given 
-the model parameters $\vec{\theta}$ and class of model $\vec{\mathcal{M}}$.
-Whatever the message length to encode to class of model $\vec{\mathcal{M}}$,
-it would be a constant added to the message length. Here we provide the 
-message length of each component above in full, and the prior beliefs on those 
-components, before describing our full objective function.
+to each other. In a sense, we do not describe to the receiver that these
+encoded parameters refer to a mixture of Gaussians, or what we mean when we
+refer to the term `Gaussian'. This information is implicit, and justified
+if we are evaluating and comparing models within the same class (e.g., gaussian 
+mixture models). For example, it is analogous to writing the probability of
+some data given a model as $p(\vec{\data}|\vec{\theta})$ rather than what is 
+actually implied: $p(\vec{\data}|\vec{\theta},\vec{\mathcal{M}})$, the 
+probability of the data given the model parameters $\vec{\theta}$ and class of 
+model $\vec{\mathcal{M}}$. Whatever the message length required to encode to 
+class of model $\vec{\mathcal{M}}$, under consideration, it would be a constant 
+added to the message length regardless of the number of components in our mixture. 
+
+In the following subsections we provide expressions for the message length of
+each component listed above, and our prior beliefs, before describing our
+full objective function.
 
 \subsubsection{The number of mixture components (or groups) $K$}
 
-We assume a prior on the number of mixtures $K$ of $\prior{K} \propto 2^{-K}$
-\cite[e.g., see p279, sec. 6.8.2, of ][]{Wallace05} such that the length of the 
+We assume a prior on the number of components $K$ of $\prior{K} \propto 2^{-K}$
+\cite[][p279, sec. 6.8.2]{Wallace05} such that the length of the 
 optimal lossless message to encode $K$ is 
 \begin{equation}
     I(K) = -\log{\prior{K}} = K\log{2} + \textrm{constant} \quad .
 \end{equation}
-This prior expresses our belief that, in general, there ought to be fewer 
-mixtures.
+This  expresses our prior belief that there ought to be fewer components.
 
 
 
-\subsubsection{The relative weight $w_k$ of each mixture}
+\subsubsection{The relative weight $w_k$ of each component}
 
 We assume a uniform prior on the individual weights $\weight_{k}$. The weights
 $\weights$ are drawn from a multinomial distribution, such that only $K - 1$
-weights need to be encoded because $\sum_{k=1}^{K}\weight_k = 1$.
-
-The length of this component is equal (within a small constant) to the 
-negative log of the product of the prior probabilities of each group 
-($\prior{w}$) divided by the square root of the expected Fisher information
-($\sqrt{F(\vec{w_k})}$), where the Fisher information matrix contains the
-\emph{expected} second-order partial derivatives of the log-likelihood
-function. This describes how sharply the likelihood function peaks, and as a
-result it quantifies how precisely the parameters should be stated. This
-estimation of the multinomial parameters quantifies the trade-off between
-stating the parameters $\vec{\weights}$ imprecisely, so as to place higher
-prior probability in the relevant uncertainty region and to keep the first
-part of the message short, and the goodness-of-fit to the data, which is
-typically better if we state the estimates of the parameters more precisely.
-
-\noindent{}In the case of uniform prior probabilities,
+weights need to be encoded because $\sum_{k=1}^{K}\weight_k = 1$. Following
+from Equation \ref{eq:taylor}, here we describe how our estimate of the message 
+length of the multinomial parameter $\vec{\weight}$ quantifies the trade-off 
+between stating the parameters $\vec{\weights}$ imprecisely, so as to keep the 
+first part of the message short and place higher prior probability in the 
+relevant uncertainty region, and the goodness-of-fit to the data, which is 
+typically better if we state the estimates of the parameters more precisely. 
+By balancing this trade-off, the length of this component is equal (within a 
+small constant) to the negative log of the product of the prior probabilities 
+of each group ($\prior{\vec{\weight}}$) divided by the square root of the 
+expected Fisher information ($\sqrt{\fisher{\vec{\weight_k}}}$), where the 
+Fisher information matrix contains the \emph{expected} second-order partial 
+derivatives of the log-likelihood function. This describes how sharply the 
+likelihood function peaks, and as a result it quantifies how precisely the 
+parameters should be stated. In the case of uniform prior probabilities,
 \begin{equation}
-    \prior{w} = (K - 1)! \quad ,
+    \prior{\vec{\weight}} = (K - 1)! \quad ,
 \end{equation}
-\noindent{}and the Fisher information is
+\noindent{}the Fisher information is
 \begin{equation}
-F(\vec{w}) = \frac{N^{K - 1}}{\prod_{k=1}^{K} w_k} \quad ,
+\fisher{\vec{w}} = \frac{N^{K - 1}}{\prod_{k=1}^{K} w_k} \quad ,
 \end{equation}
 \noindent{}which gives the message length of this part to be
 \begin{eqnarray}
-I(\vec{w}) &=& -\log\left(\frac{\prior{\vec{w}}}{\sqrt{{\kappa_K}^K F(\vec{w})}}\right)  \nonumber \\
+I(\vec{w}) &=& -\log\left(\frac{\prior{\vec{w}}}{\sqrt{{\kappa_K}^K \fisher{\vec{w}}}}\right)  \nonumber \\
 I(\vec{w}) &=& -\log{(K - 1)!} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{\weight_k} \nonumber \\
 I(\vec{w}) &=& -\log{\Gamma(K)} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{\weight_k}
 \end{eqnarray}
@@ -540,34 +567,6 @@ and $1/(2\pi e)$ \cite{BoultonWallace1969}.
 
 \subsubsection{The mean $\vecmean_k$ and covariance matrix $\veccov_k$ for all
                $K$ Gaussian components}
-test
-
-%Parts 1a, 1b and 1c encode the parameters from the clustering process, and part 2 encodes the likelihood (the data given the hypothesis), which represents the goodness-of-fit. 
-
-%The estimation of the multinomial parameters from part 1b is done by quantifying the trade-off between stating the parameters imprecisely, so as to have higher prior probability in the relevant uncertainty region and keep the first part of the message short, and the goodness of fit to the data, which is typically better if we state the parameter estimates more precisely. 
-
-%Quantitatively, this is done by minimising the sum of the lengths of the three components (1a, 1b, 1c and 2 above). If MML finds that the data for a specific element do not affect the selection of groups, then it will {\it ignore that element.\/} This could tell us something important - such as that there is a large random component for that element or that there are significant observational errors ruining the usefulness of that measurement. These are significant insights into the data that are, importantly, quantified by the MML method.
-
-
-
-
-
-% \begin{enumerate}
-% k has been used previously in describing AIC and BIC.
-% If k is the number of parameters, then it will be neither (the number of clusters) nor an index running from 1 to (the number of clusters).
-% \item
-% \begin{itemize}
-% \item (1a) ~ The number of Gaussian mixture components, $K$.
-% \item (1b) ~ The relative weights $\weights$ of the $K - 1$ Gaussian components. Only
-%       $K - 1$ weights need be encoded because $\sum_{k=1}^{K}\weight_k = 1$.
-% \item (1c) ~ The component parameters $\vecmean$ and $\veccov$ for all $K$ Gaussian
-%       components.
-% \end{itemize}
-% \item (2) ~ The data, given the model parameters.
-%  \item The lattice quantisation constant $\kappa(Q)$ for the number of model       parameters $Q$.
-% \end{enumerate}
-
-
 
 In order to properly encode the means $\vecmean$ and covariance matrices
 $\veccov$ for all $K$ mixtures, we must encode both our prior belief on 
@@ -587,16 +586,12 @@ matrix. For the $k$-th mixture the joint message length is
 We use an improper uniform prior on the mean $\vecmean$ for all mixtures such
 that 
     $\mathcal{U}(\vecmean) = (-\infty, +\infty)$.
-However,  the MML principle \todo{demands} proper priors. In practice we make 
+However,  the MML principle requires proper priors. In practice we make 
 this prior proper by assuming the bounds on $\prior{\vecmean}$ are very large, but 
 we do so without actually specifying the value of the bounds because they add 
 only a constant value to the total message length\todo{\cite{someone}}.
 We adopt a conjugate inverted Wishart prior for the covariance matrix of an
-individual mixture
-- e.g.,
-%[]
-\cite[Section 5.2.3]{Schafer_1997}:
-
+individual mixture \cite[Section 5.2.3]{Schafer_1997}:
 
 \begin{equation}
   \prior{{\vecmean_k, \veccov_k}} \propto |\veccov_k|^{\frac{D+1}{2}} \quad .
@@ -607,12 +602,14 @@ individual mixture
 % Casey: Reword following paragraph because it is clumsy.
 Following Eq. \ref{eq:I_component_params}, we require the logarithm of the
 determinant of the expected Fisher information matrix for $\vecmean_k$ and
-$\veccov_k$ in order to encode the full message length. We approximate the
-determinant of the Fisher information $\detfisher{{\vecmean_k, \veccov_k}}$ 
+$\veccov_k$ in order to encode the full message. In practice the determinant
+of the Fisher information is non-trivial to evaluate, and as such we
+approximate the determinant of the Fisher information
+ $\detfisher{{\vecmean_k, \veccov_k}}$ 
 as the product of $\detfisher{\vecmean_k}$ and $\detfisher{\veccov_k}$ 
 \cite{Oliver_1996,Roberts_1998}. In order to derive $\detfisher{\vecmean_k}$
 we take the second derivative of the log-likelihood function 
-$\likelihood(\data|\vecmean,\veccov)$, which yields:
+$\likelihood(\data|\vectheta)$, which yields:
 \begin{equation}
   \detfisher{\vecmean_k} = (N\weight_k)^{D}|\veccov_k|^{-1} \quad .
 \end{equation}
@@ -639,13 +636,14 @@ parameters $\vecmean$ and $\veccov$ for all $K$ mixtures:
   I(\vecmean,\veccov) &=& -\sum_{k=1}^{K}\log{\prior{{\vecmean_k,\veccov_k}}} + \frac{1}{2}\sum_{k=1}^{K}\log{\detfisher{{\vecmean_k,\veccov_k}}} \nonumber \\
   I(\vecmean,\veccov) &=& -\sum_{k=1}^{K}\log{|\veccov_k|^{\frac{D + 1}{2}}}
     + \frac{1}{2}\sum_{k=1}^{K}\log{\left[(N\weight_k)^\frac{D(D+3)}{2}2^{-D}|\veccov_k|^{-(D+2)}\right]} \nonumber \\
-  I(\vecmean,\veccov) &=& \frac{D(D+3)}{4}\sum_{k=1}^{K}\log{N\weight_k} -\frac{(D + 1)}{2}\sum_{k=1}^{K}\log{|\veccov_k|}
-    -\frac{KD}{2}\log{2} \nonumber \\
-  && -\frac{D+2}{2}\sum_{k=1}^{K}\log{|\veccov_k|} \nonumber \\
+%  I(\vecmean,\veccov) &=& \frac{D(D+3)}{4}\sum_{k=1}^{K}\log{N\weight_k} -\frac{(D + 1)}{2}\sum_{k=1}^{K}\log{|\veccov_k|}
+    %-\frac{KD}{2}\log{2} \nonumber \\
+%  && -\frac{D+2}{2}\sum_{k=1}^{K}\log{|\veccov_k|} \nonumber \\
   I(\vecmean,\veccov) &=& \frac{D(D+3)}{4}\sum_{k=1}^{K}\log{N\weight_k} -\frac{2D+3}{2}\sum_{k=1}^{K}\log{|\veccov_k|} - \frac{KD}{2}\log{2} 
 \end{eqnarray}
 
 
+\subsubsection{The data given the model}
 If we assume that the data have homoskedastic noise properties, then the 
 precision of each measurement $\mathcal{E}$ relates the probability of a
 datum $p(\datum_n)$ can be related to the probability density of
@@ -685,30 +683,149 @@ parameters is
 \end{equation}
 
 
+\subsection{Objective function}
 
-%  Here
+Combining the expressions for the message length (or information content) of
+each component, we arrive at our objective function $I$ to minimise across 
+all model parameters (including the number of mixtures, $K$):
 
- Each $k$-th mixture is a $D$-dimensional Gaussian that contributes a relative weight $\weight_k$ such that $\sum_{k=1}^{K}\weight_k = 1$. We will assume that the data have homoscedastic noise properties.
+\begin{equation}
+\todo{I = 0}
+\end{equation}
 
-The data have the same error value, $y_{err}$, in all $D$ dimensions, for all $N$ observations.
 
-The message length for the data is given by:
+%\begin{eqnarray}
+%I_K & = & K\log{2} % I_k
+%    + \frac{(K - 1)}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{w_k} - \log{|\Gamma(K)|} % I_w
+%    +\mathcal{L}(\data|\vectheta) \nonumber \\
+%    & -& DN\log{y_{err}} % Likelihood
+%   +  \frac{1}{2}\sum_{k=1}^{K}\left[\frac{D(D+3)}{2}\log{{Nw_k}} - (D + 2)\log{|\veccov_k|} - D\log{2}\right]\nonumber \\% I_t
+%    &-& \frac{Q}{2}\log(2\pi) + \frac{\log{Q\pi}}{2} % lattice, minus the lattice of part 2
+%%\end{eqnarray}
 
-Here we introduce the individual components that contribute to the message length.
+%\noindent{}where $Q = \frac{1}{2}DK(D + 3) + K - 1$, the number of free parameters, and
+%$\mathcal{L}$ is the log-likelihood of a multivariate Gaussian distribution.
 
-Combining these expressions, the complete message length for $K$ mixtures is given by
-
+While we can evaluate the objective function $I(\vec{\data}|\vec{\psi})$, where 
+for the sake of brevity we denote $\vec{\psi} = \{K, N, D, \vec{\weight}, 
+\vecmean, \veccov\}$, and we can meaningfully compare models with different numbers of components or parameter
+values, we require a search strategy in order to efficiently find the global
+solution: the minimum message length over a class of finite mixture models
+(where $N > K$). Before we introduce and compare search strategies,
+let us first make some comments and quantitative descriptions on how the
+total message length $I$ will vary with the model parameters. Specifically, we
+will re-arrange Equation \ref{eq:objective_function} to be a sum of three 
+smaller functions, and we will derive limits and predictions for those 
+quantites. In an ideal scenario, those limits and predictions would be able
+to provide us with an estimate of the message length for a Gaussian mixture
+before computing the mixture (i.e., before performing expectation-maximization.
+We begin by re-casting Equation \ref{eq:objective_function} as
 \begin{eqnarray}
-I_K & = & K\log{2} % I_k
-    + \frac{(K - 1)}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{w_k} - \log{|\Gamma(K)|} % I_w
-    +\mathcal{L}(\data|\vectheta) \nonumber \\
-    & -& DN\log{y_{err}} % Likelihood
-   +  \frac{1}{2}\sum_{k=1}^{K}\left[\frac{D(D+3)}{2}\log{{Nw_k}} - (D + 2)\log{|\veccov_k|} - D\log{2}\right]\nonumber \\% I_t
-    &-& \frac{Q}{2}\log(2\pi) + \frac{\log{Q\pi}}{2} % lattice, minus the lattice of part 2
+I(\vec{\data}|\vec{\psi}) = I_{1}(K, N, D, \vec{\weight}) 
+                          + I_{2}(K, N, \veccov)
+                          + I_{3}(\vec{\psi}) \quad ,
 \end{eqnarray}
+\noindent{}where:
+\begin{eqnarray}
+    I_{1} &=& \left(1-\frac{D}{2}\right)K\log{2} + \log{\Gamma(K)} + \frac{1}{4}\left[2\left(K - 1\right) + KD\left(D+3\right)\right]\log{N} \nonumber \\
+          &+& \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \left(\frac{D(D+3) - 2}{4}\right)\sum_{k=1}^{K}\log{\weight_k} \todo{+ \kappa} \quad , \label{eq:I1} \\
+    I_{2} &=& -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{|\veccov_k|} \quad {\textrm and},\\
+    I_{3} &=& -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) - DN\log{\sigma_{\datum}} \quad .
+\end{eqnarray}
+The nomenclature for $I_1$, $I_2$ and $I_3$ bear no relation to the two-part 
+message that we introduced earlier to describe message length. Rather we are
+simply re-arranging the objective function because, as we will show, there are
+useful theoretical bounds and predictions that we can make for each part of
+this re-arranged expression.
 
-\noindent{}where $Q = \frac{1}{2}DK(D + 3) + K - 1$, the number of free parameters, and
-$\mathcal{L}$ is the log-likelihood of a multivariate Gaussian distribution.
+In Eq. \ref{eq:I1} it can be seen that for any finite mixture, $I_1$ can be
+almost directly computed just from knowing the number of mixture components
+$K$ and the properties of the data: the number of data points $N$ and its
+dimensionality $D$. The only ambiguous term is $\sum_{k=1}^{K}\log\weight_k$,
+which will depend on the data. However, for any finite mixture of $K$
+components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
+
+\begin{enumerate}
+    \item The weights are distributed uniformly such that $w_k = 1/K$ and
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = \sum_{k=1}^{K}\log{\frac{1}{K}} =-K\log{K} \quad .
+          \end{equation}
+    \item The weights are distributed such that $K - 1$ components each 
+          describe just one data point $w_{1..K-1} = 1/N$, and the remaining 
+          component describes all other data points $w_{K} = 1 - (K-1)/N$
+          as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
+          \end{equation}
+          \noindent{}and by making use of the identity 
+            $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$
+          we can simplify this expression to:
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+          \end{equation}
+\end{enumerate}
+
+\noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
+derived the bounds
+\begin{equation}
+-K\log{K} \leq \sum_{k=1}^{K}\log\weight_k \leq - K\log{K} + \log(N + 1 - K)
+\end{equation}
+\noindent{}which gives us analytic expressions for the upper and lower value 
+of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture.
+
+
+Developing similar theoretical bounds for $I_2$ is not straightforward, because
+the determinants of the covariance matrices of Gaussian components will not
+-- to our knowledge -- strictly follow some expected distribution, in the way 
+that the weights $\weights$ follow a multinomial distribution. Similarly, the
+\emph{scale} of $|\veccov_k|$ will depend entirely on the distribution of the
+data. In that sense, we cannot a priori state with any certainty about what 
+values $|\veccov_k|$ might take (or $\log{|\veccov_k|}$) without knowing
+something about the data first. Even demanding that the covariance matrices
+$\veccov_k$ are positive semi-definite only informs us that $\log{|\veccov_k|}$
+is finite. However, there are quantitative predictions we can make on the 
+bounds of $\sum_{k=1}^{K}\log{|\veccov_k|}$ if something is known about the
+data. Specifically if we consider the determinant of the sample covariance 
+matrix, which we denote $|\cov_{s}|$, then we can state with confidence that
+the sample covariance matrix describes the maximum amount of variance that 
+could be captured by the components in the mixture. For example, a limiting
+case of $\sum_{k=1}^{K}\log{|\veccov_k|}$ can be described when the determinant
+of the sample covariance matrix must be equally (uniformly) captured by $K$ 
+components in a mixture. In other words, the maximum variance in the data 
+must be equally spread between the components in the mixture. Uniformly 
+describing the variance in the data is the limiting case because any 
+non-uniformity would lead to smaller $|\veccov|$ for one mixture (and larger 
+for another), and that asymmetry would lead to a higher $I_2$ because 
+$\log(x - \epsilon) + \log(x + \epsilon) < 2\log{x}$, and because of the 
+$-(1 + \frac{D}{2})$ term that enters multiplicatively in the calculation of 
+$I_2$. Thus, we can specify a lower bound on $I_2$ based on the determinant of
+the sample covariance matrix.
+
+
+
+
+
+It can be seen that for some finite mixture, the total message length depends 
+on the number of components $K$, the number of data points $N$ and its 
+dimensionality $D$, and the parameters of that mixture: $\vec{\weight}$, 
+$\vecmean$, and $\veccov$. That is to say that we can re-arrange Equation
+\ref{eq:objective_function} to separate our objective function into three
+smaller functions, and use information theory to determine limits or 
+predictions for those quantities. Specifically, 
+
+Re-arranging Equation \ref{eq:objective_function},
+we can describe our objective function as being the sum of three functions:
+$I_{g}(N, D, K, \vec{\weight})$
+
+given mixture of finite
+components, the total message length depends on the 
+
+Before we introduce and compare search strategies,
+here we will 
+
+
+
+
 
 \section{Search Methods}
 
