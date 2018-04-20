@@ -822,13 +822,13 @@ In practice we calculate the minimum total pair-wise euclidean distance $d_{min}
 in $D$ dimensions, average it over the dimensions, and approximate the minimum
 determinant of the covariance matrix $|\cov_l|$ as
 \begin{equation}
-    |\cov_{l}| \approx \prod_{d=1}^{D}\frac{d_{min}^2}{4} \quad ,
+    |\cov_{l}| \approx \prod_{d=1}^{D}\left(\frac{d_{min}}{2}\right)^2 \quad ,
 \end{equation}
 \noindent{}which approximately represents the variance between two data points,
 but ignores correlations and assumes only a mean distance in $D$ dimensions
 (for comuptational cost). With these approximations,
 \begin{eqnarray}
-    \log{|\cov_{l}|} & \approx & \sum_{d=1}^{D}\log{\frac{d_{min}^2}{4}}  \nonumber \\
+    \log{|\cov_{l}|} & \approx & \sum_{d=1}^{D}\log{\left(\frac{d_{min}}{2}\right)^2}  \nonumber \\
     \log{|\cov_{l}|} & \approx & 2D\log{\left(\frac{d_{min}}{2}\right)} \quad ,
 \end{eqnarray}
 \noindent{}and the upper limit on $I_2$ is:
@@ -844,35 +844,54 @@ arguably more useful for search and optimisation, but one could conceive
 situations where there is great utility in also having upper bounds on $I_1$
 and $I_2$.
 
-There is no finite upper bound on $I_{3}$ because the negative log likelihood
+There is no finite upper bound on $I_{3}$ because the negative log-likelihood
 $-\log\likelihood$ will approach infinity for an increasingly poor fit to the
-data. A lower limit, however, does exist.
+data. A useful lower limit, however, does exist. The negative log-likelihood
+in Eq. \ref{eq:log-likelihood} can be expanded as,
+\begin{equation}
+    -\log\mathcal{L}\left(\vec{\data}|\vec{\theta}\right) = \sum_{n=1}^{N}\log\sum_{k=1}^{K}\frac{\weight_k}{\sqrt{(2\pi)^{D}|\vec{\cov}_k|}}\exp\left[-\frac{1}{2}\left(\vec{\data}_n - \vecmean_k\right)^\intercal{}\vec{\cov}_{k}^{-1}\left(\vec{\data}_n - \vecmean_k\right)\right]
+\end{equation}
+\noindent{}and we can define
+\begin{equation}
+\chi^{2}_{nk} = \left(\vec{\data}_{n} - \vecmean_{k}\right)^\intercal{}\vec{\cov}_{k}^{-1}\left(\vec{\data}_{n} - \vecmean_{k}\right) \quad .
+\end{equation}
+For the sake of placing a lower bound on $I_{3}$, let us assume that each data
+point will be `mostly' explained by one of the components in the 
+mixture\footnote{We model the data with partial assignment, but here we merely 
+seek to place a lower bound on the negative log-likelihood.}, but we do not 
+necessarily know which component, or what the parameters of that component are. 
+In that situation, we can state that the component that \emph{does} explain
+the data will have $\chi_{nk}^2 \sim \textrm{O}\left(D\right)$ and $\exp(-\frac{1}{2}\chi^2) \rightarrow 1$
+whereas the other components that do not explain the data will have 
+$\chi_{nk}^2 >> D$ such that $\exp(-\frac{1}{2}\chi^2) \rightarrow 0$. With
+this simplification we can write an approximation for the negative log-likelihood
+that does not require knowledge about which data points are associated to what
+component, because the number of times that the expression $\exp(-\frac{1}{2}\chi^2)$
+will be non-zero is for the $k$th mixture component will be $N\weight_k$. The
+approximate lower bound is:
+\begin{eqnarray}
+    -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) & \gtrsim & -\sum_{k=1}^{K}N\weight_{k}\log\left[\frac{\weight_k}{\sqrt{(2\pi)^{D}|\vec{\cov}_k|}}\exp\left(-\frac{1}{2}{D}\right)\right] \\
+    -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) & \gtrsim & -N\sum_{k=1}^{K}\weight_{k}\log{\weight_k} + \frac{1}{2}N\sum_{k=1}^{K}\weight_{k}\log{|\vec{\cov}_k|} + \frac{1}{2}ND\left(1 + \log{2\pi}\right) \quad . \nonumber
+    \label{eq:logl-lower-bound}
+\end{eqnarray}
+\noindent{}Like before, we can consider the lower bound on $-N\sum_{k=1}^{K}\weight_{k}\log\weight_k$
+for any mixture of $K$ components by setting the weight of $K - 1$ mixtures
+to the smallest realistic values, where those mixtures encapsulate only two
+data points and $\todo{w_{1} = w_2 = w_{\cdots} = w_{K-1} = 2/N}$:
+
+\begin{eqnarray}
+-N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& -N\left[(K-1)\left(\frac{1}{N}\log\frac{1}{N}\right) + \left(1 - \frac{K-1}{N}\right)\log\left(1 - \frac{K-1}{N}\right)\right] \nonumber \\
+-N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& (K - 1)\log{N} + (K - 1 - N)\log\left(1-\frac{K-1}{N}\right) \nonumber \\
+-N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& N\log{N} + (K - 1 - N)\log\left(N-K+1\right) \quad .
+\end{eqnarray}
+
+The remaining term in Eq. \ref{eq:logl-lower-bound}, $\frac{1}{2}N\sum_{k=1}^{K}\weight_{k}\log|\vec{\cov}_k|$, requires some  consideration.
 
 \andy{here}
 
 
 
 
-
-
-
-It can be seen that for some finite mixture, the total message length depends 
-on the number of components $K$, the number of data points $N$ and its 
-dimensionality $D$, and the parameters of that mixture: $\vec{\weight}$, 
-$\vecmean$, and $\veccov$. That is to say that we can re-arrange Equation
-\ref{eq:objective_function} to separate our objective function into three
-smaller functions, and use information theory to determine limits or 
-predictions for those quantities. Specifically, 
-
-Re-arranging Equation \ref{eq:objective_function},
-we can describe our objective function as being the sum of three functions:
-$I_{g}(N, D, K, \vec{\weight})$
-
-given mixture of finite
-components, the total message length depends on the 
-
-Before we introduce and compare search strategies,
-here we will 
 
 
 
