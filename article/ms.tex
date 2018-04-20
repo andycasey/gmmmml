@@ -706,20 +706,21 @@ all model parameters (including the number of mixtures, $K$):
 %\noindent{}where $Q = \frac{1}{2}DK(D + 3) + K - 1$, the number of free parameters, and
 %$\mathcal{L}$ is the log-likelihood of a multivariate Gaussian distribution.
 
-While we can evaluate the objective function $I(\vec{\data}|\vec{\psi})$, where 
-for the sake of brevity we denote $\vec{\psi} = \{K, N, D, \vec{\weight}, 
-\vecmean, \veccov\}$, and we can meaningfully compare models with different numbers of components or parameter
-values, we require a search strategy in order to efficiently find the global
-solution: the minimum message length over a class of finite mixture models
-(where $N > K$). Before we introduce and compare search strategies,
-let us first make some comments and quantitative descriptions on how the
-total message length $I$ will vary with the model parameters. Specifically, we
-will re-arrange Equation \ref{eq:objective_function} to be a sum of three 
-smaller functions, and we will derive limits and predictions for those 
-quantites. In an ideal scenario, those limits and predictions would be able
-to provide us with an estimate of the message length for a Gaussian mixture
-before computing the mixture (i.e., before performing expectation-maximization.
-We begin by re-casting Equation \ref{eq:objective_function} as
+While we can evaluate the objective function $I(\vec{\data}|\vec{\psi})$, 
+where for the sake of brevity we denote $\vec{\psi} = \{K, N, D, \vec{\weight}, 
+\vecmean, \veccov\}$, and we can meaningfully compare models with different 
+numbers of components or parameter values, we require a search strategy in 
+order to efficiently find the global solution: the minimum message length 
+over a class of finite mixture models (where $N > K$). Before we introduce and 
+compare search strategies, let us first make some comments and quantitative 
+descriptions on how the message length $I$ will vary with the model parameters. 
+Specifically, we will re-arrange Equation \ref{eq:objective_function} to be a 
+sum of three smaller functions, and we will derive limits and predictions for 
+those quantites. In an ideal scenario, those limits and predictions would be 
+able to provide us with an estimate of the message length for a Gaussian 
+mixture before computing the mixture (i.e., before performing 
+expectation-maximization.We begin by re-casting Eq. \ref{eq:objective_function} 
+as
 \begin{eqnarray}
 I(\vec{\data}|\vec{\psi}) = I_{1}(K, N, D, \vec{\weight}) 
                           + I_{2}(K, N, \veccov)
@@ -768,10 +769,11 @@ components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
 \noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
 derived the bounds
 \begin{equation}
--K\log{K} \leq \sum_{k=1}^{K}\log\weight_k \leq - K\log{K} + \log(N + 1 - K)
+-K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad - K\log{K} + \log(N + 1 - K)
 \end{equation}
 \noindent{}which gives us analytic expressions for the upper and lower value 
-of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture.
+of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture, and
+bounds on $I_{1}$ can be derived from just $\{K, N, D\}$.
 
 
 Developing similar theoretical bounds for $I_2$ is not straightforward, because
@@ -786,7 +788,8 @@ $\veccov_k$ are positive semi-definite only informs us that $\log{|\veccov_k|}$
 is finite. However, there are quantitative predictions we can make on the 
 bounds of $\sum_{k=1}^{K}\log{|\veccov_k|}$ if something is known about the
 data. Specifically if we consider the determinant of the sample covariance 
-matrix, which we denote $|\cov_{s}|$, then we can state with confidence that
+matrix, which we denote $|\cov_{u}|$ (where the $u$ subscript denotes `upper',
+for the upper limit on the covariance matrix), then we can state with confidence that
 the sample covariance matrix describes the maximum amount of variance that 
 could be captured by the components in the mixture. For example, a limiting
 case of $\sum_{k=1}^{K}\log{|\veccov_k|}$ can be described when the determinant
@@ -799,11 +802,55 @@ for another), and that asymmetry would lead to a higher $I_2$ because
 $\log(x - \epsilon) + \log(x + \epsilon) < 2\log{x}$, and because of the 
 $-(1 + \frac{D}{2})$ term that enters multiplicatively in the calculation of 
 $I_2$. Thus, we can specify a lower bound on $I_2$ based on the determinant of
-the sample covariance matrix $|\cov_{s}|$.
+the sample covariance matrix $|\cov_{u}|$:
+
+\begin{eqnarray}
+    I_{2} & \geq & -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{\frac{|\cov_u|}{K}} \nonumber \\
+    I_{2} & \geq & -\left(1 + \frac{D}{2}\right)\left(K\log{|\cov_u|} - K\log{K}\right) 
+\end{eqnarray}
 
 
 The other extreme on $I_2$ can be approximated by estimating the \emph{minimum}
-possible variance that could be captured by any single component.
+possible variance that could be captured by any single component. In theory
+this approaches zero, but in practice it will be set by the minimum pairwise
+distance in $D$ dimensions. Specifically, if we consider two data points to be
+captured by a component in the mixture, an those two data points are the
+closest two data points (in high dimensional space) of any data points, then
+the variance captured by that Gaussian component will represent the \emph{minimum}
+possible variance that can be captured by any single component.  
+In practice we calculate the minimum total pair-wise euclidean distance $d_{min}$
+in $D$ dimensions, average it over the dimensions, and approximate the minimum
+determinant of the covariance matrix $|\cov_l|$ as
+\begin{equation}
+    |\cov_{l}| \approx \prod_{d=1}^{D}\frac{d_{min}^2}{4} \quad ,
+\end{equation}
+\noindent{}which approximately represents the variance between two data points,
+but ignores correlations and assumes only a mean distance in $D$ dimensions
+(for comuptational cost). With these approximations,
+\begin{eqnarray}
+    \log{|\cov_{l}|} & \approx & \sum_{d=1}^{D}\log{\frac{d_{min}^2}{4}}  \nonumber \\
+    \log{|\cov_{l}|} & \approx & 2D\log{\left(\frac{d_{min}}{2}\right)} \quad ,
+\end{eqnarray}
+\noindent{}and the upper limit on $I_2$ is:
+\begin{eqnarray}
+    I_{2} & \leq & -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{|\cov_l|} \nonumber \\
+    I_{2} & \leq & -DK\left(D+2\right)\log{\left(\frac{d_{min}}{2}\right)} \quad .
+\end{eqnarray}
+
+Here our bounds on $I_2$ are only dependent on $K$, $D$, the minimum euclidean
+pair-wise distance $d_{min}$, and the determinant of the sample covariance
+matrix $|\cov_u|$. In practice it is the lower bound on $I_{2}$ that is 
+arguably more useful for search and optimisation, but one could conceive
+situations where there is great utility in also having upper bounds on $I_1$
+and $I_2$.
+
+There is no finite upper bound on $I_{3}$ because the negative log likelihood
+$-\log\likelihood$ will approach infinity for an increasingly poor fit to the
+data. A lower limit, however, does exist.
+
+\andy{here}
+
+
 
 
 
