@@ -490,6 +490,6 @@ def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     assert np.all(np.isfinite(new_mu))
     assert np.all(np.isfinite(new_cov))
     assert np.all(np.isfinite(new_weight))
-    
+
 
     return state 

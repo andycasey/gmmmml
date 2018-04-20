@@ -473,7 +473,7 @@ def _deprecated_predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs
 
 
 def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
-    previous_states, **kwargs):
+    previous_states, min_mean_pairwise_distance, **kwargs):
     r"""
     Predict the negative log likelihood for future (target) mixtures with
     :math:`K` components.
@@ -571,6 +571,10 @@ def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
     nll_lower_bound = nll.copy()
     nll += 0.5 * N * D * pred_chisqs
 
+    #nll_lower_bound = N * np.log(N) + (K - 1 - N) * np.log(N - K + 1) \
+    #                + N * K * D * np.log(min_mean_pairwise_distance/2.0) \
+    #                + 0.5 * N * D * (1 + np.log(2 * np.pi))
+
     return (nll, nll_lower_bound)
 
 
@@ -622,7 +626,7 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         K, N=N, previous_states=(_state_K, _state_det_covs), **state_meta)
 
     p_nll, t_nll_lower = predict_negative_log_likelihood(
-        K, N, D, uniformity_fraction, previous_states=(
+        K, N, D, uniformity_fraction, min_mean_pairwise_distance=min_mean_pairwise_distance, previous_states=(
             _state_K, 
             _state_det_covs,
             _state_sum_log_likelihoods

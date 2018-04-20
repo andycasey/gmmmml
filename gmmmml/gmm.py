@@ -6,7 +6,7 @@ Model data with a mixture of gaussians.
 import logging
 import numpy as np
 import scipy
-from scipy.spatial.distance import pdist
+from scipy.spatial import distance
 
 from . import (em, mml)
 
@@ -227,11 +227,12 @@ class GaussianMixture(object):
 
         N, D = y.shape
 
-        mmpwd = self._state_meta.get("min_mean_pairwise_distance", None)
+        pwdm = self._state_meta.get("pairwise_distance_matrix", None)
 
-        if mmpwd is None:
-            mmpwd = np.min(pdist(y))/(2.0 * D)
-            self._state_meta["min_mean_pairwise_distance"] = mmpwd
+        if pwdm is None:
+
+            raise a
+            self._state_meta["pairwise_distance_matrix"] = mmpwd
 
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
