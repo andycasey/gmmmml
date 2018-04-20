@@ -35,12 +35,30 @@ class GaussianMixture(object):
     :param max_em_iterations: [optional]
         The maximum number of iterations to run per expectation-maximization
         loop (default: ``10000``).
+
+    :param information_bound: [optional]
+        Whether or not to use a strict calculation for the lower bound on the
+        predictions for the sum of the log of the determinant of the covariance
+        matrices.
+
+        If 'strict' is employed, then the pair-wise distances between all points
+        will be calculated, and this matrix will be used when predicting the
+        entropy of future gaussian mixtures. This can be computationally
+        expensive for large data sets.
+
+        If 'loose' is employed, then no pair-wise distances will be calculated
+        and the logarithm of the determinant of the covariance matrices will
+        be approximated by a Gaussian kernel density estimator. This approach
+        is computationally efficient and reasonaly accurate, but may result in
+        poor or uncertain predictions when the variance of components in the 
+        mixture vary by several orders of magnitude.
     """
 
     parameter_names = ("mean", "covariance", "weight")
 
     def __init__(self, covariance_type="full", covariance_regularization=0, 
-        threshold=1e-3, max_em_iterations=1000, **kwargs):
+        threshold=1e-3, max_em_iterations=1000, information_bound="strict",
+        **kwargs):
 
         available = ("full", )
         covariance_type = covariance_type.strip().lower()
@@ -59,10 +77,18 @@ class GaussianMixture(object):
         if 1 > max_em_iterations:
             raise ValueError("max_em_iterations must be a positive integer")
 
+        available = ("strict", "loose")
+        information_bound = information_bound.strip().lower()
+        if information_bound not in available:
+            raise ValueError("information bound type '{}' is invalid. Must be "\
+                             "one of: {}".format(
+                                information_bound, ", ".join(available)))
+
         self._threshold = threshold
         self._max_em_iterations = max_em_iterations
         self._covariance_type = covariance_type
         self._covariance_regularization = covariance_regularization
+        self._information_bound = information_bound
 
         # Lists to record states for predictive purposes.
         self._state_K = []
@@ -231,7 +257,9 @@ class GaussianMixture(object):
 
         if pwdm is None:
 
-            raise a
+            pwdm = distance.dist(y, y)
+
+
             self._state_meta["pairwise_distance_matrix"] = mmpwd
 
         predictions, meta = mml.predict_message_length(K, N, D, 
