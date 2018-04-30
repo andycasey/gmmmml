@@ -254,13 +254,14 @@ class GaussianMixture(object):
         N, D = y.shape
 
         pwdm = self._state_meta.get("pairwise_distance_matrix", None)
-
+        """
         if pwdm is None:
 
             pwdm = distance.dist(y, y)
 
 
             self._state_meta["pairwise_distance_matrix"] = mmpwd
+        """
 
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
@@ -269,7 +270,7 @@ class GaussianMixture(object):
                 self._state_det_covs,
                 self._state_sum_log_likelihoods),
             state_meta=self._state_meta,
-            min_mean_pairwise_distance=mmpwd)
+            min_mean_pairwise_distance=pwdm)
 
         # Update the metadata of our state so that future predictions are 
         # faster (e.g., the optimization functions start from values closer to

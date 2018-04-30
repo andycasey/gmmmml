@@ -3,6 +3,12 @@
 
 *.pyc
 gmmmml/__pycache__/
+tmp/
 
 article/vc.tex
 article/ms.pdf
+article/*.log
+article/*.bbl
+article/*.aux
+article/*.blg
+article/*.spl

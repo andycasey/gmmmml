@@ -473,7 +473,7 @@ def _deprecated_predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs
 
 
 def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
-    previous_states, min_mean_pairwise_distance, **kwargs):
+    previous_states, **kwargs):
     r"""
     Predict the negative log likelihood for future (target) mixtures with
     :math:`K` components.
@@ -616,7 +616,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     # Predict the sum of the log of the determinant of the covariance
     # matrices.
     log_max_det = np.log(_state_det_covs[0][0])
-    log_min_det = np.log(min_mean_pairwise_distance)
+    log_min_det = np.log(np.min(np.hstack(_state_det_covs)))
+    #log_min_det = np.log(min_mean_pairwise_distance)
 
     t_slogdetcov_lower, t_slogdetcov_upper = bounds_of_sum_log_det_covs(
         K, N, log_max_det, log_min_det)
@@ -626,7 +627,7 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         K, N=N, previous_states=(_state_K, _state_det_covs), **state_meta)
 
     p_nll, t_nll_lower = predict_negative_log_likelihood(
-        K, N, D, uniformity_fraction, min_mean_pairwise_distance=min_mean_pairwise_distance, previous_states=(
+        K, N, D, uniformity_fraction, previous_states=(
             _state_K, 
             _state_det_covs,
             _state_sum_log_likelihoods
@@ -670,9 +671,9 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     t_I_lower = t_I_analytic_lower + t_I_slogdetcov_lower + t_I_data_lower
 
-    assert np.all(t_I_analytic_lower <= t_I_analytic_upper)
-    if np.isfinite(t_I_slogdetcov_upper).all():
-        assert np.all(t_I_slogdetcov_upper >= t_I_slogdetcov_lower)
+    #assert np.all(t_I_analytic_lower <= t_I_analytic_upper)
+    #if np.isfinite(t_I_slogdetcov_upper).all():
+    #    assert np.all(t_I_slogdetcov_upper >= t_I_slogdetcov_lower)
 
     predictions = OrderedDict([
         ("K", K),
