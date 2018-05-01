@@ -614,6 +614,10 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
     else:
         predict_concentration = lower_concentration
 
+
+    # Predict the increasing \chi^2 improvement...
+    raise a
+
     # TODO: Take from predictions.
     #mean_chisq = 0
     mean_chisq = np.ones(K.size)
