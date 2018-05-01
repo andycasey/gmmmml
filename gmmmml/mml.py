@@ -52,7 +52,9 @@ def _gmm_parameter_message_length(K, N, D):
     :param D:
         The dimensionality of the data.
     """
-    print("update docs for _gmm_parameter_message_length")
+
+    # TODO: update docs.
+    #print("update docs for _gmm_parameter_message_length")
 
     Q = number_of_gmm_parameters(K, D)
 
@@ -241,7 +243,8 @@ def predict_sum_log_weights(K, N, previous_states=None):
     if previous_states is not None:
         # We will fit some fractional value between these bounds.
         
-        previous_K, previous_slogw = previous_states
+        previous_K, previous_weights = previous_states
+        previous_slogw = np.array([np.sum(np.log(w)) for w in previous_weights])
         
         if previous_K.size != previous_slogw.size:
             raise ValueError("number of previous K does not match number of "
@@ -472,7 +475,186 @@ def _deprecated_predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs
     return (prediction, prediction_err, update_state)
 
 
-def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
+def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
+    previous_states, **kwargs):
+    r"""
+    Predict the sum of the negative log likelihood for future (target)
+    mixtures with :math:`K` components.
+
+    :param K:
+        The number of target Gaussian mixtures.
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data points.
+
+    :param predicted_uniformity_fraction:
+        The predicted uniformity fraction of the true mixture, based on the
+        weights of previously computed mixtures.
+
+    :param previous_states:
+        A four-length tuple containing:
+
+        (1) previous trialled :math:`K` values;
+
+        (2) previous computed weights for each of the :math:`K` mixtures
+
+        (2) the determinates of covariance matrices for previously-trialled
+            mixtures
+
+        (3) the sum of the log likelihoods for previously-trialled mixtures
+    """
+
+    K = np.atleast_1d(K)
+
+    _state_K, _state_weights, _state_det_covs, _state_sum_log_likelihoods \
+        = previous_states
+
+    """
+    Approximate the function:
+
+    .. math:
+        
+        -N\sum_{k=1}^{K} w_k\log{w_k}
+
+    Using the predicted uniformity fraction, taking the two extrema:
+
+    (1) The mixture is uniform and all weights are equal such that.
+
+    .. math:
+        
+        -N\sum_{k=1}^{K} w_k\log{w_k} = N\log{K}
+
+    (2) There are K - 1 mixtures that each describe two data points, and the
+        remaining mixture describes the rest of the data. In this extreme:
+
+    .. math:
+        
+        -N\sum_{k=1}^{K} w_k\log{w_k} = (2K - 2 - N)\log{(N - 2K + 2)} + 2(1 - K)\log{2} + N\log{N}
+
+    """
+
+    upper = lambda K: N * np.log(K)
+    lower = lambda K: N * np.log(N) + 2*(1 - K) * np.log(2) \
+                    + (2*K - 2 - N) * np.log(N - 2*K + 2)
+
+    mN_sum_wlogw = lower(K) \
+                 + predicted_uniformity_fraction * (upper(K) - lower(K))
+
+    """
+    Approximate the concentration:
+    
+    ..math:
+
+        -N\sum_{k=1}^{K} w_{k}\log\det{C_k}
+
+    There are two extrema for the concentration:
+
+    (1) The mixture is uniform such that.
+
+    .. math:
+
+        -N\sum_{k=1}^{K} w_{k}\log\det{C_k} \geq -N\sum_{k=1}^{K} w_{k}\log\det{C_k}_{k=1}
+
+    where :math:`\log\det{C_k}_{k=1}` describes the log of the determinant of
+    the covariance matrix for the :math:`K = 1` mixture. Even for overlapping
+    mixtures with the same covariance matrix, this provides an upper bound on
+    this quantity.
+
+    (2) The mixture is completely not uniform. This is Hard(tm), so we will
+        approximate it based on what we have seen from previous mixtures so
+        far.
+    """
+
+    lower_concentration = -N * np.log(_state_det_covs[0][0])
+
+    # For the lower concentration we are going to approximate it from the
+    # previously computed mixtures.
+    upper_concentration = -N * np.log(np.min(np.hstack(_state_det_covs)))
+    
+    if len(_state_det_covs[-1]) > 1:
+
+        # TODO: See if we can avoid re-calculating this every time.
+        # And see if we can avoid passing _state_weights rather than
+        # the sum of the log of the weights (which is needed to predict)
+        # the uniformity fraction.
+
+        _mixture_concentration = np.array([
+            -N * np.sum(np.array(w) * np.log(dc)) \
+            for w, dc in zip(_state_weights, _state_det_covs)])
+
+        x = lambda K: 1.0/(np.array(K) + 1)
+
+        # Fit the mixtur concentration with K.
+        deg = np.min([2, _mixture_concentration.size])
+        coefficients = np.polyfit(x(_state_K), _mixture_concentration, 2)
+
+        # Predict the mixture concentration for future K.
+        predict_concentration = np.polyval(coefficients, x(K))
+
+        if K.max() > 80:
+
+            concentration = lambda x, *p: np.polyval(coefficients, x)
+
+            p_opt, p_cov = op.curve_fit(
+                concentration, x(_state_K), _mixture_concentration,
+                p0=coefficients)
+
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+
+            ax.scatter(_state_K, _mixture_concentration)
+            ax.plot(K, predict_concentration, c='r')
+            ax.plot(K, concentration(x(K), *p_opt), c='g')
+
+            raise a
+
+    else:
+        predict_concentration = lower_concentration
+
+    # TODO: Take from predictions.
+    #mean_chisq = 0
+    mean_chisq = np.ones(K.size)
+    vals = np.array([10, 8, 6.5, 5.3, 4.5, 3.8, 3.25, 2.8, 2.4, 2.0, 1.8, 1.5])
+    mean_chisq[:len(vals)] = vals
+    
+
+
+
+    
+    # Calculate the lower bound on the negative log-likelihood.
+    nll_theorical_lower_bound = lower(K) + lower_concentration + 0.5 * N * D * np.log(2*np.pi)
+
+    nll_practical_lower_bound = lower(K) \
+        + predicted_uniformity_fraction * (upper(K) - lower(K)) \
+        + lower_concentration + 0.5 * N * D * (np.log(2*np.pi) + 1)
+
+    # Make a prediction for the actual log-likelihood. 
+    print("TODO make KDE predictions")
+    predict_offset = 0.5 * N * D * (np.log(2 * np.pi) + mean_chisq)
+    
+    nll = mN_sum_wlogw + predict_concentration + predict_offset
+
+    """
+    _deprecated_previous_states = [
+        _state_K,
+        _state_det_covs,
+        _state_sum_log_likelihoods
+    ]
+    _deprecated_nll, _deprecated_nll_theorical_lower_bound = \
+    _deprecated_predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
+        previous_states=_deprecated_previous_states)
+    """
+
+    return (nll, nll_practical_lower_bound)
+
+
+
+
+
+def _deprecated_predict_negative_log_likelihood(K, N, D, uniformity_fraction,
     previous_states, **kwargs):
     r"""
     Predict the negative log likelihood for future (target) mixtures with
@@ -497,6 +679,8 @@ def predict_negative_log_likelihood(K, N, D, uniformity_fraction,
 
         (3) the sum of the log likelihoods for previously-trialled mixtures.
     """
+
+    print("_deprecated_predict_negative_log_likelihood")
 
     K = np.atleast_1d(K)
 
@@ -595,23 +779,21 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         The dimensionality of the data points.
     """
 
+    # TODO: update docs
+
     state_meta = state_meta or {}
 
-    print("UPDATE DOCS")
-
-
-    _state_K, _state_sum_log_weights, _state_det_covs, _state_sum_log_likelihoods = previous_states
+    _state_K, _state_weights, _state_det_covs, _state_sum_log_likelihoods = previous_states
 
     _state_K = np.array(_state_K)
-    _state_sum_log_weights = np.array(_state_sum_log_weights)
-
+    
 
     K = np.atleast_1d(K)
 
     # Predict the sum of the log of the weights.
     p_slogw, p_slogw_err, t_slogw_lower, t_slogw_upper, uniformity_fraction, \
         uniformity_fraction_err = predict_sum_log_weights(K, N, 
-            previous_states=(_state_K, _state_sum_log_weights))
+            previous_states=(_state_K, _state_weights))
 
     # Predict the sum of the log of the determinant of the covariance
     # matrices.
@@ -629,6 +811,7 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     p_nll, t_nll_lower = predict_negative_log_likelihood(
         K, N, D, uniformity_fraction, previous_states=(
             _state_K, 
+            _state_weights,
             _state_det_covs,
             _state_sum_log_likelihoods
         ))

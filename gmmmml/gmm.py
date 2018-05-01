@@ -266,7 +266,7 @@ class GaussianMixture(object):
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
                 self._state_K,
-                self._state_sum_log_weights,
+                self._state_weights,
                 self._state_det_covs,
                 self._state_sum_log_likelihoods),
             state_meta=self._state_meta,
@@ -282,7 +282,11 @@ class GaussianMixture(object):
             predictions["t_I_lower"] >= np.min(self._state_message_lengths))[0]
 
         if any(indices):
-            print("K_true < {0:.0f}".format(1 + K[indices[0]]))
+            
+            K_true_upper_bound = 1 + K[indices[0]]
+            print("K_true < {0:.0f}".format(K_true_upper_bound))
+            assert K_true_upper_bound < N, \
+                   "Your prediction is bad and you should feel bad."
             
 
 
