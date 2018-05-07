@@ -148,21 +148,8 @@ class GaussianMixture(object):
             The state to provide to the random number generator.
         """
 
-        kwds = dict(
-            threshold=self.threshold, 
-            max_em_iterations=self.max_em_iterations,
-            covariance_type=self.covariance_type, 
-            covariance_regularization=self.covariance_regularization,
-            visualization_handler=None)
-        kwds.update(kwargs)
-        
-        y = np.atleast_1d(y)
-
-        N, D = y.shape
-        K_max = N if K_max is None else K_max
-        K_predict = kwds.pop("K_predict", 50)
-
-        visualization_handler = kwargs.get("visualization_handler", None)
+        y, kwds, K_max, K_predict, handler = self._prepare_search(y, K_max, 
+                                                                  **kwargs)
             
         for K in range(1, K_max):
 
@@ -193,14 +180,63 @@ class GaussianMixture(object):
             K_target = np.arange(1, weight.size + K_predict)
             predictions = self._predict_message_length(K_target, y, **kwds)
 
-            if visualization_handler is not None:
-                visualization_handler.emit("model", 
+            if handler is not None:
+                handler.emit("model", 
                     dict(mu=mu, cov=cov, weight=weight, nll=-np.sum(ll), I=I))
-                visualization_handler.emit("prediction", predictions)
+                handler.emit("prediction", predictions)
 
 
         raise a
 
+
+    def _prepare_search(self, y, K_max=None, **kwargs):
+
+        kwds = dict(
+            threshold=self.threshold,
+            max_em_iterations=self.max_em_iterations,
+            covariance_type=self.covariance_type,
+            covariance_regularization=self.covariance_regularization,
+            visualization_handler=None)
+        kwds.update(kwargs)
+
+        y = np.atleast_1d(y)
+        N, D = y.shape
+        K_max = N if K_max is None else K_max
+
+        K_predict = kwds.pop("K_predict", 50)
+
+        visualization_handler = kwargs.get("visualization_handler", None)
+
+        return (y, kwds, K_max, K_predict, visualization_handler)
+
+
+    def search_simulated_annealing(self, y, K_max=None, random_state=None,
+        **kwargs):
+        r"""
+        Search for the optimal number of mixtures using simulated annealing.
+
+        :param y:
+            The data :math:`y`.
+
+        :param K_max: [optional]
+            The maximum number of Gaussian components to consider in the
+            mixture (defaults to the number of data points).
+
+        :param random_state: [optional]
+            The state to provide to the random number generator.
+        """
+
+        y, kwds, K_max, K_predict, handler = self._prepare_search(y, K_max, 
+                                                                  **kwargs)
+
+        temperature = 100000
+        minimum_temperature = 1e-6
+        cooling_rate = 0.003
+
+
+
+
+        raise a
 
 
     def _record_state(self, cov, weight, log_likelihood, message_length):
