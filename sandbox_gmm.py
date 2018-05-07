@@ -31,7 +31,7 @@ for i in range(10):
 from sklearn.datasets import make_blobs
 
 y, assignments = make_blobs(
-  n_samples=10000, n_features=2, centers=43, random_state=11)
+  n_samples=20000, n_features=2, centers=200, random_state=1, center_box=(-30, 30))
 #y = np.vstack([y, np.random.uniform(-10, 10, size=(10, y.shape[1]))])
 
 #n_samples=100, n_features=2, centers=3, cluster_std=1.0, center_box=(-10.0, 10.0), shuffle=True, random_state=Non
@@ -41,7 +41,7 @@ visualization_handler = visualize.VisualizationHandler(
 
 search_model = mixture.GaussianMixture(
   max_em_iterations=5, covariance_regularization=1e-10)
-search_model.search_greedy_forgetful(y, K_max=50, 
+search_model.search_greedy_forgetful(y, K_max=200, K_predict=200,
     visualization_handler=visualization_handler)
 
 
