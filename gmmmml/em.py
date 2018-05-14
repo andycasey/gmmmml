@@ -169,7 +169,7 @@ def _compute_precision_cholesky(covariances, covariance_type):
     return cholesky_precision
 
 
-def _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type):
+def _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type, full_output=False):
     r"""
     Estimate the log of the Gaussian probability of the mixture model, for
     each datum given each mixture.
@@ -214,7 +214,11 @@ def _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type):
     else:
         raise ValueError("unrecognised covariance type")
 
-    return -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
+    if not full_output:
+        return -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
+    else:
+        foo =  -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
+        return (foo, log_prob, log_det)
     
 
 def _estimate_covariance_matrix_diag(y, responsibility, mu, 
@@ -393,8 +397,18 @@ def responsibility_matrix(y, mu, cov, weight, covariance_type, **kwargs):
     with np.errstate(under="ignore"):
         log_responsibility = weighted_log_prob - log_likelihood[:, np.newaxis]
     
+    """
+    if weight.size > 1:
+        N, D = y.shape
+
+        wlp, log_prob, log_det = _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type, True)
+
+        raise a
+    """
     responsibility = np.exp(log_responsibility).T
     
+
+
     return (responsibility, log_likelihood) 
 
 
