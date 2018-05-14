@@ -3,7 +3,9 @@ import numpy as np
 from gmmmml import (gmm as mixture, visualize, utils)
 import  scipy.optimize as op
 
-np.random.seed(11)
+seed = 45
+
+np.random.seed(seed)
 
 # Seed 1100 is a fun one: K = 103, D = 5, N = 4249
 
@@ -31,7 +33,7 @@ for i in range(10):
 from sklearn.datasets import make_blobs
 
 y, assignments = make_blobs(
-  n_samples=2300, n_features=10, centers=45, random_state=1)
+  n_samples=10000, n_features=2, centers=100, center_box=(-15.0, 15.0), random_state=seed)
 #y = np.vstack([y, np.random.uniform(-10, 10, size=(10, y.shape[1]))])
 
 #n_samples=100, n_features=2, centers=3, cluster_std=1.0, center_box=(-10.0, 10.0), shuffle=True, random_state=Non
@@ -41,7 +43,7 @@ visualization_handler = visualize.VisualizationHandler(
 
 search_model = mixture.GaussianMixture(
   max_em_iterations=5, covariance_regularization=1e-10)
-search_model.search_greedy_forgetful(y, K_max=50, K_predict=50,
+search_model.search_greedy_forgetful(y, K_max=150, K_predict=100,
     visualization_handler=visualization_handler)
 
 

@@ -175,6 +175,8 @@ def bounds_of_sum_log_weights(K, N):
         The lower and upper bound on :math:`\sum_{k=1}^{K}\log{w_k}`.
     """
 
+    # TODO: Update this such that the minimum weight is 2/N not 1/N
+
     upper = -K * np.log(K)
     lower = np.log(N + 1 - K) - K * np.log(N)
     return (lower, upper)
@@ -388,15 +390,11 @@ def predict_sum_log_det_covs(K, N, previous_states, draws=100, **kwargs):
     #         weights.
     lower_sum_log_det_cov = K * log_max_det - K * np.log(N) + np.log(N - K + 1)
 
-
-    raise a
+    assert 0
 
     p_sldc = np.zeros(K.size)
 
     return (p_sldc, (lower_sum_log_det_cov, upper_sum_log_det_cov), {})
-
-
-
 
 
 
@@ -478,6 +476,34 @@ def _deprecated_predict_sum_log_det_covs(K, previous_states, draws=100, **kwargs
     return (prediction, prediction_err, update_state)
 
 
+def _bag_of_hacks(x, y, p0=None):
+
+    x = np.array(x)
+    y = np.array(y)
+
+    assert x.size == y.size
+    if x.size >= 4:
+        objective_function = lambda x, *p: p[0] * np.exp(-x/p[1]) + p[2] + p[3]*x.astype(float)**-1
+
+    elif x.size >= 3:
+        objective_function = lambda x, *p: p[0] * np.exp(-x/p[1]) + p[2]
+        
+    elif x.size == 2:
+        objective_function = lambda x, *p: p[0] * np.exp(-x/p[1])
+    
+    else:
+        objective_function = lambda x, *p: p[0] * np.exp(-x)
+
+    if p0 is None:
+        p0 = [y[0], 10, 0, 0][:len(x)]
+
+    p_opt, p_cov = op.curve_fit(objective_function, x, y, p0=p0,
+        sigma=1.0/x)
+
+    return (p_opt, p_cov, objective_function)
+
+
+
 def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
     previous_states, **kwargs):
     r"""
@@ -510,8 +536,6 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
         (3) the sum of the log likelihoods for previously-trialled mixtures
     """
 
-
-    
     _state_K, _state_weights, _state_det_covs, _state_sum_log_likelihoods \
         = previous_states
 
@@ -519,8 +543,6 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
     P = obs_nll.size
     K = np.atleast_1d(K)
     
-
-
     """
     Approximate the function:
 
@@ -545,319 +567,52 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
 
     """
 
-
-    if P > 3:
-
-        # Fit and predict the concentration.
-        y = np.array([np.sum(w * np.log(dc)) \
-            for w, dc in zip(_state_weights, _state_det_covs)])
-
-        x = K[:y.size].astype(float)
-        objective_function = lambda x, *p: p[0] * np.exp(-x/p[1]) + p[2]
-
-        p_opt, p_cov = op.curve_fit(objective_function, x, y, p0=[y[0], 10, 0])
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(x, y)
-        ax.plot(K, objective_function(K, *p_opt), c='r')
-
-        concentration = lambda K: objective_function(K, *p_opt)
-
-    else:
-        # Just get the last concentration.
-        concentration = lambda K: \
-            np.sum(_state_weights[-1] * np.log(_state_det_covs[-1]))
-
     upper = lambda K: N * np.log(K)
     lower = lambda K: N * np.log(N) + 2*(1 - K)*np.log(2) \
                     + (2*K - 2 - N) * np.log(N - 2*K + 2)
+
+    # We won't fit the concentration because instead we will just lump it in
+    # with the difference in reduced \chi^2.
+    """
+    x_concentration = K[:P].astype(float)
+    y_concentration = np.array([np.sum(w * np.log(dc)) \
+        for w, dc in zip(_state_weights, _state_det_covs)])
+
+    p_conc_op, p_conc_cov, func = _bag_of_hacks(x_concentration, y_concentration)
+    concentration = lambda K: func(K, *p_conc_op)
+    """
+    concentration = lambda K: np.zeros(len(K))
 
     # Calculate the NLL without any contribution by chi-squared values (yet).
     pre_nll = 0.5 * N * D * np.log(2 * np.pi) + lower(K) \
             + predicted_uniformity_fraction * (upper(K) - lower(K)) \
             + concentration(K)
 
-    if P > 3:
-        # Predict the improvement with mean reduced \chi^2 value.
-        y = (obs_nll - pre_nll[:P]) / (0.5 * N * D)
-        x = K[:y.size].astype(float)
+    # Fit and predict the improvement in mean reduced \chi^2.
+    y_mrc = (obs_nll - pre_nll[:P]) / (0.5 * N * D)
+    x_mrc = K[:P].astype(float)
 
-        objective_function = lambda x, *p: p[0] * np.exp(-x/p[1]) + p[2]
-        p0 = [y[0], 10, 0]
-
-        p_mrc_opt, p_mrc_cov = op.curve_fit(objective_function, x, y, p0=p0)
-
-        mean_reduced_chisq = lambda K: objective_function(K, *p_mrc_opt)
-
-    else:
-        mean_reduced_chisq = lambda K: (obs_nll[-1] - pre_nll[P]) / (0.5 * N * D)
+    p_mrc_opt, p_mrc_cov, func = _bag_of_hacks(x_mrc, y_mrc)
+    mean_reduced_chisq = lambda K: func(K, *p_mrc_opt)
 
     pre_nll += 0.5 * N * D * mean_reduced_chisq(K)
 
 
-    """
-    # Calculate the lower bound on the negative log-likelihood.
-    concentration = N * np.sum(_state_weights[-1] * np.log(_state_det_covs[-1]))
-    nll_practical_lower_bound = lower(K) + predicted_uniformity_fraction * (upper(K) - lower(K)) \
-        + 0.5 * N * D * np.log(2*np.pi) - concentration
+    # Calculate the theoretical lower bound on the negative log likelihood, and
+    # the practical lower bound on the negative log likelihood.
+    initial_concentration = np.log(_state_det_covs[0])
+    nll_theoretical_lower_bound = \
+        0.5 * N * D * np.log(2 * np.pi) + lower(K) + initial_concentration
 
-    nll_theoretical_lower_bound = lower(K) + 0.5 * N * D * np.log(2*np.pi) \
-                                - N * np.sum(_state_weights[0] * np.log(_state_det_covs[0]))
-    """
+    nll_practical_lower_bound \
+        = 0.5 * N * D * np.log(2 * np.pi) \
+        + lower(K) + predicted_uniformity_fraction * (upper(K) - lower(K)) \
+        + concentration(K)
 
-    #nll_practical_lower_bound = lower(K) \
-    #    + predicted_uniformity_fraction * (upper(K) - lower(K)) \
-    #    + lower_concentration + 0.5 * N * D * (np.log(2*np.pi) + 1)
+    # Clip the predictions to the theoretical bound.
+    pre_nll = np.max([pre_nll, nll_theoretical_lower_bound], axis=0)
 
-    # Make a prediction for the actual log-likelihood. 
-    #predict_offset = 0.5 * N * D * (np.log(2 * np.pi) + mean_chisq)
-    
-    #nll = mN_sum_wlogw + predict_concentration + predict_offset
-
-
-
-    if len(obs_nll) > 30:
-
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:pre_nll.size], pre_nll, c='r')
-        ax.plot(K[:obs_nll.size], obs_nll, c='k')
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:diff_cac.size], diff_cac)
-
-        raise a
-        #moo6 = N * np.sum(weights * np.log(weights)) \
-        #     + N * np.sum(weights * log_det) \
-        #     - 0.5 * N * D * (np.log(2 * np.pi) + 1)
-
-        approx_nll = N * np.array([np.sum(w * np.log(w * dc)) for w, dc in zip(_state_weights, _state_det_covs)]) \
-                   + 0.5 * N * D * (np.log(2 * np.pi) + 0)
-
-        diff_cac = (approx_nll - obs_nll)/(0.5 * N * D)
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-
-        ax.plot(K[:approx_nll.size], approx_nll)
-        ax.plot(K[:obs_nll.size], obs_nll)
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:obs_nll.size], diff_cac)
-
-        concentration = np.array([np.sum(w * np.log(w*dc)) for w, dc in zip(_state_weights, _state_det_covs)])
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:concentration.size], concentration)
-
-        raise a
-        M = len(_state_weights)
-        predict_nll_parts = 0.5 * N * D * np.log(2 * np.pi) + lower(K[:M]) + predicted_uniformity_fraction * (upper(K[:M]) - lower(K[:M])) \
-                          + np.array([np.sum(w * np.log(dc)) for w, dc in zip(_state_weights, _state_det_covs)])
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:M], predict_nll_parts)
-        ax.plot(K[:obs_nll.size], obs_nll, c='k')
-
-        fig, ax = plt.subplots()
-        diff_cac = (obs_nll - predict_nll_parts)/(0.5 * N * D)
-        ax.plot(K[:M], diff_cac)
-
-        fig, ax = plt.subplots()
-        ax.plot(K[:M], np.array([np.sum(w * np.log(dc)) for w, dc in zip(_state_weights, _state_det_covs)]))
-
-        raise a
-
-
-    """
-
-    if len(obs_nll) > 20:
-
-        # Fit this.
-        x, y = 1.0/(K[:P] + 1), diff_cac
-        Q = min(4, len(obs_nll) - 1)
-        p0 = np.hstack([1, np.zeros(Q)])
-
-        function = lambda x, *params: np.polyval(params, x)
-
-        p_opt, p_cov = op.curve_fit(function, x[2:], y[2:], p0=p0, sigma=x[2:])
-
-        pre_nll[:P] += 0.5 * N * D * diff_cac
-        pre_nll[P:] += 0.5 * N * D * function(1.0/(K[P:] + 1), *p_opt)
-
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots()
-        concentration = N * np.array([np.sum(w * np.log(dc)) for w, dc in zip(_state_weights, _state_det_covs)])
-
-        ax.plot(K[:concentration.size], concentration)
-
-
-        
-        #approx_nll = -N * np.sum(weight * (np.log(weight) + np.linalg.det(cov))) \
-        #           + 0.5 * N * D * (np.log(2 * np.pi) + 0)
-
-        approx_nll = -N * np.array([np.sum(w * (np.log(w) + np.log(dc))) for w, dc in zip(_state_weights, _state_det_covs)]) \
-                   + 0.5 * N * D * (np.log(2 * np.pi) + 0)
-
-        fig, ax = plt.subplots()
-
-        ax.plot(K[:approx_nll.size], approx_nll)
-        ax.plot(K[:obs_nll.size], obs_nll)
-
-        raise a
-
-    """
-
-    """
-    if K.max() > 70:
-
-        function = lambda x, *params: np.polyval(params, x)
-
-        x = np.array(1.0/(1 + K[:len(diff_cac)]), dtype=float)
-
-        import scipy.optimize as op
-        p0 = [0, 1, 0]
-        p_opt, p_cov = op.curve_fit(function, x, diff_cac, p0=p0)
-
-
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.scatter(K[:len(diff_cac)], diff_cac)
-
-        ax.plot(K[:len(diff_cac)], function(x, *p_opt), c='r')
-
-
-        raise a
-    """
-
-    """
-    _deprecated_previous_states = [
-        _state_K,
-        _state_det_covs,
-        _state_sum_log_likelihoods
-    ]
-    _deprecated_nll, _deprecated_nll_theorical_lower_bound = \
-    _deprecated_predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
-        previous_states=_deprecated_previous_states)
-    """
-
-    nll_theoretical_lower_bound = np.zeros_like(K)
-    nll_practical_lower_bound = np.zeros_like(K)
     return (pre_nll, nll_theoretical_lower_bound, nll_practical_lower_bound)
-
-
-
-
-
-def _deprecated_predict_negative_log_likelihood(K, N, D, uniformity_fraction,
-    previous_states, **kwargs):
-    r"""
-    Predict the negative log likelihood for future (target) mixtures with
-    :math:`K` components.
-
-    :param K:
-        The number of target Gaussian mixtures.
-
-    :param N:
-        The number of data points.
-
-    :param D:
-        The dimensionality of the data points.
-
-    :param previous_states:
-        A four-length tuple containing:
-
-        (1) previous trialled :math:`K` values;
-
-        (2) the determinates of covariance matrices for previously-trialled
-            mixtures;
-
-        (3) the sum of the log likelihoods for previously-trialled mixtures.
-    """
-
-    print("_deprecated_predict_negative_log_likelihood")
-
-    K = np.atleast_1d(K)
-
-    _state_K, _state_det_covs, _state_sum_log_likelihoods = previous_states
-    
-    # Use the predicted uniformity fraction.
-    upper = lambda K: N * np.log(K)
-    lower = lambda K: N * np.log(N) - (N - K + 1) * np.log(N - K + 1)
-
-    # Calculate the first part of the negative log-likelihood.
-    nll = 0.5 * N * D * np.log(2 * np.pi) \
-        + lower(K) + uniformity_fraction * (upper(K) - lower(K))
-
-    # Draw some determinants..
-    print("EXTRACT THE STATES")
-    if len(_state_det_covs[-1]) > 1:
-        # Use a Gaussian KDE to estimate the determinants of covariance
-        # matrices for future mixtures.
-        kernel = gaussian_kde(np.log(_state_det_covs[-1]))
-
-        # TODO: This assumes uniform 
-        print("STOP ASSUMING UNIFORMITY")
-        for i, k in enumerate(K):
-            w = 1.0/k
-            
-            print("ANDY CHECK THIS")
-            # check this.
-            nll -= N * np.sum(w * kernel(k))
-
-    else:
-        nll -= N * np.log(_state_det_covs[0][0])
-
-    # The current calculation of the negative log-likelihood is based on the
-    # ideal case where the mean chi-squared value is the limiting case of zero
-    # (e.g., a perfect fit).
-
-    # In practice this prediction is going to be wrong for earlier K than the
-    # true K value, because the chi-squared value is going to be non-zero.
-
-    # Let's compare our predicted negative log-likelihood values to that which
-    # was determined from previous trials, in order to see how quickly we are
-    # improving, and how we can adjust our prediction to take this improving
-    # fit into account.
-
-    # Compare to what is already observed.
-    obs_nll = -np.array(_state_sum_log_likelihoods)
-    pre_nll = nll[:len(obs_nll)] # assumes one trial per K.
-    print("stop assuming one trial per K")
-
-    # The difference between our observed negative log likelihoods and the
-    # predicted negative log-likelihoods is the mean chi-squared value for
-    # each observation (weighted over each of the mixtures).
-    chisqs = (obs_nll - pre_nll)/(0.5 * N * D)
-
-    x = 1.0/(1.0 + _state_K)
-    y = chisqs
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("error")
-
-        try:
-            coeff = np.polyfit(x, y, 2, w=x.astype(float))
-
-        except np.RankWarning:
-            pred_chisqs = np.max(y)
-
-        else:
-            pred_chisqs = np.clip(np.polyval(coeff, 1.0/(1.0 + K)), 0, np.max(y))
-
-    # Predict difference based on chi-sq improvement through increasing number
-    # of mixtures.
-    nll_lower_bound = nll.copy()
-    nll += 0.5 * N * D * pred_chisqs
-
-    #nll_lower_bound = N * np.log(N) + (K - 1 - N) * np.log(N - K + 1) \
-    #                + N * K * D * np.log(min_mean_pairwise_distance/2.0) \
-    #                + 0.5 * N * D * (1 + np.log(2 * np.pi))
-
-    return (nll, nll_lower_bound)
 
 
 
@@ -906,7 +661,7 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
     p_slogdetcov, p_slogdetcov_err, update_meta = _deprecated_predict_sum_log_det_covs(
         K, N=N, previous_states=(_state_K, _state_det_covs), **state_meta)
 
-    p_nll, _, t_nll_lower = predict_negative_log_likelihood(
+    p_nll, t_nll_lower, t_practical_nll_lower = predict_negative_log_likelihood(
         K, N, D, uniformity_fraction, previous_states=(
             _state_K, 
             _state_weights,
@@ -947,10 +702,11 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     # TODO: better way to encode yerr?
     p_I_data = p_nll - D * N * np.log(yerr)
-    t_I_data_lower = t_nll_lower - D * N * np.log(yerr)
+    t_I_data_lower = t_practical_nll_lower - D * N * np.log(yerr)
     p_I = p_I_analytic + p_I_slogdetcov + p_I_data
 
-    t_I_lower = t_I_analytic_lower + t_I_slogdetcov_lower + t_I_data_lower
+    t_practical_I_lower = t_I_analytic_lower + t_I_slogdetcov_lower + t_I_data_lower
+    t_I_lower = t_I_slogdetcov_lower + t_nll_lower - D * N * np.log(yerr)
 
     #assert np.all(t_I_analytic_lower <= t_I_analytic_upper)
     #if np.isfinite(t_I_slogdetcov_upper).all():
@@ -970,9 +726,11 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         ("p_I_slogdetcov_neg_err", p_I_slogdetcov_neg_err),
         ("p_nll", p_nll),
         ("t_nll_lower", t_nll_lower),
-        ("t_I_data", t_I_data_lower),
+        ("t_practical_nll_lower", t_practical_nll_lower),
+        ("t_practical_I_data", t_I_data_lower),
         ("p_I_data", p_I_data),
         ("p_I", p_I),
+        ("t_practical_I_lower", t_practical_I_lower),
         ("t_I_lower", t_I_lower)
     ])
 

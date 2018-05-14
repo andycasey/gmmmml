@@ -6,7 +6,6 @@ Model data with a mixture of gaussians.
 import logging
 import numpy as np
 import scipy
-from scipy.spatial import distance
 
 from . import (em, mml)
 
@@ -94,7 +93,6 @@ class GaussianMixture(object):
         self._state_K = []
         self._state_det_covs = []
         self._state_weights = []
-        self._state_sum_log_weights = []
         self._state_sum_log_likelihoods = []
         self._state_message_lengths = []
 
@@ -158,10 +156,6 @@ class GaussianMixture(object):
                 covariance_regularization=self.covariance_regularization,
                 random_state=random_state)
 
-            # TODO: Will giving the same random state yield the same result
-            #       on every iteration?
-
-            # Do one E-M iteration.
             prev_I = np.inf
             for i in range(self.max_em_iterations):
 
@@ -190,6 +184,16 @@ class GaussianMixture(object):
 
 
     def _prepare_search(self, y, K_max=None, **kwargs):
+        """
+        Prepare keyword arguments and other miscellaneous things before starting
+        the search.
+
+        :param y:
+            The data.
+
+        :param K_max: [optional]
+            The maximum number of :math:`K` values to try.
+        """
 
         kwds = dict(
             threshold=self.threshold,
@@ -204,9 +208,7 @@ class GaussianMixture(object):
         K_max = N if K_max is None else K_max
 
         K_predict = kwds.pop("K_predict", 50)
-
         visualization_handler = kwargs.get("visualization_handler", None)
-
         return (y, kwds, K_max, K_predict, visualization_handler)
 
 
@@ -264,8 +266,7 @@ class GaussianMixture(object):
 
         # Record weights.
         self._state_weights.append(weight)
-        self._state_sum_log_weights.append(np.sum(np.log(weight)))
-
+        
         # Record log-likelihood.
         self._state_sum_log_likelihoods.append(np.sum(log_likelihood))
 
@@ -289,24 +290,13 @@ class GaussianMixture(object):
 
         N, D = y.shape
 
-        pwdm = self._state_meta.get("pairwise_distance_matrix", None)
-        """
-        if pwdm is None:
-
-            pwdm = distance.dist(y, y)
-
-
-            self._state_meta["pairwise_distance_matrix"] = mmpwd
-        """
-
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
                 self._state_K,
                 self._state_weights,
                 self._state_det_covs,
                 self._state_sum_log_likelihoods),
-            state_meta=self._state_meta,
-            min_mean_pairwise_distance=pwdm)
+            state_meta=self._state_meta)
 
         # Update the metadata of our state so that future predictions are 
         # faster (e.g., the optimization functions start from values closer to
@@ -323,7 +313,16 @@ class GaussianMixture(object):
             print("K_true < {0:.0f}".format(K_true_upper_bound))
             assert K_true_upper_bound < N, \
                    "Your prediction is bad and you should feel bad."
-            
+        
+        practical_indices = np.where(
+            predictions["t_practical_I_lower"] >= np.min(self._state_message_lengths))[0]
 
+        if any(practical_indices):
+
+            K_true_upper_bound = 1 + K[practical_indices[0]]
+            print("K_true ~< {0:.0f}".format(K_true_upper_bound))
+            assert K_true_upper_bound < N, \
+                   "Your prediction is bad and you should feel bad."
+        
 
         return predictions

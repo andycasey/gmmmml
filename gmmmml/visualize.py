@@ -299,7 +299,7 @@ class VisualizationHandler(object):
                     **theory_plot_kwds)[0],
                 ax.plot(
                     params["K"], params["t_I_slogdetcov_upper"],
-                    linestyle="-.", **theory_plot_kwds)[0]
+                    linestyle=":", **theory_plot_kwds)[0]
                 ])
             _rescale_based_on_data(ax, params["K"], 
                 np.hstack([
@@ -315,8 +315,9 @@ class VisualizationHandler(object):
                 ax.plot(params["K"], params["p_nll"], **pred_plot_kwds)[0],
                 ax.fill_between(params["K"], params["t_nll_lower"], ylim_max,
                     **theory_fill_kwds),
-                ax.plot(params["K"], params["t_nll_lower"],
-                    **theory_plot_kwds)[0]
+                ax.plot(params["K"], params["t_practical_nll_lower"],
+                    linestyle=":", **theory_plot_kwds)[0],
+                ax.plot(params["K"], params["t_nll_lower"], **theory_plot_kwds)[0]
             ])
             _rescale_based_on_data(ax, params["K"], 
                 np.hstack([np.min(params["t_nll_lower"]), params["p_nll"]]))
@@ -337,14 +338,14 @@ class VisualizationHandler(object):
             ylim = ax.get_ylim()
             self._plot_prediction_items.extend([
                 ax.fill_between(
-                    params["K"], params["t_I_lower"], ylim[1],
+                    params["K"], params["t_practical_I_lower"], ylim[1],
                     **theory_fill_kwds),
                 ax.plot(
-                    params["K"], params["t_I_lower"],
-                    **theory_plot_kwds)[0]
+                    params["K"], params["t_practical_I_lower"],
+                    linestyle=":", **theory_plot_kwds)[0]
             ])
             _rescale_based_on_data(
-                ax, params["K"], [ylim[1], np.min(params["t_I_lower"])])
+                ax, params["K"], [ylim[1], np.min(params["t_practical_I_lower"])])
             ax.set_ylim(ax.get_ylim()[0], ylim[1])
 
 
