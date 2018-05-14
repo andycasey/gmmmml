@@ -289,40 +289,18 @@ class GaussianMixture(object):
         """
 
         N, D = y.shape
-
         predictions, meta = mml.predict_message_length(K, N, D, 
             previous_states=(
                 self._state_K,
                 self._state_weights,
                 self._state_det_covs,
-                self._state_sum_log_likelihoods),
+                self._state_sum_log_likelihoods,
+                self._state_message_lengths),
             state_meta=self._state_meta)
 
         # Update the metadata of our state so that future predictions are 
         # faster (e.g., the optimization functions start from values closer to
         # the true value).
         self._state_meta.update(meta)
-
-        # Say something about K_max.
-        indices = np.where(
-            predictions["t_I_lower"] >= np.min(self._state_message_lengths))[0]
-
-        if any(indices):
-            
-            K_true_upper_bound = 1 + K[indices[0]]
-            print("K_true < {0:.0f}".format(K_true_upper_bound))
-            assert K_true_upper_bound < N, \
-                   "Your prediction is bad and you should feel bad."
-        
-        practical_indices = np.where(
-            predictions["t_practical_I_lower"] >= np.min(self._state_message_lengths))[0]
-
-        if any(practical_indices):
-
-            K_true_upper_bound = 1 + K[practical_indices[0]]
-            print("K_true ~< {0:.0f}".format(K_true_upper_bound))
-            assert K_true_upper_bound < N, \
-                   "Your prediction is bad and you should feel bad."
-        
 
         return predictions

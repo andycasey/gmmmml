@@ -3,7 +3,7 @@ import numpy as np
 from gmmmml import (gmm as mixture, visualize, utils)
 import  scipy.optimize as op
 
-seed = 45
+seed = 1100
 
 np.random.seed(seed)
 
@@ -11,29 +11,10 @@ np.random.seed(seed)
 
 import logging
 
-"""
-for i in range(10):
-
-    j = 0
-    while True:
-        print(i, j)
-        j += 1
-        try:
-            y, labels, target, kwds = utils.generate_data(K=30, D=10, center_box=(-1000, 1000))
-
-        except:
-          logging.exception("failed")
-          if j > 3:
-            raise 
-          continue 
-
-        else:
-          break
-"""
 from sklearn.datasets import make_blobs
 
 y, assignments = make_blobs(
-  n_samples=10000, n_features=2, centers=100, center_box=(-15.0, 15.0), random_state=seed)
+  n_samples=2500, n_features=2, centers=50, center_box=(-15, 15), random_state=seed)
 #y = np.vstack([y, np.random.uniform(-10, 10, size=(10, y.shape[1]))])
 
 #n_samples=100, n_features=2, centers=3, cluster_std=1.0, center_box=(-10.0, 10.0), shuffle=True, random_state=Non

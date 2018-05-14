@@ -126,7 +126,6 @@ def mixture_message_length(K, N, D, cov, weight, log_likelihood, yerr=0.001,
 
     I_yerr = -np.log(yerr) if yerr.size > 1 else - N * D * np.log(yerr)
 
-
     I_data = -log_likelihood + I_yerr
     I_slogdetcovs = -0.5 * (D + 2) * sum_log_det_cov
     I_weights = (0.25 * D * (D + 3) - 0.5) * sum_log_weights
@@ -636,7 +635,8 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     state_meta = state_meta or {}
 
-    _state_K, _state_weights, _state_det_covs, _state_sum_log_likelihoods = previous_states
+    _state_K, _state_weights, _state_det_covs, _state_sum_log_likelihoods, \
+        _state_message_lengths = previous_states
 
     _state_K = np.array(_state_K)
     
@@ -734,5 +734,26 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
         ("t_I_lower", t_I_lower)
     ])
 
+    # Check, and perhaps comment, on predictions.
+    _check_predictions(predictions, _state_message_lengths)
 
     return (predictions, update_meta)
+
+
+def _check_predictions(predictions, _state_message_lengths):
+
+    K = predictions["K"]
+    mml_so_far = np.min(_state_message_lengths)
+
+    # Say something about K_max.
+    t_indices = np.where(predictions["t_I_lower"] >= mml_so_far)[0]
+    if any(t_indices):       
+        K_true_upper_bound = 1 + K[t_indices[0]]
+        logging.info("K_true < {0:.0f}".format(K_true_upper_bound))
+        
+    p_indices = np.where(predictions["t_practical_I_lower"] >= mml_so_far)[0]
+    if any(p_indices):
+        K_true_upper_bound = 1 + K[p_indices[0]]
+        logging.info("K_true ~< {0:.0f}".format(K_true_upper_bound))
+    
+    return None
