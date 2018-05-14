@@ -588,9 +588,13 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
             + concentration(K)
 
     # Fit and predict the improvement in mean reduced \chi^2.
-    y_mrc = (obs_nll - pre_nll[:P]) / (0.5 * N * D)
-    x_mrc = K[:P].astype(float)
-
+    x_mrc = np.array(_state_K, dtype=float)
+    # TODO: make this betterised
+    pre_nll_for_obs_nll = 0.5 * N * D * np.log(2 * np.pi) + lower(x_mrc) \
+        + predicted_uniformity_fraction * (upper(x_mrc) - lower(x_mrc)) \
+        + concentration(x_mrc)
+    y_mrc = (obs_nll - pre_nll_for_obs_nll) / (0.5 * N * D)
+    
     p_mrc_opt, p_mrc_cov, func = _bag_of_hacks(x_mrc, y_mrc)
     mean_reduced_chisq = lambda K: func(K, *p_mrc_opt)
 
@@ -599,6 +603,7 @@ def predict_negative_log_likelihood(K, N, D, predicted_uniformity_fraction,
 
     # Calculate the theoretical lower bound on the negative log likelihood, and
     # the practical lower bound on the negative log likelihood.
+    # TODO: This assumes [0] is the K = 1 trial. Is that a problem?
     initial_concentration = np.log(_state_det_covs[0])
     nll_theoretical_lower_bound = \
         0.5 * N * D * np.log(2 * np.pi) + lower(K) + initial_concentration
@@ -650,6 +655,7 @@ def predict_message_length(K, N, D, previous_states, yerr=0.001,
 
     # Predict the sum of the log of the determinant of the covariance
     # matrices.
+    # TODO: This assumes the first entry is the K = 1 solution. Is that a prob?
     log_max_det = np.log(_state_det_covs[0][0])
     log_min_det = np.log(np.min(np.hstack(_state_det_covs)))
     #log_min_det = np.log(min_mean_pairwise_distance)
