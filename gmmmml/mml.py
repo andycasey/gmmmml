@@ -218,8 +218,8 @@ def information_of_sum_log_det_covs(sum_log_det_covs, D):
     :param D:
         The dimensionality of the data.
 
-    :returns:
 
+    :returns:
     """
     return -0.5 * (D + 2) * sum_log_det_covs
 
@@ -242,32 +242,41 @@ def predict_information_of_sum_log_det_covs(K, D, data):
 
     :param data:
         A two-length tuple containing (1) the number of components in previously
-        trialled Gaussian mixtures, and the sum of the log of the determinant of
-        their covariance matrices.
+        trialled Gaussian mixtures, and the determinant of the
+        covariance matrices in each mixture.
 
     :returns:
-        A two-length tuple containing:
+        A three-length tuple containing:
 
             (1) the predicted information content of the sum of the log of the
                 determinant of the covariance matrices for each :math:`K`
                 mixture;
 
             (2) the variance on the predicted information content on the sum of
-                the log of the determinant of the covariance matrices.
+                the log of the determinant of the covariance matrices
+
+            (3) the lower bound on the information content on the sum of the
+                log of the determinant of the covariance matrices. This bound
+                is not a theoretical bound: it is a lower bound based on the
+                smallest determinant of the covariance matrices.
     """
 
     if data is None:
         raise NotImplementedError("cannot predict this theoretically")
 
-    x, y = _group_over(data[0], data[1], np.mean)
-    _, yerr = _group_over(data[0], data[1], np.std)
+    slogdetcovs = np.array([np.sum(dc) for dc in data[1]])
+    x, y = _group_over(data[0], slogdetcovs, np.mean)
+    _, yerr = _group_over(data[0], slogdetcovs, np.std)
 
-    yerr = np.clip(yerr, 0, np.inf)
+    yerr = np.clip(yerr, 1, np.inf)
 
-    kernel = np.var(y) * kernels.LinearKernel(order=1, log_gamma2=1) \
-           + np.var(y) * kernels.ExpSquaredKernel(1)
+    kernel = np.var(y) * kernels.ExpSquaredKernel(1) \
+           + np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
+
+    #(y) * kernels.LocalGaussianKernel(location=0, log_width=0) \
 
     gp = george.GP(kernel=kernel, 
+                   mean=np.mean(y), fit_mean=True,
                    white_noise=np.log(np.std(y)), fit_white_noise=True)
                    
     def nll(p):
@@ -283,14 +292,107 @@ def predict_information_of_sum_log_det_covs(K, D, data):
 
     p0 = gp.get_parameter_vector()
 
-    gp_result = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+
+    gp.set_parameter_vector(results.x)
 
     pred, pred_var = gp.predict(y, K, return_var=True)
 
     I = information_of_sum_log_det_covs(pred, D)
     I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
-    return (I, I_var)
+    max_log_det_cov = np.log(np.max(np.hstack(data[1])))
+    I_lower = information_of_sum_log_det_covs(K * max_log_det_cov, D)
 
-    
+    return (I, I_var, I_lower)
+
+
+def predict_negative_sum_log_likelihood(K, data):
+    r"""
+    Predict the negative sum of the log likelihood for a Gaussian mixture model
+    with :math:`K` components.
+
+    :param K:
+        The number of components in the target Gaussian mixture.
+
+    :param data:
+        A two-length tuple containing (1) the number of components in previously
+        trialled Gaussian mixtures, and (2) the negative sum of the 
+        log-likelihood of those Gaussian mixtures.
+
+    :returns:
+        A two-length tuple containing:
+
+            (1) the predicted negative sum of the log likelihood for each
+                :math:`K` mixture;
+
+            (2) the variance in the predicted negative sum of the log likelihood.
+
+    """
+
+    x, y = _group_over(data[0], data[1], np.mean)
+    _, yerr = _group_over(data[0], data[1], np.std)
+    yerr = np.clip(yerr, 1, np.inf)
+
+    kernel = np.var(y) * kernels.Matern32Kernel(1)
+
+    gp = george.GP(kernel=kernel,
+                   mean=np.mean(y), fit_mean=True,
+                   white_noise=np.log(np.std(y)), fit_white_noise=True)
+
+    def nll(p):
+        gp.set_parameter_vector(p)
+        ll = gp.log_likelihood(y, quiet=True)
+        return -ll if np.isfinite(ll) else 1e25
+
+    def grad_nll(p):
+        gp.set_parameter_vector(p)
+        return -gp.grad_log_likelihood(y, quiet=True)
+
+    gp.compute(x.astype(float), yerr=yerr)
+
+    p0 = gp.get_parameter_vector()
+
+    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+
+    gp.set_parameter_vector(results.x)
+
+    pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
+
+    return (pred_nll, pred_nll_var)
+
+
+def predict_message_length(K, data):
+
+    x, y = _group_over(data[0], data[1], np.mean)
+    _, yerr = _group_over(data[0], data[1], np.std)
+    yerr = np.clip(yerr, 1, np.inf)
+
+    kernel = np.var(y) * kernels.Matern32Kernel(1)
+
+    gp = george.GP(kernel=kernel,
+                   mean=np.mean(y), fit_mean=True,
+                   white_noise=np.log(np.std(y)), fit_white_noise=True)
+
+    def nll(p):
+        gp.set_parameter_vector(p)
+        ll = gp.log_likelihood(y, quiet=True)
+        return -ll if np.isfinite(ll) else 1e25
+
+    def grad_nll(p):
+        gp.set_parameter_vector(p)
+        return -gp.grad_log_likelihood(y, quiet=True)
+
+    gp.compute(x.astype(float), yerr=yerr)
+
+    p0 = gp.get_parameter_vector()
+
+    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+
+    gp.set_parameter_vector(results.x)
+
+    pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
+
+    return (pred_nll, pred_nll_var)
+
     

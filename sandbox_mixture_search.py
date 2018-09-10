@@ -3,7 +3,7 @@ import numpy as np
 from gmmmml import (mixture_search as mixture, visualize, utils)
 import  scipy.optimize as op
 
-np.random.seed(11)
+np.random.seed(43)
 
 # Seed 1100 is a fun one: K = 103, D = 5, N = 4249
 
@@ -16,7 +16,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(K=30, D=5, center_box=(-100, 100))
+            y, labels, target, kwds = utils.generate_data(K=40, D=10, center_box=(-10, 10))
 
         except:
           logging.exception("failed")

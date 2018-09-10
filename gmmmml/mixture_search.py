@@ -240,6 +240,7 @@ class GaussianMixture(object):
 
         # Lists to record states for predictive purposes.
         self._state_K = []
+        self._state_I = []
         self._state_det_covs = []
         self._state_sum_log_det_covs = []
         self._state_weights = []
@@ -296,7 +297,7 @@ class GaussianMixture(object):
         R, ll, message_length = _expectation(y, mu, cov, weight, **kwds)
 
         # Record state for predictions.
-        self._record_state_for_predictions(cov, weight, ll)
+        self._record_state_for_predictions(cov, weight, ll, message_length)
 
         # Do visualization stuff.
         handler = kwargs.get("visualization_handler", None)
@@ -306,6 +307,12 @@ class GaussianMixture(object):
 
             handler.emit("actual_I_slogdetcovs", 
                          dict(K=weight.size, I=message_length["I_slogdetcovs"]))
+
+            handler.emit("actual_I_data", 
+                         dict(K=weight.size, I=-np.sum(ll)))
+
+            handler.emit("actual_I",
+                dict(K=weight.size, I=np.sum(np.hstack(message_length.values()))))
 
 
         return (R, ll, message_length)
@@ -342,9 +349,10 @@ class GaussianMixture(object):
         kwds = {**self._em_kwds, **kwargs}
         handler = kwds.get("visualization_handler", None)
 
-        #for K in range(1, K_max):
-        for K in np.random.choice(np.arange(1, 1 + K_max), K_max, replace=False):
+        #for K in np.random.choice(np.arange(1, 1 + K_max), K_max, replace=False):
 
+        for K in range(1, K_max):
+        
             # Assign everything to the closest thing.            
             means, covs, weights, responsibilities \
                 = self.initialize(y, K, **kwargs)
@@ -466,14 +474,18 @@ class GaussianMixture(object):
                 K, N, D, data=(self._state_K, self._state_slog_weights))
 
         # Sum of the log of the determinant of the covariance matrices.
-        I_sum_log_det_covs, I_sum_log_det_covs_var \
+        I_sum_log_det_covs, I_sum_log_det_covs_var, I_sum_log_det_covs_lower \
             = mml.predict_information_of_sum_log_det_covs(
-                K, D, data=(self._state_K, self._state_sum_log_det_covs))
+                K, D, data=(self._state_K, self._state_det_covs))
 
         # Negative log-likelihood.
+        I_data, I_data_var \
+            = mml.predict_negative_sum_log_likelihood(
+                K, data=(self._state_K, -np.array(self._state_slog_likelihoods)))
 
-
-
+        # Predict total.
+        I, I_var = mml.predict_message_length(
+            K, data=(self._state_K, self._state_I))
 
         handler = kwargs["visualization_handler"]
         if handler is not None:
@@ -482,8 +494,13 @@ class GaussianMixture(object):
                 I_lower=I_sum_log_weights_lower, I_upper=I_sum_log_weights_upper))
 
             handler.emit("predict_I_slogdetcovs", dict(
-                K=K, I=I_sum_log_det_covs, I_var=I_sum_log_det_covs_var))
+                K=K, I=I_sum_log_det_covs, I_var=I_sum_log_det_covs_var,
+                I_lower=I_sum_log_det_covs_lower))
 
+            handler.emit("predict_I_data", dict(
+                K=K, I=I_data, I_var=I_data_var))
+
+            handler.emit("predict_I", dict(K=K, I=I, I_var=I_var))
 
         """
         
@@ -592,7 +609,8 @@ class GaussianMixture(object):
         """
 
 
-    def _record_state_for_predictions(self, cov, weight, log_likelihood):
+    def _record_state_for_predictions(self, cov, weight, log_likelihood,
+        message_lengths):
         r"""
         Record 'best' trialled states (for a given K) in order to make some
         predictions about future mixtures.
@@ -611,7 +629,7 @@ class GaussianMixture(object):
 
         # Record log likelihood
         self._state_slog_likelihoods.append(np.sum(log_likelihood))
-
+        self._state_I.append(np.sum(np.hstack(message_lengths.values())))
 
 
     def _predict_information_sum_log_weights(self, K, N, D):

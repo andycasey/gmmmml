@@ -117,17 +117,21 @@ class VisualizationHandler(object):
         self._actual_sum_log_det_covs = []
         self._scatter_actual_sum_log_det_covs = ax.scatter([np.nan], [np.nan])
 
-        ax = self._ax("nll")
+        ax = self._ax("negative_sum_log_likelihood")
         ax.set_xlabel(r"$K$")
         ax.set_ylabel(r"$-\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._actual_negative_log_likelihoods = []
+        self._scatter_actual_negative_log_likelihoods = ax.scatter([np.nan], [np.nan])
 
+        self._actual_message_lengths = []
         ax = self._ax("I")
         ax.set_xlabel(r"$K$")
         ax.set_ylabel(r"$I$ $[{\rm nats}]$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._scatter_actual_message_lengths = ax.scatter([np.nan], [np.nan])
 
         if target is not None:
             print("no target implemented  yet")
@@ -150,7 +154,8 @@ class VisualizationHandler(object):
         """
 
         axes = np.array(self._fig.axes).flatten()
-        index = ["data", "sum_log_weights", "sum_log_det_covs", "nll", "I"].index(descriptor)
+        index = ["data", "sum_log_weights", "sum_log_det_covs", 
+                 "negative_sum_log_likelihood", "I"].index(descriptor)
         return axes[index]
 
 
@@ -294,6 +299,49 @@ class VisualizationHandler(object):
             self._clear_items(self._plot_items[ax])
             
             K, I, I_var = (params["K"], params["I"], params["I_var"])
+            I_lower = params["I_lower"]
+
+            prediction_colour = self._colours["predictions"]
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I, lw=2, c=prediction_colour)[0],
+                ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
+                                facecolor=prediction_colour, alpha=0.3, zorder=-1),
+            ])
+            """
+                ax.fill_between(K, 
+                                I_lower, 
+                                np.max(I + np.sqrt(I_var)) * np.ones_like(I_lower),
+                                facecolor=self._colours["bounds"], alpha=0.3,
+                                zorder=-1)
+            ])
+            """
+
+        elif kind == "actual_I_data":
+
+
+            K, I = params["K"], params["I"]
+
+            self._actual_negative_log_likelihoods.append(np.hstack([K, I]))
+
+            scat = self._scatter_actual_negative_log_likelihoods
+            data = self._actual_negative_log_likelihoods
+
+            data = np.array(data)
+            scat.set_offsets(data)
+            scat.set_facecolor(self._colours["data"])
+            scat.set_sizes(30 * np.ones(len(data)))
+            scat.set_zorder(100)
+
+            #_rescale_based_on_data(self._ax("negative_sum_log_likelihood"), *data.T)
+
+
+        elif kind == "predict_I_data":
+
+            ax = self._ax("negative_sum_log_likelihood")
+            self._clear_items(self._plot_items[ax])
+            
+            K, I, I_var = (params["K"], params["I"], params["I_var"])
 
             prediction_colour = self._colours["predictions"]
 
@@ -303,6 +351,39 @@ class VisualizationHandler(object):
                                 facecolor=prediction_colour, alpha=0.3, zorder=-1),
             ])
 
+
+        elif kind == "actual_I":
+
+            K, I = params["K"], params["I"]
+
+            self._actual_message_lengths.append(np.hstack([K, I]))
+            scat = self._scatter_actual_message_lengths
+            data = self._actual_message_lengths
+
+            data = np.array(data)
+            scat.set_offsets(data)
+            scat.set_facecolor(self._colours["data"])
+            scat.set_sizes(30 * np.ones(len(data)))
+            scat.set_zorder(100)
+
+            #elif kind == "predict_I":
+
+            #_rescale_based_on_data(self._ax("I"), *data.T)
+
+        elif kind == "predict_I":
+
+            ax = self._ax("I")
+            self._clear_items(self._plot_items[ax])
+            
+            K, I, I_var = (params["K"], params["I"], params["I_var"])
+
+            prediction_colour = self._colours["predictions"]
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I, lw=2, c=prediction_colour)[0],
+                ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
+                                facecolor=prediction_colour, alpha=0.3, zorder=-1),
+            ])
 
 
         else:
