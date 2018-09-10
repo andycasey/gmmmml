@@ -2,9 +2,146 @@
 import numpy as np
 from sklearn import datasets
 
+from sklearn.neighbors import NearestNeighbors
+
+def concentration(y, K_max=None):
+    """
+    Calculate the maximum concentration as a function of the number of data
+    points. Specifically, calculate the minimum of
+
+    .. math:
+
+        w_{k}\log{|C_k|}
+
+    for any subset of the N data points that exist. That is, find the :math:`M` 
+    nearest points in order to calculate the minimum sample covariance among 
+    :math:`M` points, and do this for increasing :math:`M` values. Then for
+    each number of :math:`K` components, calculate the minimum mixture among a
+    set o
+    """
+
+    y = np.atleast_2d(y)
+    N, D = y.shape
+
+    if K_max is None or K_max > N:
+        K_max = N
+
+    knn = NearestNeighbors().fit(y)
+    distances, indices = knn.kneighbors(y, n_neighbors=2)
+    
+    # Successively build up the minimum concentration.
+    K = np.arange(1, 1 + K_max, dtype=int)
+    minimum_concentration = np.zeros(K.size, dtype=float)
+    maximum_concentration = np.zeros(K.size, dtype=float)
+    minimum_concentration[0] = maximum_concentration[0] \
+                             = np.sum(np.log(np.var(y, axis=0)))
+    
+    minimum_sum_log_dets = np.zeros(K.size)
+    minimum_sum_log_dets[0] = minimum_concentration[0]
+
+    for i, k in enumerate(K[1:]):
+
+        # Find the closest and smallest k-1 mixtures
+        closest_indices = np.argsort(distances.T[1])
+
+        assigned = np.zeros(N, dtype=bool)
+        components, concentration = (0, 0)
+        min_sum_log_det = 0
+
+        for index in closest_indices:
+            if np.any(assigned[indices[index, :2]]): continue
+            concentration += 2.0/N * np.sum(np.log(np.var(y[indices[index, :2]],
+                                                          axis=0)))
+            min_sum_log_det += np.sum(np.log(np.var(y[indices[index, :2]], axis=0)))
+
+            assigned[indices[index, :2]] = True
+            components += 1
+
+            if components == k - 1:
+                break
+
+        sum_log_det = np.sum(np.log(np.var(y[~assigned], axis=0)))
+        weight = (N - (k-1) * 2)/float(N)
+        minimum_concentration[i] = concentration + weight * sum_log_det
+        minimum_sum_log_dets[i] = min_sum_log_det + np.sum(np.log(np.var(y[~assigned], axis=0)))
+        print(k, minimum_concentration[i])
+
+    maximum_mixture_concentration = K * np.log(np.product(np.var(y, axis=0))/K)
+
+    return (K, minimum_concentration, maximum_mixture_concentration, minimum_sum_log_dets)
 
 
+def concentration_hard(y, K_max=None):
+    """
+    Calculate the maximum concentration as a function of the number of data
+    points. Specifically, calculate the minimum of
 
+    .. math:
+
+        w_{k}\log{|C_k|}
+
+    for any subset of the N data points that exist. That is, find the :math:`M` 
+    nearest points in order to calculate the minimum sample covariance among 
+    :math:`M` points, and do this for increasing :math:`M` values. Then for
+    each number of :math:`K` components, calculate the minimum mixture among a
+    set o
+    """
+
+    y = np.atleast_2d(y)
+    N, D = y.shape
+
+    if K_max is None or K_max > N:
+        K_max = N
+
+    knn = NearestNeighbors().fit(y)
+    distances, indices = knn.kneighbors(y, n_neighbors=int(N/2))
+    
+    estimated_cumulative_log_det = np.cumsum(
+        D * np.log((distances[:, 1:]/(2 * D))**2), axis=1)
+
+    estimated_cumulative_concentration = estimated_cumulative_log_det \
+                                       * np.arange(2, 1 + distances.shape[1]) \
+                                       / N
+
+    # Successively build up the minimum concentration.
+    K = np.arange(2, 1 + K_max, dtype=int)
+    minimum_mixture_concentration = np.zeros(K.size, dtype=float)
+    for i, k in enumerate(K):
+
+        assigned = np.zeros(N, dtype=bool)
+
+        ecc = np.copy(estimated_cumulative_concentration)
+
+        min_index = np.argmin(estimated_cumulative_concentration)
+        xi, yi = int(min_index / ecc.shape[1]), min_index % ecc.shape[1]
+
+        raise a
+        #for K = 2 we are looking for 
+
+
+        # Find the closest and smallest k-1 mixtures
+        closest_indices = np.argsort(distances.T[1])
+
+        components, concentration = (0, 0)
+
+        for index in closest_indices:
+            if np.any(assigned[indices[index, :2]]): continue
+            concentration += 2.0/N * np.sum(np.log(np.var(y[indices[index, :2]],
+                                                          axis=0)))
+
+            assigned[indices[index, :2]] = True
+            components += 1
+
+            if components == k - 1:
+                break
+
+        sum_log_det = np.sum(np.log(np.var(y[~assigned], axis=0)))
+        weight = (N - (k-1) * 2)/float(N)
+        minimum_mixture_concentration[i] = concentration + weight * sum_log_det
+
+        print(k, minimum_mixture_concentration[i])
+
+    return (K, minimum_mixture_concentration)
 
 def aggregate(x, y, function):
     """
