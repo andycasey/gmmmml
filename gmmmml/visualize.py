@@ -109,11 +109,13 @@ class VisualizationHandler(object):
         ax.yaxis.set_major_locator(MaxNLocator(5))
         self._scatter_actual_sum_log_weights = ax.scatter([np.nan], [np.nan])
 
-        ax = self._ax("slogdet")
+        ax = self._ax("sum_log_det_covs")
         ax.set_xlabel(r"$K$")
         ax.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._actual_sum_log_det_covs = []
+        self._scatter_actual_sum_log_det_covs = ax.scatter([np.nan], [np.nan])
 
         ax = self._ax("nll")
         ax.set_xlabel(r"$K$")
@@ -148,7 +150,7 @@ class VisualizationHandler(object):
         """
 
         axes = np.array(self._fig.axes).flatten()
-        index = ["data", "sum_log_weights", "slogdet", "nll", "I"].index(descriptor)
+        index = ["data", "sum_log_weights", "sum_log_det_covs", "nll", "I"].index(descriptor)
         return axes[index]
 
 
@@ -254,7 +256,7 @@ class VisualizationHandler(object):
 
             K, I = params["K"], params["I"]
 
-            self._actual_sum_log_weights.append([K, I])
+            self._actual_sum_log_weights.append(np.hstack([K, I]))
 
             scat, data = (self._scatter_actual_sum_log_weights, self._actual_sum_log_weights)
 
@@ -263,6 +265,43 @@ class VisualizationHandler(object):
             scat.set_facecolor(self._colours["data"])
             scat.set_sizes(30 * np.ones(len(data)))
             scat.set_zorder(100)
+
+            #_rescale_based_on_data(self._ax("sum_log_weights"), *data.T)
+            
+
+
+        elif kind == "actual_I_slogdetcovs":
+
+
+            K, I = params["K"], params["I"]
+
+            self._actual_sum_log_det_covs.append(np.hstack([K, I]))
+
+            scat, data = (self._scatter_actual_sum_log_det_covs, self._actual_sum_log_det_covs)
+
+            data = np.array(data)
+            scat.set_offsets(data)
+            scat.set_facecolor(self._colours["data"])
+            scat.set_sizes(30 * np.ones(len(data)))
+            scat.set_zorder(100)
+
+            #_rescale_based_on_data(self._ax("sum_log_det_covs"), *data.T)
+
+
+        elif kind == "predict_I_slogdetcovs":
+
+            ax = self._ax("sum_log_det_covs")
+            self._clear_items(self._plot_items[ax])
+            
+            K, I, I_var = (params["K"], params["I"], params["I_var"])
+
+            prediction_colour = self._colours["predictions"]
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I, lw=2, c=prediction_colour)[0],
+                ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
+                                facecolor=prediction_colour, alpha=0.3, zorder=-1),
+            ])
 
 
 
@@ -299,7 +338,7 @@ class VisualizationHandler(object):
         return True
 
 
-def _rescale_based_on_data(ax, x, y, y_percent_edge=5):
+def _rescale_based_on_data(ax, x=None, y=None, y_percent_edge=5):
     """
     Re-scale a figure axis based on the given data.
 
@@ -317,15 +356,17 @@ def _rescale_based_on_data(ax, x, y, y_percent_edge=5):
         range of `y` values.
     """
 
-    if np.sum(np.isfinite(np.unique(x))) > 1:
-        ax.set_xlim(np.nanmin(x), np.nanmax(x))
+    if x is not None:
+        if np.sum(np.isfinite(np.unique(x))) > 1:
+            ax.set_xlim(np.nanmin(x) - 1, np.nanmax(x) + 5)
 
-    y_finite = np.array(y)[np.isfinite(y)]
-    if y_finite.size > 1:
-        y_ptp = np.ptp(y_finite)
-        ax.set_ylim(
-            np.min(y_finite) - y_percent_edge/100.0 * y_ptp,
-            np.max(y_finite) + y_percent_edge/100.0 * y_ptp
-        )
+    if y is not None:
+        y_finite = np.array(y)[np.isfinite(y)]
+        if y_finite.size > 1:
+            y_ptp = np.ptp(y_finite)
+            ax.set_ylim(
+                np.min(y_finite) - y_percent_edge/100.0 * y_ptp,
+                np.max(y_finite) + y_percent_edge/100.0 * y_ptp
+            )
 
     return None

@@ -241,6 +241,7 @@ class GaussianMixture(object):
         # Lists to record states for predictive purposes.
         self._state_K = []
         self._state_det_covs = []
+        self._state_sum_log_det_covs = []
         self._state_weights = []
         self._state_slog_weights = []
         self._state_slog_likelihoods = []
@@ -303,6 +304,9 @@ class GaussianMixture(object):
             handler.emit("actual_I_weights", 
                          dict(K=weight.size, I=message_length["I_weights"]))
 
+            handler.emit("actual_I_slogdetcovs", 
+                         dict(K=weight.size, I=message_length["I_slogdetcovs"]))
+
 
         return (R, ll, message_length)
 
@@ -338,7 +342,8 @@ class GaussianMixture(object):
         kwds = {**self._em_kwds, **kwargs}
         handler = kwds.get("visualization_handler", None)
 
-        for K in range(1, K_max):
+        #for K in range(1, K_max):
+        for K in np.random.choice(np.arange(1, 1 + K_max), K_max, replace=False):
 
             # Assign everything to the closest thing.            
             means, covs, weights, responsibilities \
@@ -454,11 +459,19 @@ class GaussianMixture(object):
 
         K = np.atleast_1d(K)
 
+        # Sum of the log of the weights.
         I_sum_log_weights, I_sum_log_weights_var, \
         I_sum_log_weights_lower, I_sum_log_weights_upper \
             = mml.predict_information_of_sum_log_weights(
-                K, N, D,
-                data=(self._state_K, self._state_slog_weights))
+                K, N, D, data=(self._state_K, self._state_slog_weights))
+
+
+        # Sum of the log of the determinant of the covariance matrices.
+        I_sum_log_det_covs, I_sum_log_det_covs_var \
+            = mml.predict_information_of_sum_log_det_covs(
+                K, D, data=(self._state_K, self._state_sum_log_det_covs))
+
+
 
         handler = kwargs["visualization_handler"]
         if handler is not None:
@@ -466,6 +479,8 @@ class GaussianMixture(object):
                 K=K, I=I_sum_log_weights, I_var=I_sum_log_weights_var,
                 I_lower=I_sum_log_weights_lower, I_upper=I_sum_log_weights_upper))
 
+            handler.emit("predict_I_slogdetcovs", dict(
+                K=K, I=I_sum_log_det_covs, I_var=I_sum_log_det_covs_var))
 
 
         """
@@ -586,6 +601,7 @@ class GaussianMixture(object):
         # Record determinates of covariance matrices.
         determinates = np.linalg.det(cov)
         self._state_det_covs.append(determinates)
+        self._state_sum_log_det_covs.append(np.sum(np.linalg.slogdet(cov)[1]))
 
         # Record sum of the log of the weights.
         self._state_weights.append(weight)
