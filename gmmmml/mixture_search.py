@@ -23,6 +23,7 @@ from sklearn.utils.extmath import row_norms
 
 from collections import defaultdict
 
+from . import mml
 
 logger = logging.getLogger(__name__)
 
@@ -71,178 +72,7 @@ def _total_parameters(K, D):
     return (0.5 * D * (D + 3) * K) + K - 1
 
 
-def _bound_sum_log_weights(K, N):
-    r"""
-    Return the analytical bounds of the function:
 
-    .. math:
-
-        \sum_{k=1}^{K}\log{w_k}
-
-    Where :math:`K` is the number of mixtures, and :math:`w` is a multinomial
-    distribution. The bounded function for when :math:`w` are uniformly
-    distributed is:
-
-    .. math:
-
-        \sum_{k=1}^{K}\log{w_k} \lteq -K\log{K}
-
-    and in the other extreme case, all the weight would be locked up in one
-    mixture, with the remaining :math:`w` values encapsulating the minimum
-    (physically realistic) weight of one data point. In that extreme case,
-    the bound becomes:
-
-    .. math:
-
-        \sum_{k=1}^{K}\log{w_k} \gteq log{(N + 1 - K)} - K\log{N}
-
-    :param K:
-        The number of target Gaussian mixtures.
-
-    :param N:
-        The number of data points.
-
-    :returns:
-        The lower and upper bound on :math:`\sum_{k=1}^{K}\log{w_k}`.
-    """
-
-    upper = -K * np.log(K)
-    lower = np.log(N + 1 - K) - K * np.log(N)
-
-    return (lower, upper)
-
-
-'''
-def _approximate_log_likelihood(N, D, K, logdetcovs, weights, actuals):
-    """
-    Calculate a first-order approximation of the log-likelihood for the
-    :math:`K`-th mixture.
-
-    :param K:
-        The number of target Gaussian mixtures.
-
-    :param N:
-        The number of data points.
-
-    :param D:
-        The dimensionality of the data points.
-
-    :param logdetcovs:
-        The natural logarithm of the determinant of the covariance matrices of
-        the :math:`K`-th mixtures. If :math:`K` is like a list, then the
-        length of `logdetcovs` must match the size of `K`.
-
-    :param weights:
-        The weights of the :math:`K`-th mixtures. 
-
-    """
-
-    K = np.atleast_1d(K)
-    log_likelihoods = np.zeros(K.size)
-
-    assert len(K) == len(logdetcovs)
-    assert len(K) == len(weights)
-
-    # chi_r is, approximately, the estimated reduced chi-squared value for
-    # data that are correctly fit by a component in the mixture model.
-    est_red_chisq = 0
-
-    for i, (k, ldcs, ws) in enumerate(zip(K, logdetcovs, weights)):
-
-        log_likelihoods[i] = N * np.sum(ws * np.log(ws)) \
-                           + N * np.sum(ws * ldcs) \
-                           - 0.5 * N * D * (np.log(2 * np.pi) + est_red_chisq)
-
-
-
-
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.plot(K, -log_likelihoods, label="prediction", c='r')
-    ax.scatter(K, -np.array(actuals))
-
-    ax.set_ylabel('-log(L)')
-
-    raise a
-
-
-    for i, (k, logdetcov, weight) in enumerate(zip(K, logdetcovs, weights)):
-        # most things will be chi-sq ~ 5 away (per dim) from most K means
-        # TODO: my intuition is that this should be D * 5, but that doesn't
-        # seem to come out through experiment.
-        log_prob = np.ones((N, k)) * 3
-        # just assign each object to one mixture, where we would expect the 
-        # chi-sq value to be approximately 1 per dimension D
-        for j, w in enumerate(weight):
-            Nk = int(np.round(w * N))
-            # TODO: I feel like this should be 1 * D,.... as per above.
-            log_prob.T[j, np.arange(Nk)] = 1
-
-        #log_prob[:, 0] = D
-
-        weighted_log_prob = np.log(weight) + logdetcov \
-            - 0.5 * (D * np.log(2 * np.pi) + log_prob)
-
-        log_likelihoods[i] = np.sum(
-            scipy.misc.logsumexp(weighted_log_prob, axis=1))
-
-    raise a
-
-    if not np.all(np.isfinite(log_likelihoods)):
-        logger.warn("Non-finite predictions of the log-likelihood!")
-    return log_likelihoods
-
-
-
-def _log_likelihood_bound(K, N, D, logdetcov_bound, aggregate_function,
-    chisq_scalar=1):
-
-    scale = 1e6
-    chisq_scalar = D
-    K = np.atleast_1d(K)
-    log_likelihoods = np.zeros((K.size, 2))
-    
-    for i, (k, logdetcov) \
-    in enumerate(zip(K.astype(int), logdetcov_bound)):
-
-        log_prob_uniform = np.ones((N, k)) * scale * chisq_scalar
-
-        # Consider the first case where weights are uniformly distributed.
-        uniform_weights = np.ones(k, dtype=float)/N
-        Sk = 0
-        for j, w in enumerate(uniform_weights):
-            Nk = int(np.round(w * N))
-            log_prob_uniform.T[j, np.arange(Sk, Sk + Nk)] = chisq_scalar
-            Sk += Nk
-
-        wlp_lu = np.log(uniform_weights) + logdetcov \
-            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
-        ll_lu = np.sum(scipy.misc.logsumexp(wlp_lu, axis=1))
-        
-        log_prob_non_uniform = np.ones_like(log_prob_uniform) * scale * chisq_scalar
-
-        non_uniform_weights = np.ones(k, dtype=float)
-        non_uniform_weights[1:] = 1.0/N
-        non_uniform_weights[0] = 1.0 - np.sum(non_uniform_weights[1:])
-
-        Sk = 0
-        for j, w in enumerate(non_uniform_weights):
-            Nk = int(np.round(w * N))
-            log_prob_non_uniform.T[j, np.arange(Sk, Sk + Nk)] = chisq_scalar
-            Sk += Nk
-
-        wlp_ln = np.log(non_uniform_weights) + logdetcov \
-            - 0.5 * (D * np.log(2 * np.pi) + log_prob_uniform)
-        
-        ll_ln = np.sum(scipy.misc.logsumexp(wlp_ln, axis=1))
-        
-        log_likelihoods[i, :] = [ll_lu, ll_ln]
-
-    # I think that it will always be the case that the uniform weight dist.
-    # provides a lower bound, but just in case we calculate both.
-    return aggregate_function(log_likelihoods, axis=1)
-
-'''
 
 
 
@@ -348,7 +178,7 @@ def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None,
     I = np.sum([I_mixtures, I_parameters, I_data, I_slogdetcovs, I_weights],
         axis=0) # [nats]
 
-    return (I, I_parts)
+    return I_parts
 
 
 
@@ -378,36 +208,40 @@ class GaussianMixture(object):
         loop (default: ``10000``).
     """
 
-    parameter_names = ("mean", "covariance", "weight")
+    parameter_names = ("means", "covariances", "weights")
 
     def __init__(self, covariance_type="full", covariance_regularization=0, 
-        threshold=1e-5, max_em_iterations=10000, **kwargs):
+        threshold=1e-5, max_em_iterations=10000, visualization_handler=None,
+        **kwargs):
 
         available = ("full", )
         covariance_type = covariance_type.strip().lower()
         if covariance_type not in available:
-            raise ValueError("covariance type '{}' is invalid. "\
-                             "Must be one of: {}".format(
-                                covariance_type, ", ".join(available)))
+            raise ValueError(f"covariance type '{covariance_type}' is invalid."\
+                             f" Must be one of: {available}")
 
+        covariance_regularization = float(covariance_regularization)
         if 0 > covariance_regularization:
-            raise ValueError(
-                "covariance_regularization must be a non-negative float")
+            raise ValueError("covariance_regularization must be non-negative")
 
+        threshold = float(threshold)
         if 0 >= threshold:
-            raise ValueError("threshold must be a positive value")
+            raise ValueError("threshold must be positive")
 
+        max_em_iterations = int(max_em_iterations)
         if 1 > max_em_iterations:
             raise ValueError("max_em_iterations must be a positive integer")
 
-        self._threshold = threshold
-        self._max_em_iterations = max_em_iterations
-        self._covariance_type = covariance_type
-        self._covariance_regularization = covariance_regularization
+        self._em_kwds = dict(threshold=threshold,
+                             covariance_type=covariance_type,
+                             max_em_iterations=max_em_iterations,
+                             covariance_regularization=covariance_regularization,
+                             visualization_handler=visualization_handler)
 
         # Lists to record states for predictive purposes.
         self._state_K = []
         self._state_det_covs = []
+        self._state_sum_log_det_covs = []
         self._state_weights = []
         self._state_slog_weights = []
         self._state_slog_likelihoods = []
@@ -423,7 +257,7 @@ class GaussianMixture(object):
     @property
     def covariance_type(self):
         r""" Return the type of covariance stucture assumed. """
-        return self._covariance_type
+        return self._em_kwds["covariance_type"]
 
 
     @property
@@ -431,60 +265,111 @@ class GaussianMixture(object):
         r""" 
         Return the regularization applied to diagonals of covariance matrices.
         """
-        return self._covariance_regularization
+        return self._em_kwds["covariance_regularization"]
 
 
     @property
     def threshold(self):
         r""" Return the threshold improvement required in message length. """
-        return self._threshold
+        return self._em_kwds["threshold"]
 
 
     @property
     def max_em_iterations(self):
         r""" Return the maximum number of expectation-maximization steps. """
-        return self._max_em_iterations
+        return self._em_kwds["max_em_iterations"]
+
+
+    def initialize(self, y, K, **kwargs):
+
+        mu, cov, weight, responsibility = _initialize_with_kmeans_pp(y, K, **kwargs)
+
+        # Do visualization stuff.
+
+        return (mu, cov, weight, responsibility)
+
+
+    def expectation(self, y, mu, cov, weight, **kwargs):
+
+        kwds = {**self._em_kwds, **kwargs}
+
+        R, ll, message_length = _expectation(y, mu, cov, weight, **kwds)
+
+        # Record state for predictions.
+        self._record_state_for_predictions(cov, weight, ll)
+
+        # Do visualization stuff.
+        handler = kwargs.get("visualization_handler", None)
+        if handler is not None:
+            handler.emit("actual_I_weights", 
+                         dict(K=weight.size, I=message_length["I_weights"]))
+
+            handler.emit("actual_I_slogdetcovs", 
+                         dict(K=weight.size, I=message_length["I_slogdetcovs"]))
+
+
+        return (R, ll, message_length)
+
+
+    def maximization(self, y, means, covs, weights, responsibilities, **kwargs):
+
+        kwds = {**self._em_kwds, **kwargs}
+        means, covs, weights = _maximization(y, means, covs, weights, 
+                                             responsibilities, **kwds)
+
+        # Make predictions?
+
+        # Do visualization stuff.
+        handler = kwargs.get("visualization_handler", None)
+        if handler is not None:
+            handler.emit("maximization", dict(means=means,
+                                              covs=covs,
+                                              weights=weights))
+
+
+        return (means, covs, weights)
+
+
 
 
     def kmeans_search(self, y, K_max=None, **kwargs):
 
-        kwds = dict(
-            threshold=self._threshold, 
-            max_em_iterations=self._max_em_iterations,
-            covariance_type=self.covariance_type, 
-            covariance_regularization=self._covariance_regularization,
-            visualization_handler=None)
-        kwds.update(kwargs)
-        
         y = np.atleast_1d(y)
 
         N, D = y.shape
         K_max = N if K_max is None else K_max
 
-        for K in range(1, K_max):
+        kwds = {**self._em_kwds, **kwargs}
+        handler = kwds.get("visualization_handler", None)
+
+        #for K in range(1, K_max):
+        for K in np.random.choice(np.arange(1, 1 + K_max), K_max, replace=False):
 
             # Assign everything to the closest thing.            
-            mu, cov, weight, responsibility = _initialize_with_kmeans_pp(y, K)
+            means, covs, weights, responsibilities \
+                = self.initialize(y, K, **kwargs)
 
             # Do one E-M step.
             try:
-                R, ll, message_length = _expectation(y, mu, cov, weight, **kwds)
+                responsibilities, ll, message_length \
+                    = self.expectation(y, means, covs, weights, **kwargs)
+
 
             except ValueError:
                 logger.exception("Failed to calculate E-step")
                 continue
 
-            self._record_state_for_predictions(cov, weight, ll)
+            means, covs, weights,= self.maximization(y, means, covs, weights,
+                                                     responsibilities, **kwargs)
 
-            mu, cov, weight = _maximization(
-                y, mu, cov, weight, responsibility, **kwds)
-            
-            if kwds["visualization_handler"] is not None:
 
-                K_predict = np.arange(1, weight.size + 25)
+            if handler is not None:
+
+                K_predict = np.arange(1, weights.size + 25)
                 self._predict_message_length(K_predict, N, D, **kwds)
-            
                 
+
+
 
         return None
 
@@ -554,7 +439,7 @@ class GaussianMixture(object):
 
         raise a
         K = np.arange(1, 11)
-        self._predict_slogweights(K)
+        self._predict_information_sum_log_weights(K)
         self._predict_slogdetcovs(K)
 
         raise a
@@ -573,9 +458,37 @@ class GaussianMixture(object):
         """
 
         K = np.atleast_1d(K)
+
+        # Sum of the log of the weights.
+        I_sum_log_weights, I_sum_log_weights_var, \
+        I_sum_log_weights_lower, I_sum_log_weights_upper \
+            = mml.predict_information_of_sum_log_weights(
+                K, N, D, data=(self._state_K, self._state_slog_weights))
+
+        # Sum of the log of the determinant of the covariance matrices.
+        I_sum_log_det_covs, I_sum_log_det_covs_var \
+            = mml.predict_information_of_sum_log_det_covs(
+                K, D, data=(self._state_K, self._state_sum_log_det_covs))
+
+        # Negative log-likelihood.
+
+
+
+
+        handler = kwargs["visualization_handler"]
+        if handler is not None:
+            handler.emit("predict_I_weights", dict(
+                K=K, I=I_sum_log_weights, I_var=I_sum_log_weights_var,
+                I_lower=I_sum_log_weights_lower, I_upper=I_sum_log_weights_upper))
+
+            handler.emit("predict_I_slogdetcovs", dict(
+                K=K, I=I_sum_log_det_covs, I_var=I_sum_log_det_covs_var))
+
+
+        """
         
         # Predict the sum of the log of the weights.
-        p_slw, p_slw_err, slw_lower, slw_upper = self._predict_slogweights(K, N)
+        p_slw, p_slw_err, slw_lower, slw_upper = self._predict_information_sum_log_weights(K, N)
         
         # Predict sum of the log of the determinant of the covariance matrices.
         p_sldc, p_sldc_pos_err, p_sldc_neg_err = self._predict_slogdetcovs(K)
@@ -676,7 +589,7 @@ class GaussianMixture(object):
                 I_relaxed_bound=I_relaxed_lower_bound,
                 p_I=I_prediction))
 
-
+        """
 
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood):
@@ -690,6 +603,7 @@ class GaussianMixture(object):
         # Record determinates of covariance matrices.
         determinates = np.linalg.det(cov)
         self._state_det_covs.append(determinates)
+        self._state_sum_log_det_covs.append(np.sum(np.linalg.slogdet(cov)[1]))
 
         # Record sum of the log of the weights.
         self._state_weights.append(weight)
@@ -700,54 +614,63 @@ class GaussianMixture(object):
 
 
 
-    def  _predict_slogweights(self, target_K, N):
+    def _predict_information_sum_log_weights(self, K, N, D):
 
-        slw_lower, slw_upper = _bound_sum_log_weights(target_K, N)
 
-        x_unique, y_unique = _group_over(
-            self._state_K, self._state_slog_weights, np.min)
+        I_lower, I_upper = mml.information_bounds_of_sum_log_weights(K, N, D)
 
-        if x_unique.size > 1:            
-            function = lambda x, scale, constant: -x * scale * np.log(x) + constant
-            p_opt, p_cov = op.curve_fit(function, x_unique, y_unique)
 
-            pred = function(target_K, *p_opt)
+        xu, yu = _group_over(self._state_K, self._state_slog_weights, np.min)
+
+        if xu.size > 1:
 
             """
-            if x_unique.size > 5:
-                import matplotlib.pyplot as plt
-                fig, axes = plt.subplots(2)
-                ax = axes[0]
-                ax.plot(x_unique, y_unique)
-                ax.plot(target_K, slw_lower)
-                ax.plot(target_K, slw_upper)
+            If the upper bound on the sum of the log of the weights is
 
-                def normit(values):
-                    N = len(values)
-                    return (values - slw_lower[:N])/(slw_upper[:N] - slw_lower[:N])
+            .. math:
 
-                ax = axes[1]
-                ax.plot(x_unique, normit(y_unique), c='b')
-                ax.plot(target_K, normit(slw_lower), c='r')
-                ax.plot(target_K, normit(slw_upper), c='g')
+                \sum_{k=0}^{K}\log{w_k} \lteq -K\log{NI}
 
-                raise a
+            and the lower bound on the sum of the log of the weights is
+
+            .. math:
+
+                \sum_{k=0}^{K}\log{w_k} \gteq \log{(N + 1 - K)} - K\log{N}
+
+            then the problem can be cast as:
+
+            ..math 
+
+                \sum_{k=0}^{K}\log{w_k} = - K\log{N} + f\log{(N + 1 - K)}
+
+            where f is bounded between [0, 1].
+
             """
 
-            if np.all(np.isfinite(p_cov)):
-                draws = np.random.multivariate_normal(p_opt, p_cov, size=100)
-                pred_err = np.percentile(
-                    [function(target_K, *draw) for draw in draws], [16, 84], axis=0) \
-                    - pred
+            def cost(k, f):
+                lower = np.log(N + 1 - k) - k * np.log(N)
+                upper = -k * np.log(k)
 
-            else:
-                pred_err = np.nan * np.ones((2, target_K.size))
+                return lower + f * (upper - lower)
+
+
+
+            p_opt, p_cov = op.curve_fit(cost, xu, yu, bounds=[0, 1])
+
+            predicted_sum_log_weights = cost(K, *p_opt)
+
+            I = mml.information_of_sum_log_weights(predicted_sum_log_weights, D)
+            I_var = np.nan * np.ones((2, I.size))
+
 
         else:
-            pred = slw_upper
-            pred_err = np.nan * np.ones((2, pred.size))
+            I = I_upper
+            I_var = np.nan * np.ones((2, I.size))
 
-        return (pred, pred_err, slw_lower, slw_upper)
+        if xu.size > 5:
+            raise a
+
+        return (I, I_var, I_lower, I_upper)
 
 
     def _predict_negative_log_likelihood(self, K, N, D):
@@ -1138,11 +1061,6 @@ def _initialize_with_kmeans_pp(y, K, random_state=None, **kwargs):
     # If this is K = 1, then use this as the bound limit for sumlogdetcov
     weight = responsibility.sum(axis=1)/N
 
-    handler = kwargs.get("visualization_handler", None)
-    if handler is not None:
-        handler.emit("actual_I_slw",
-                     dict(K=weight.size, ))
-
     return (mu, cov, weight, responsibility)
 
 
@@ -1226,14 +1144,8 @@ def _expectation(y, mu, cov, weight, **kwargs):
     K = weight.size
     N, D = y.shape
     slogdetcov = np.sum(np.linalg.slogdet(cov)[1])
-    I, I_parts = _mixture_message_length(K, N, D, -nll, slogdetcov, 
+    I = _mixture_message_length(K, N, D, -nll, slogdetcov, 
         weights=[weight])
-
-    visualization_handler = kwargs.get("visualization_handler", None)
-    if visualization_handler is not None:
-        visualization_handler.emit("expectation", dict(
-            K=weight.size, message_length=I, responsibility=responsibility,
-            log_likelihood=log_likelihood))
 
     return (responsibility, log_likelihood, I)
 
@@ -1459,25 +1371,6 @@ def _maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     assert np.all(np.isfinite(new_cov))
     assert np.all(np.isfinite(new_weight))
     
-    visualization_handler = kwargs.get("visualization_handler", None)
-    if visualization_handler is not None:
-
-        # TODO: don't  do this twice
-        I_other = _mixture_message_length_parts(M, N, D)
-        visualization_handler.emit("maximization", dict(
-            mean=new_mu, cov=new_cov, 
-            weight=new_weight, I_other=I_other))
-
-
-        _, I_parts = _mixture_message_length(M, N, D, 0, 0, weights=[new_weight])
-        I_slw = I_parts["I_mixtures"] + I_parts["I_parameters"] \
-              + I_parts["I_weights"]
-
-        visualization_handler.emit("actual_I_slw", dict(K=new_mu.size, I_slw=I_slw))
-        visualization_handler.emit("actual_I_slogdetcovs", 
-            dict(K=new_mu.size, I_slogdetcovs=I_parts["I_slogdetcovs"]))
-
-
     return state 
 
 

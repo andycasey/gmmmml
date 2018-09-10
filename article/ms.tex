@@ -755,15 +755,22 @@ components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
           describe just two data points $w_{1..K-1} = 2/N$, and the remaining 
           component describes all other data points $w_{K} = 1 - 2(K-1)/N$
           as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
+          %\begin{equation}
+          %      \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
+          %\end{equation}
           \begin{equation}
                 \sum_{k=1}^{K}\log\weight_k = 2(K-1)\log\frac{2}{N} 
                 		    + \log\left(1 - \frac{2(K - 1)}{N}\right)
           \end{equation}
+
           \noindent{}and by making use of the identity 
             $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$:
           \begin{equation}
                 \sum_{k=1}^{K}\log\weight_k = 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \quad .
           \end{equation}
+          %\begin{equation}
+          %      \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+          %\end{equation}
 \end{enumerate}
 
 \noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
@@ -772,6 +779,10 @@ derived the bounds
 \sum_{k=1}^{K}\log\weight_k & \geq & -K\log{K} \nonumber \\
 \sum_{k=1}^{K}\log\weight_k & \leq & 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \nonumber
 \end{eqnarray}
+\begin{equation}
+-K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
+\end{equation}
+
 \noindent{}which gives us analytic expressions for the upper and lower value 
 of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture, and
 bounds on $I_{1}$ can be derived from just $\{K, N, D\}$.

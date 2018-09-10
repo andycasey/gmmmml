@@ -249,8 +249,10 @@ def generate_data(N=None, D=None, K=None, cluster_std=1.0,
     #    full_output=True, covariance_type="full")
 
     _, slogdetcovs = np.linalg.slogdet(cov)
-    I, I_parts = _mixture_message_length(K, N, D, -nll, np.sum(slogdetcovs),
+    I_parts = _mixture_message_length(K, N, D, -nll, np.sum(slogdetcovs),
         weights=[weight])
+
+    I = np.sum(I_parts.values())
 
     target = dict(mean=mean, cov=cov, weight=weight, I=I, I_parts=I_parts,
         nll=nll)
