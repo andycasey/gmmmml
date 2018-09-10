@@ -4,8 +4,9 @@ Visualize the search progress for a gaussian mixture model.
 """
 
 import os
-import numpy as np
+import logging as logger
 import matplotlib.pyplot as plt
+import numpy as np
 
 from matplotlib.patches import Ellipse
 from matplotlib.ticker import MaxNLocator
@@ -38,6 +39,13 @@ class VisualizationHandler(object):
         self._y_shape = y.shape
         self._data_projection_indices = data_projection_indices
 
+        self.__plot_bounds_kwds = dict(c="k", lw=2)
+        self.__plot_prediction_kwds = dict(c="tab:blue", lw=2)
+        self.__fill_between_prediction_kwds = dict(facecolor="tab:blue",
+                                                   alpha=0.5, edgecolor=None,
+                                                   zorder=-1)
+
+
         self._figure_path = "" if figure_path is None else figure_path
         self._figure_iter = 1
         self._figure_prefix = os.path.join(self._figure_path,
@@ -50,7 +58,8 @@ class VisualizationHandler(object):
 
         # lists for plotting
         self._plot_model_items = []
-        self._plot_prediction_items = []
+        self._plot_prediction_items = {}
+
 
         return None
 
@@ -194,7 +203,7 @@ class VisualizationHandler(object):
             cov_mask[y_index, y_index] = True
 
             for k in range(K):
-                mu = params["mu"][k][[x_index, y_index]]
+                mu = params["mean"][k][[x_index, y_index]]
                 cov = params["cov"][k][cov_mask].reshape((2, 2))
 
                 vals, vecs = np.linalg.eigh(cov)
@@ -238,6 +247,142 @@ class VisualizationHandler(object):
                 scatter.set_facecolor("k")
                 scatter.set_sizes(30 * np.ones(len(data)))
                 scatter.set_zorder(100)
+
+
+
+
+        elif kind == "maximization":
+
+            self._clear_items(self._plot_model_items)
+
+            ax = self._ax("data")
+            x_index, y_index = self._data_projection_indices
+
+            N, D = self._y_shape
+            K = params["weight"].size
+
+            cov_mask = np.zeros((D, D), dtype=bool)
+            cov_mask[y_index, x_index] = True
+            cov_mask[x_index, y_index] = True
+            cov_mask[x_index, x_index] = True
+            cov_mask[y_index, y_index] = True
+
+
+            for k in range(K):
+                mu = params["mean"][k][[x_index, y_index]]
+                cov = params["cov"][k][cov_mask].reshape((2, 2))
+
+                vals, vecs = np.linalg.eigh(cov)
+                order = vals.argsort()[::-1]
+                vals = vals[order]
+                vecs = vecs[:, order]
+
+                theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
+
+                # Show 2 standard deviations.
+                width, height = 2 * 2 * np.sqrt(vals)
+                ellipse = Ellipse(xy=mu, width=width, height=height, angle=theta,
+                    facecolor="r", alpha=0.25)
+
+                self._plot_model_items.append(ax.add_artist(ellipse))
+                self._plot_model_items.append(ax.scatter(
+                    [mu[x_index]], [mu[y_index]], facecolor="r", s=5))            
+
+
+        elif kind == "I_slw_bounds":
+
+            self._plot_prediction_items.setdefault(kind, [])
+            self._clear_items(self._plot_prediction_items[kind])
+
+            K, lower, upper = (params["K"], params["lower"], params["upper"])
+
+            ax = self._ax("slogw")
+
+            self._plot_prediction_items[kind].extend([
+                ax.plot(K, lower, **self.__plot_bounds_kwds)[0],
+            ])
+
+        elif kind == "predict_I_slw":
+
+            self._plot_prediction_items.setdefault(kind, [])
+            self._clear_items(self._plot_prediction_items[kind])
+
+            K, p_I_slw = params["K"], params["p_I_slw"]
+            p_I_slw_err_pos, p_I_slw_err_neg = params["p_I_slw_err"]
+
+            ax = self._ax("slogw")
+
+            self._plot_prediction_items[kind].extend([
+                ax.plot(K, p_I_slw, **self.__plot_prediction_kwds)[0],
+                ax.fill_between(K, 
+                                p_I_slw + p_I_slw_err_neg,
+                                p_I_slw + p_I_slw_err_pos,
+                                **self.__fill_between_prediction_kwds)
+
+            ])
+
+
+        elif kind == "actual_I_slw":
+
+            K, I_slw = params["K"], params["I_slw"]
+
+            self._slogw_data.append([K, I_slw])
+            scat, data = (self._scatter_slogw_data, self._slogw_data)
+
+            data = np.array(data)
+            scat.set_offsets(data)
+            scat.set_facecolor("k")
+            scat.set_sizes(30 * np.ones(len(data)))
+            scat.set_zorder(100)
+
+
+        elif kind == "I_sldc_bounds":
+
+            ax = self._ax("slogdet")
+
+            self._plot_prediction_items.setdefault(kind, [])
+            self._clear_items(self._plot_prediction_items[kind])
+
+            K, lower, upper = (params["K"], params["lower"], params["upper"])
+
+            self._plot_prediction_items[kind].extend([
+                ax.plot(K, lower, **self.__plot_bounds_kwds)[0],
+            ])
+
+
+        elif kind == "actual_I_slogdetcovs":
+
+            K, I_sldc = params["K"], params["I_slogdetcovs"]
+
+            self._slogdet_data.append([K, I_sldc])
+            scat, data = (self._scatter_slogdet_data, self._slogdet_data)
+
+            data = np.array(data)
+            scat.set_offsets(data)
+            scat.set_facecolor("k")
+            scat.set_sizes(30 * np.ones(len(data)))
+            scat.set_zorder(100)
+
+        elif kind == "predict_I_slogdetcovs":
+
+            K, p_I_sldc = params["K"], params["p_I_slogdetcovs"]
+            p_I_sldc_pos_err = params["p_I_slogdetcovs_pos_err"]
+            p_I_sldc_neg_err = params["p_I_slogdetcovs_neg_err"]
+
+
+            self._plot_prediction_items.setdefault(kind, [])
+            self._clear_items(self._plot_prediction_items[kind])
+
+            ax = self._ax("slogdet")
+
+            self._plot_prediction_items[kind].extend([
+                ax.plot(K, p_I_sldc, **self.__plot_prediction_kwds)[0],
+                ax.fill_between(K, 
+                                p_I_sldc + p_I_sldc_neg_err,
+                                p_I_sldc + p_I_sldc_pos_err,
+                                **self.__fill_between_prediction_kwds)
+
+            ])
 
 
         elif kind == "prediction":
@@ -350,8 +495,9 @@ class VisualizationHandler(object):
 
 
         else:
-            raise NotImplementedError("unknown event kind")
-
+            logger.warn(f"Ignoring vizualiation event '{kind}'")
+            return None
+        
         if snapshot:
             self.snapshot()
 

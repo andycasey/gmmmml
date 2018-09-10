@@ -16,7 +16,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(K=30, D=10, center_box=(-1000, 1000))
+            y, labels, target, kwds = utils.generate_data(K=30, D=5, center_box=(-100, 100))
 
         except:
           logging.exception("failed")
@@ -34,7 +34,7 @@ for i in range(10):
     search_model.kmeans_search(y, K_max=kwds["centers"] + 25, 
         visualization_handler=visualization_handler)
 
-
+    """
     K = np.array(search_model._state_K)
 
     ke = int(np.ceil(K.size**0.5))
@@ -52,7 +52,7 @@ for i in range(10):
             verticalalignment="top")
 
     fig.subplots_adjust(wspace=0, hspace=0, top=1.0, bottom=0.0, left=0, right=1)
-
+    """
     
     raise a
 

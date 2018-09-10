@@ -275,6 +275,7 @@ def _mixture_message_length_parts(K, N, D):
     return I_mixtures + I_parameters
 
 
+
 def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None, 
     yerr=0.001):
     """
@@ -462,11 +463,6 @@ class GaussianMixture(object):
 
         for K in range(1, K_max):
 
-            #model = cluster.KMeans(n_clusters=K)
-            #model.fit(y)
-            #mu = model.cluster_centers_
-            #labels = model.labels_
-
             # Assign everything to the closest thing.            
             mu = _initialize_with_kmeans_pp(y, K)
             labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
@@ -603,6 +599,10 @@ class GaussianMixture(object):
         _, I_parts = _mixture_message_length(K, N, D, _z, _z)
         I_other = I_parts["I_mixtures"] + I_parts["I_parameters"]
 
+        # TODO: Move this calculation to one place so we use the same calculation
+        # for actual as we do for predictions.
+
+
         I_slw_c = (0.25 * D * (D + 3) - 0.5)
         I_sldc_c = -0.5 * (D + 2)
             
@@ -612,7 +612,6 @@ class GaussianMixture(object):
 
         nll_strict_bound, nll_relaxed_bound \
             = self._predict_lower_bounds_on_negative_log_likelihood(K, N, D)
-
 
         yerr = 0.001
         I_strict_lower_bound = I_other \
@@ -643,8 +642,9 @@ class GaussianMixture(object):
                 upper=I_other + I_slw_c * slw_upper))
 
             visualization_handler.emit("predict_I_slw",
-                dict(K=K, p_slw=I_other + I_slw_c * p_slw, 
-                    p_slw_err=I_other + I_slw_c * p_slw_err))
+                dict(K=K, 
+                     p_I_slw=I_other + I_slw_c * p_slw, 
+                     p_I_slw_err=I_slw_c * p_slw_err))
 
 
             # Show the information contributions from the sum of the log of the
@@ -658,10 +658,10 @@ class GaussianMixture(object):
             if p_sldc is not None \
             and np.all(np.isfinite(np.hstack([p_sldc, p_sldc_pos_err]))) \
             and np.sum((p_sldc + p_sldc_pos_err) <= (K * np.max(log_det_covs))) >= (K.size - 2):
-                visualization_handler.emit("predict_I_slogdetcov",
-                    dict(K=K, p_slogdetcovs=I_sldc_c * p_sldc,
-                        p_slogdetcovs_pos_err=I_sldc_c * p_sldc_pos_err,
-                        p_slogdetcovs_neg_err=I_sldc_c * p_sldc_neg_err))
+                visualization_handler.emit("predict_I_slogdetcovs",
+                    dict(K=K, p_I_slogdetcovs=I_sldc_c * p_sldc,
+                        p_I_slogdetcovs_pos_err=I_sldc_c * p_sldc_pos_err,
+                        p_I_slogdetcovs_neg_err=I_sldc_c * p_sldc_neg_err))
 
                 I_prediction = I_other \
                      + I_slw_c * p_slw \
@@ -680,7 +680,6 @@ class GaussianMixture(object):
 
             visualization_handler.emit("predict_nll_bounds", dict(K=K,
                 nll_strict_bound=nll_strict_bound, nll_relaxed_bound=nll_relaxed_bound))
-
 
             # Predict the total message length.
             visualization_handler.emit("predict_I_bounds", dict(K=K,
@@ -725,6 +724,7 @@ class GaussianMixture(object):
 
             pred = function(target_K, *p_opt)
 
+            """
             if x_unique.size > 5:
                 import matplotlib.pyplot as plt
                 fig, axes = plt.subplots(2)
@@ -743,6 +743,7 @@ class GaussianMixture(object):
                 ax.plot(target_K, normit(slw_upper), c='g')
 
                 raise a
+            """
 
             if np.all(np.isfinite(p_cov)):
                 draws = np.random.multivariate_normal(p_opt, p_cov, size=100)
@@ -1017,6 +1018,9 @@ class GaussianMixture(object):
                 x, y, p0=p0, maxfev=100000, sigma=x.astype(float)**-2)
 
         except RuntimeError:
+            return (None, None, None)
+
+        if not np.all(np.isfinite(p_opt)) or not np.all(np.isfinite(p_cov)):
             return (None, None, None)
 
         # Save optimized point for next iteration.
@@ -1449,9 +1453,22 @@ def _maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     
     visualization_handler = kwargs.get("visualization_handler", None)
     if visualization_handler is not None:
-        I_other = _mixture_message_length_parts(new_weight.size, N, D)
-        visualization_handler.emit("model", dict(mean=new_mu, cov=new_cov, 
+
+        # TODO: don't  do this twice
+        I_other = _mixture_message_length_parts(M, N, D)
+        visualization_handler.emit("maximization", dict(
+            mean=new_mu, cov=new_cov, 
             weight=new_weight, I_other=I_other))
+
+
+        _, I_parts = _mixture_message_length(M, N, D, 0, 0, weights=[new_weight])
+        I_slw = I_parts["I_mixtures"] + I_parts["I_parameters"] \
+              + I_parts["I_weights"]
+
+        visualization_handler.emit("actual_I_slw", dict(K=new_mu.size, I_slw=I_slw))
+        visualization_handler.emit("actual_I_slogdetcovs", 
+            dict(K=new_mu.size, I_slogdetcovs=I_parts["I_slogdetcovs"]))
+
 
     return state 
 
