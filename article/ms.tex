@@ -752,24 +752,31 @@ components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
                 \sum_{k=1}^{K}\log\weight_k = \sum_{k=1}^{K}\log{\frac{1}{K}} =-K\log{K} \quad .
           \end{equation}
     \item The weights are distributed such that $K - 1$ components each 
-          describe just one data point $w_{1..K-1} = 1/N$, and the remaining 
-          component describes all other data points $w_{K} = 1 - (K-1)/N$
+          describe just two data points $w_{1..K-1} = 2/N$, and the remaining 
+          component describes all other data points $w_{K} = 1 - (K-1)\frac{2}{N}$
           as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
+          %\begin{equation}
+          %      \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
+          %\end{equation}
           \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
+            \sum_{k=1}^{K}\log\weight_k = (K - 1)\log\frac{2}{N} + \log\left(1 - \frac{2(K - 1)}{N}\right)
           \end{equation}
+
           \noindent{}and by making use of the identity 
             $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$
           we can simplify this expression to:
           \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+            \sum_{k=1}^{K}\log\weight_k = (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
           \end{equation}
+          %\begin{equation}
+          %      \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+          %\end{equation}
 \end{enumerate}
 
 \noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
 derived the bounds
 \begin{equation}
--K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad - K\log{K} + \log(N + 1 - K)
+-K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
 \end{equation}
 \noindent{}which gives us analytic expressions for the upper and lower value 
 of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture, and
