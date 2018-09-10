@@ -464,18 +464,7 @@ class GaussianMixture(object):
         for K in range(1, K_max):
 
             # Assign everything to the closest thing.            
-            mu = _initialize_with_kmeans_pp(y, K)
-            labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
-
-            # generate repsonsibilities.
-            responsibility = np.zeros((K, N))
-            responsibility[labels, np.arange(N)] = 1.0
-
-            # estimate covariance matrices.
-            cov = _estimate_covariance_matrix_full(y, responsibility, mu)
-
-            # If this is K = 1, then use this as the bound limit for sumlogdetcov
-            weight = responsibility.sum(axis=1)/N
+            mu, cov, weight, responsibility = _initialize_with_kmeans_pp(y, K)
 
             # Do one E-M step.
             try:
@@ -1129,13 +1118,32 @@ def _parameters_per_mixture(D, covariance_type):
         raise ValueError("unknown covariance type '{}'".format(covariance_type))
 
 
-def _initialize_with_kmeans_pp(y, K, random_state=None):
+def _initialize_with_kmeans_pp(y, K, random_state=None, **kwargs):
 
     random_state = check_random_state(random_state)
     squared_norms = row_norms(y, squared=True)
-    return cluster.k_means_._k_init(y, K, x_squared_norms=squared_norms,
+    mu = cluster.k_means_._k_init(y, K, x_squared_norms=squared_norms,
         random_state=random_state)
 
+    labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
+
+    # generate repsonsibilities.
+    N, D = y.shape
+    responsibility = np.zeros((K, N))
+    responsibility[labels, np.arange(N)] = 1.0
+
+    # estimate covariance matrices.
+    cov = _estimate_covariance_matrix_full(y, responsibility, mu)
+
+    # If this is K = 1, then use this as the bound limit for sumlogdetcov
+    weight = responsibility.sum(axis=1)/N
+
+    handler = kwargs.get("visualization_handler", None)
+    if handler is not None:
+        handler.emit("actual_I_slw",
+                     dict(K=weight.size, ))
+
+    return (mu, cov, weight, responsibility)
 
 
 

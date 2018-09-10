@@ -41,6 +41,8 @@ class VisualizationHandler(object):
 
         self.__plot_bounds_kwds = dict(c="k", lw=2)
         self.__plot_prediction_kwds = dict(c="tab:blue", lw=2)
+        self.__fill_between_bounds_kwds = dict(facecolor="k", alpha=0.3,
+                                               zorder=-1)
         self.__fill_between_prediction_kwds = dict(facecolor="tab:blue",
                                                    alpha=0.5, edgecolor=None,
                                                    zorder=-1)
@@ -300,6 +302,8 @@ class VisualizationHandler(object):
 
             self._plot_prediction_items[kind].extend([
                 ax.plot(K, lower, **self.__plot_bounds_kwds)[0],
+                ax.plot(K, upper, **self.__plot_bounds_kwds)[0],
+                ax.fill_between(K, lower, upper, **self.__fill_between_bounds_kwds),
             ])
 
         elif kind == "predict_I_slw":
@@ -326,7 +330,7 @@ class VisualizationHandler(object):
 
             K, I_slw = params["K"], params["I_slw"]
 
-            self._slogw_data.append([K, I_slw])
+            self._slogw_data.append([K, I_slw[0]])
             scat, data = (self._scatter_slogw_data, self._slogw_data)
 
             data = np.array(data)
