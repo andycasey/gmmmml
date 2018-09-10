@@ -166,7 +166,9 @@ def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None,
         + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
     I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
     
-    I_data = -log_likelihood - D * N * np.log(yerr)
+    I_data = -log_likelihood 
+    # TODO: this requires a thinko
+    #- D * N * np.log(yerr)
     I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
     I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
 
@@ -212,7 +214,7 @@ class GaussianMixture(object):
 
     def __init__(self, covariance_type="full", covariance_regularization=0, 
         threshold=1e-5, max_em_iterations=10000, visualization_handler=None,
-        **kwargs):
+        predict=25, **kwargs):
 
         available = ("full", )
         covariance_type = covariance_type.strip().lower()
@@ -247,9 +249,6 @@ class GaussianMixture(object):
         self._state_slog_weights = []
         self._state_slog_likelihoods = []
 
-        self._state_predictions_K = []
-        self._state_predictions_slog_det_covs = []
-        self._state_predictions_slog_likelihoods = []
         self._state_meta = {}
 
         return None
@@ -349,7 +348,6 @@ class GaussianMixture(object):
         kwds = {**self._em_kwds, **kwargs}
         handler = kwds.get("visualization_handler", None)
 
-        #for K in np.random.choice(np.arange(1, 1 + K_max), K_max, replace=False):
 
         for K in range(1, K_max):
         
@@ -467,6 +465,9 @@ class GaussianMixture(object):
 
         K = np.atleast_1d(K)
 
+        # Constant terms.
+        I_other = mml.information_of_mixture_constants(K, N, D)
+
         # Sum of the log of the weights.
         I_sum_log_weights, I_sum_log_weights_var, \
         I_sum_log_weights_lower, I_sum_log_weights_upper \
@@ -474,7 +475,8 @@ class GaussianMixture(object):
                 K, N, D, data=(self._state_K, self._state_slog_weights))
 
         # Sum of the log of the determinant of the covariance matrices.
-        I_sum_log_det_covs, I_sum_log_det_covs_var, I_sum_log_det_covs_lower \
+        I_sum_log_det_covs, I_sum_log_det_covs_var, \
+        I_sum_log_det_covs_lower, I_sum_log_det_covs_upper \
             = mml.predict_information_of_sum_log_det_covs(
                 K, D, data=(self._state_K, self._state_det_covs))
 
@@ -483,9 +485,10 @@ class GaussianMixture(object):
             = mml.predict_negative_sum_log_likelihood(
                 K, data=(self._state_K, -np.array(self._state_slog_likelihoods)))
 
-        # Predict total.
-        I, I_var = mml.predict_message_length(
-            K, data=(self._state_K, self._state_I))
+        # Predict total, given other predictions.
+        I = I_other + I_sum_log_weights + I_sum_log_det_covs + I_data
+        I_var = I_sum_log_weights_var + I_sum_log_det_covs_var + I_data_var
+
 
         handler = kwargs["visualization_handler"]
         if handler is not None:
@@ -495,12 +498,17 @@ class GaussianMixture(object):
 
             handler.emit("predict_I_slogdetcovs", dict(
                 K=K, I=I_sum_log_det_covs, I_var=I_sum_log_det_covs_var,
-                I_lower=I_sum_log_det_covs_lower))
+                I_lower=I_sum_log_det_covs_lower,
+                I_upper=I_sum_log_det_covs_upper))
 
             handler.emit("predict_I_data", dict(
                 K=K, I=I_data, I_var=I_data_var))
 
             handler.emit("predict_I", dict(K=K, I=I, I_var=I_var))
+
+            # Create an image.
+            handler.emit(None, None, snapshot=True)
+
 
         """
         

@@ -5,6 +5,7 @@ Visualize the search progress for a gaussian mixture model.
 
 import os
 import logging as logger
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,6 +14,15 @@ from matplotlib.ticker import MaxNLocator
 
 from . import mml
 
+mpl_style = {
+    "font.size": 12.0,
+    "text.usetex": True,
+    "text.latex.preamble": r"\usepackage{amsmath}",
+    "text.latex.preview": True,
+    "axes.unicode_minus": False
+}
+
+matplotlib.style.use(mpl_style)
 
 class VisualizationHandler(object):
 
@@ -100,18 +110,18 @@ class VisualizationHandler(object):
         ax.set_ylabel(r"$x_{{{0}}}$".format(y_index))
         ax.xaxis.set_major_locator(MaxNLocator(3))
         ax.yaxis.set_major_locator(MaxNLocator(3))
-        
+         
         self._actual_sum_log_weights = []
         ax = self._ax("sum_log_weights")
         ax.set_xlabel(r"$K$")
-        ax.set_ylabel(r"$\left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k}$ $[{\rm nats}]$")
+        ax.set_ylabel(r"$\left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum\log{w_k} \textrm{ / nats}$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
         self._scatter_actual_sum_log_weights = ax.scatter([np.nan], [np.nan])
 
         ax = self._ax("sum_log_det_covs")
         ax.set_xlabel(r"$K$")
-        ax.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|}$ $[{\rm nats}]$")
+        ax.set_ylabel(r"$-\frac{(D+2)}{2}\sum\log{|C_k|} \textrm{ / nats}$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
         self._actual_sum_log_det_covs = []
@@ -119,24 +129,20 @@ class VisualizationHandler(object):
 
         ax = self._ax("negative_sum_log_likelihood")
         ax.set_xlabel(r"$K$")
-        ax.set_ylabel(r"$-\sum\log{\mathcal{L}(y\|\theta)}$ $[{\rm nats}]$")
+        ax.set_ylabel(r"$-\sum\log{\mathcal{L}(y|\theta)} \textrm{ / nats}$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
         self._actual_negative_log_likelihoods = []
         self._scatter_actual_negative_log_likelihoods = ax.scatter([np.nan], [np.nan])
 
-        self._actual_message_lengths = []
         ax = self._ax("I")
         ax.set_xlabel(r"$K$")
-        ax.set_ylabel(r"$I$ $[{\rm nats}]$")
+        ax.set_ylabel(r"$I \textrm{ / nats}$")
         ax.xaxis.set_major_locator(MaxNLocator(5))
         ax.yaxis.set_major_locator(MaxNLocator(5))
+        self._actual_message_lengths = []
         self._scatter_actual_message_lengths = ax.scatter([np.nan], [np.nan])
 
-        if target is not None:
-            print("no target implemented  yet")
-
-            #raise NotImplementedError("not  dun yet")
 
         for ax in self._fig.axes:
             ax.autoscale(enable=True)
@@ -191,7 +197,7 @@ class VisualizationHandler(object):
         return None
 
 
-    def emit(self, kind, params, snapshot=True):
+    def emit(self, kind, params, snapshot=False):
         r"""
         Handler for events.
         """
@@ -299,7 +305,7 @@ class VisualizationHandler(object):
             self._clear_items(self._plot_items[ax])
             
             K, I, I_var = (params["K"], params["I"], params["I_var"])
-            I_lower = params["I_lower"]
+            I_lower, I_upper = (params["I_lower"], params["I_upper"])
 
             prediction_colour = self._colours["predictions"]
 
@@ -308,14 +314,44 @@ class VisualizationHandler(object):
                 ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
                                 facecolor=prediction_colour, alpha=0.3, zorder=-1),
             ])
-            """
-                ax.fill_between(K, 
+
+            bound_colour = self._colours["bounds"]
+
+            v = np.vstack([
+                np.vstack([K, I + np.sqrt(I_var)]).T,
+                np.array(self._actual_sum_log_det_covs)
+            ])
+
+            _rescale_based_on_data(ax, *v.T)
+
+
+            # Adjust K so that it extends the region we want.
+            if K.size > 1:
+                Ks = np.hstack([K[0] - 0.5, K[1:-1], K[-1] + 0.5])
+            else:
+                Ks = K
+
+            set_upper = not np.all(np.isfinite(I_upper))
+
+            if set_upper:
+                plt.draw()
+                ylim = ax.get_ylim()
+                I_upper = np.max(ylim) * np.ones_like(I_lower)
+
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I_lower, c=bound_colour, lw=1)[0],
+                ax.plot(K, I_upper, c=bound_colour, lw=1)[0],
+                ax.fill_between(Ks, 
                                 I_lower, 
-                                np.max(I + np.sqrt(I_var)) * np.ones_like(I_lower),
-                                facecolor=self._colours["bounds"], alpha=0.3,
+                                I_upper,
+                                facecolor=bound_colour, alpha=0.3,
                                 zorder=-1)
             ])
-            """
+
+            if set_upper:
+                ax.set_ylim(ylim)
+            
 
         elif kind == "actual_I_data":
 
@@ -366,9 +402,7 @@ class VisualizationHandler(object):
             scat.set_sizes(30 * np.ones(len(data)))
             scat.set_zorder(100)
 
-            #elif kind == "predict_I":
-
-            #_rescale_based_on_data(self._ax("I"), *data.T)
+            print(f"{kind} {K} {I}")
 
         elif kind == "predict_I":
 
@@ -385,6 +419,9 @@ class VisualizationHandler(object):
                                 facecolor=prediction_colour, alpha=0.3, zorder=-1),
             ])
 
+
+        elif kind is None:
+            None
 
         else:
             logger.warn(f"Ignoring vizualiation event '{kind}'")
@@ -439,7 +476,7 @@ def _rescale_based_on_data(ax, x=None, y=None, y_percent_edge=5):
 
     if x is not None:
         if np.sum(np.isfinite(np.unique(x))) > 1:
-            ax.set_xlim(np.nanmin(x) - 1, np.nanmax(x) + 5)
+            ax.set_xlim(np.nanmin(x) - 0.5, np.nanmax(x) + 0.5)
 
     if y is not None:
         y_finite = np.array(y)[np.isfinite(y)]

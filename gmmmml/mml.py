@@ -3,6 +3,7 @@ import scipy.optimize as op
 
 import george
 from george import (kernels, modeling)
+from scipy.special import gammaln
 
 # TODO: move to utils?
 
@@ -22,6 +23,67 @@ def _group_over(x, y, function):
 
 
 
+
+def gmm_number_of_parameters(K, D):
+    r"""
+    Return the total number of model parameters :math:`Q`, if a full 
+    covariance matrix structure is assumed.
+
+    .. math:
+
+        Q = \frac{K}{2}\left[D(D+3) + 2\right] - 1
+
+
+    :param K:
+        The number of Gaussian mixtures.
+
+    :param D:
+        The dimensionality of the data.
+
+    :returns:
+        The total number of model parameters, :math:`Q`.
+    """
+    return (0.5 * D * (D + 3) * K) + K - 1
+
+
+
+def information_of_mixture_constants(K, N, D):
+    r"""
+    Return the message length, or information, to encode the additional parameters
+    for a Gaussian mixture model. Specifically this returns the sum of the
+    information to encode the number of parameters and the constant terms
+    related to the mixture itself:
+
+    .. math:
+
+        I_{mixture} = (1 - \frac{D}{2})K\log{2} + \Gamma\log{K} 
+                    + \frac{1}{4}(2(K - 1) + KD(D+3))\log{N}
+
+        I_{parameters} = \frac{1}{2}\log{Q\pi} - \frac{Q}{2}\log{2\pi}
+
+    where :math:`Q` is the total number of model parameters
+
+    .. math:
+
+        Q = \frac{KD(D + 3)}{2} + K - 1
+
+    :param K:
+        The number of components in the target Gaussian mixture.
+
+    :param N:
+        The number of data points.
+
+    :param D:
+        The dimensionality of the data.
+    """
+
+    Q = gmm_number_of_parameters(K, D)
+
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+
+    return I_mixtures + I_parameters
 
 
 def _bounds_of_sum_log_weights(K, N):
@@ -264,35 +326,48 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     if data is None:
         raise NotImplementedError("cannot predict this theoretically")
 
-    slogdetcovs = np.array([np.sum(dc) for dc in data[1]])
+    slogdetcovs = np.array([np.sum(np.log(dc)) for dc in data[1]])
     x, y = _group_over(data[0], slogdetcovs, np.mean)
     _, yerr = _group_over(data[0], slogdetcovs, np.std)
 
     yerr = np.clip(yerr, 1, np.inf)
 
-    kernel = np.var(y) * kernels.ExpSquaredKernel(1) \
-           + np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
+    var_y = np.var(y)
+    var_y = var_y if (np.isfinite(var_y) and var_y > 0) else 1
+
+    kernel = var_y * kernels.ExpSquaredKernel(1) #\
+   #+ np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
 
     #(y) * kernels.LocalGaussianKernel(location=0, log_width=0) \
 
-    gp = george.GP(kernel=kernel, 
-                   mean=np.mean(y), fit_mean=True,
-                   white_noise=np.log(np.std(y)), fit_white_noise=True)
-                   
-    def nll(p):
-        gp.set_parameter_vector(p)
-        ll = gp.log_likelihood(y, quiet=True)
-        return -ll if np.isfinite(ll) else 1e25
+    class MeanModel(modeling.Model):
 
-    def grad_nll(p):
+        parameter_names = ("a", "b", "c")
+
+        def get_value(self, k):
+            k = k.flatten()
+            return self.a/(k - self.b) +  self.c
+
+    white_noise = np.log(np.sqrt(var_y))
+
+    gp = george.GP(kernel=kernel, 
+                   mean=MeanModel(a=1, b=0, c=np.mean(y)), fit_mean=True,
+                   white_noise=white_noise, fit_white_noise=True)
+                  
+    gp.compute(x.astype(float), yerr=yerr)
+
+    def nlp(p):
+        gp.set_parameter_vector(p)
+        lp = gp.log_likelihood(y, quiet=True) + gp.log_prior()
+        return -lp if np.isfinite(lp) else 1e25
+
+    def grad_nlp(p):
         gp.set_parameter_vector(p)
         return -gp.grad_log_likelihood(y, quiet=True)
 
-    gp.compute(x.astype(float), yerr=yerr)
-
     p0 = gp.get_parameter_vector()
 
-    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+    results = op.minimize(nlp, p0, method="L-BFGS-B")
 
     gp.set_parameter_vector(results.x)
 
@@ -301,10 +376,17 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     I = information_of_sum_log_det_covs(pred, D)
     I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
+    # Calculate the lower bound based on the data we have.
     max_log_det_cov = np.log(np.max(np.hstack(data[1])))
-    I_lower = information_of_sum_log_det_covs(K * max_log_det_cov, D)
+    min_log_det_cov = np.log(np.min(np.hstack(data[1])))
 
-    return (I, I_var, I_lower)
+
+    I_lower = information_of_sum_log_det_covs(K * max_log_det_cov, D)
+    I_upper = information_of_sum_log_det_covs(K * min_log_det_cov, D)
+
+    # Calculate upper bound based on the two-point autocorrelation function
+
+    return (I, I_var, I_lower, I_upper)
 
 
 def predict_negative_sum_log_likelihood(K, data):
@@ -334,11 +416,14 @@ def predict_negative_sum_log_likelihood(K, data):
     _, yerr = _group_over(data[0], data[1], np.std)
     yerr = np.clip(yerr, 1, np.inf)
 
-    kernel = np.var(y) * kernels.Matern32Kernel(1)
+    var_y = np.var(y)
+    var_y = var_y if (var_y > 0 and np.isfinite(var_y)) else 1
+
+    kernel = var_y * kernels.ExpSquaredKernel(1)
 
     gp = george.GP(kernel=kernel,
                    mean=np.mean(y), fit_mean=True,
-                   white_noise=np.log(np.std(y)), fit_white_noise=True)
+                   white_noise=np.log(np.sqrt(var_y)), fit_white_noise=True)
 
     def nll(p):
         gp.set_parameter_vector(p)
@@ -362,37 +447,3 @@ def predict_negative_sum_log_likelihood(K, data):
     return (pred_nll, pred_nll_var)
 
 
-def predict_message_length(K, data):
-
-    x, y = _group_over(data[0], data[1], np.mean)
-    _, yerr = _group_over(data[0], data[1], np.std)
-    yerr = np.clip(yerr, 1, np.inf)
-
-    kernel = np.var(y) * kernels.Matern32Kernel(1)
-
-    gp = george.GP(kernel=kernel,
-                   mean=np.mean(y), fit_mean=True,
-                   white_noise=np.log(np.std(y)), fit_white_noise=True)
-
-    def nll(p):
-        gp.set_parameter_vector(p)
-        ll = gp.log_likelihood(y, quiet=True)
-        return -ll if np.isfinite(ll) else 1e25
-
-    def grad_nll(p):
-        gp.set_parameter_vector(p)
-        return -gp.grad_log_likelihood(y, quiet=True)
-
-    gp.compute(x.astype(float), yerr=yerr)
-
-    p0 = gp.get_parameter_vector()
-
-    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
-
-    gp.set_parameter_vector(results.x)
-
-    pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
-
-    return (pred_nll, pred_nll_var)
-
-    
