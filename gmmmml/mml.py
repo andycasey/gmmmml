@@ -262,9 +262,11 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     x, y = _group_over(data[0], data[1], np.mean)
     _, yerr = _group_over(data[0], data[1], np.std)
 
+    yerr = np.clip(yerr, 0, np.inf)
+
     kernel = np.var(y) * kernels.LinearKernel(order=1, log_gamma2=1) \
            + np.var(y) * kernels.ExpSquaredKernel(1)
-        
+
     gp = george.GP(kernel=kernel, 
                    white_noise=np.log(np.std(y)), fit_white_noise=True)
                    
@@ -277,18 +279,11 @@ def predict_information_of_sum_log_det_covs(K, D, data):
         gp.set_parameter_vector(p)
         return -gp.grad_log_likelihood(y, quiet=True)
 
-
-    gp.compute(x.astype(float), yerr=np.ones_like(x))
-
-    #print("Initial \log{{L}} = {:.2f}".format(gp.log_likelihood(y)))
-    #print("Initial \grad\log{{L}} = {}".format(gp.grad_log_likelihood(y)))
+    gp.compute(x.astype(float), yerr=yerr)
 
     p0 = gp.get_parameter_vector()
 
-    gp_result = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B", tol=1e-8)
-
-    #print("Final \log{{L}} = {:.2f}".format(gp.log_likelihood(y)))
-    #print("Final \grad\log{{L}} = {}".format(gp.grad_log_likelihood(y)))
+    gp_result = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
 
     pred, pred_var = gp.predict(y, K, return_var=True)
 

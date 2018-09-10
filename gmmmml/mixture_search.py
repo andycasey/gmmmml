@@ -465,11 +465,13 @@ class GaussianMixture(object):
             = mml.predict_information_of_sum_log_weights(
                 K, N, D, data=(self._state_K, self._state_slog_weights))
 
-
         # Sum of the log of the determinant of the covariance matrices.
         I_sum_log_det_covs, I_sum_log_det_covs_var \
             = mml.predict_information_of_sum_log_det_covs(
                 K, D, data=(self._state_K, self._state_sum_log_det_covs))
+
+        # Negative log-likelihood.
+
 
 
 
