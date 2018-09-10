@@ -730,8 +730,8 @@ I(\vec{\data}|\vec{\psi}) = I_{1}(K, N, D, \vec{\weight})
 \begin{eqnarray}
     I_{1} &=& \left(1-\frac{D}{2}\right)K\log{2} + \log{\Gamma(K)} + \frac{1}{4}\left[2\left(K - 1\right) + KD\left(D+3\right)\right]\log{N} \nonumber \\
           &+& \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \left(\frac{D(D+3) - 2}{4}\right)\sum_{k=1}^{K}\log{\weight_k} \todo{+ \kappa} \quad , \label{eq:I1} \\
-    I_{2} &=& -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{|\veccov_k|} \quad {\textrm and},\\
-    I_{3} &=& -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) - DN\log{\sigma_{\datum}} \quad .
+    I_{2} &=& -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{|\veccov_k|} \quad \textrm{and},\\
+    I_{3} &=& -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) - DN\log{\mathcal{E}} \quad .
 \end{eqnarray}
 The nomenclature for $I_1$, $I_2$ and $I_3$ bear no relation to the two-part 
 message that we introduced earlier to describe message length. Rather we are
@@ -752,25 +752,26 @@ components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
                 \sum_{k=1}^{K}\log\weight_k = \sum_{k=1}^{K}\log{\frac{1}{K}} =-K\log{K} \quad .
           \end{equation}
     \item The weights are distributed such that $K - 1$ components each 
-          describe just one data point $w_{1..K-1} = 1/N$, and the remaining 
-          component describes all other data points $w_{K} = 1 - (K-1)/N$
+          describe just two data points $w_{1..K-1} = 2/N$, and the remaining 
+          component describes all other data points $w_{K} = 1 - 2(K-1)/N$
           as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
           \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
+                \sum_{k=1}^{K}\log\weight_k = 2(K-1)\log\frac{2}{N} 
+                		    + \log\left(1 - \frac{2(K - 1)}{N}\right)
           \end{equation}
           \noindent{}and by making use of the identity 
-            $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$
-          we can simplify this expression to:
+            $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$:
           \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+                \sum_{k=1}^{K}\log\weight_k = 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \quad .
           \end{equation}
 \end{enumerate}
 
 \noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
 derived the bounds
-\begin{equation}
--K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad - K\log{K} + \log(N + 1 - K)
-\end{equation}
+\begin{eqnarray}
+\sum_{k=1}^{K}\log\weight_k & \geq & -K\log{K} \nonumber \\
+\sum_{k=1}^{K}\log\weight_k & \leq & 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \nonumber
+\end{eqnarray}
 \noindent{}which gives us analytic expressions for the upper and lower value 
 of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture, and
 bounds on $I_{1}$ can be derived from just $\{K, N, D\}$.
@@ -877,13 +878,24 @@ approximate lower bound is:
 \noindent{}Like before, we can consider the lower bound on $-N\sum_{k=1}^{K}\weight_{k}\log\weight_k$
 for any mixture of $K$ components by setting the weight of $K - 1$ mixtures
 to the smallest realistic values, where those mixtures encapsulate only two
-data points and $\todo{w_{1} = w_2 = w_{\cdots} = w_{K-1} = 2/N}$:
-
+data points and $w_{1} = w_2 = w_{\cdots} = w_{K-1} = 2/N$ such that
+%\begin{eqnarray}
+%	\sum_{k=1}^{K}\weight_{k}\log\weight_k = \left[(K-1)\left(\frac{2}{N}\log{\frac{2}{N}}\right) + \left(1-\frac{2(K-1)}{N}\right)\log{\left(1-\frac{2(K-1)}{N}\right)}\right] \nonumber
+%\end{eqnarray}`
+%\noindent{}and
 \begin{eqnarray}
--N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& -N\left[(K-1)\left(\frac{1}{N}\log\frac{1}{N}\right) + \left(1 - \frac{K-1}{N}\right)\log\left(1 - \frac{K-1}{N}\right)\right] \nonumber \\
--N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& (K - 1)\log{N} + (K - 1 - N)\log\left(1-\frac{K-1}{N}\right) \nonumber \\
--N\sum_{k=1}^{K}\weight_{k}\log\weight_k &=& N\log{N} + (K - 1 - N)\log\left(N-K+1\right) \quad .
+	-N\sum_{k=1}^{K}\weight_{k}\log\weight_k \geq 2(1-K)\log{2} + N\log{N} - (N-2K+2)\log{\left(N - 2K + 2\right)}
 \end{eqnarray}
+%  log(a-b) = log(a) + log(1 - b/a)
+% log(1 - b/a) = log(a-b) - log(a)
+% log(1 - b/a) = log(N - 2K + 2) - log(N)
+
+% 2(1-K)log(2) - 2(1-K)log(N) + (2K - N - 2)log(N - 2K + 2) - (2K - N - 2)log(N)
+% 2(1-K)log(2) - 2log(N) + 2Klog(N) + (2K - N - 2)log(N - 2K + 2) - (2K - N - 2)log(N)
+% 2(1-K)log(2) + (2K - 2)log(N) + (2K - N - 2)log(N - 2K + 2) - (2K - 2 - N)log(N)
+% 2(1-K)log(2) + Nlog(N) + (2K - N - 2)log(N - 2K + 2)
+
+
 
 The remaining term in Eq. \ref{eq:logl-lower-bound}, $\frac{1}{2}N\sum_{k=1}^{K}\weight_{k}\log|\vec{\cov}_k|$, requires some  consideration.
 
