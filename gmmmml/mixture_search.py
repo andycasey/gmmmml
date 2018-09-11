@@ -15,6 +15,7 @@ import scipy
 import scipy.misc
 import scipy.stats
 import scipy.optimize as op
+import tqdm
 import warnings
 import os
 from sklearn import cluster
@@ -335,6 +336,99 @@ class GaussianMixture(object):
         return (means, covs, weights)
 
 
+    def _search_log_jumper(self, y, **kwargs):
+
+        y = np.atleast_1d(y)
+
+        N, D = y.shape
+        kwds = {**self._em_kwds, **kwargs}
+
+        handler = kwds.get("visualization_handler", None)
+
+        # Initial guesses.
+        K_inits = np.logspace(0, np.log10(N), kwds.get("K_init", 10)).astype(int)
+
+        for K in K_inits[1:]:
+
+            # Assign everything to the closest thing.
+            means, covs, weights, responsibilities = self.initialize(y, K, **kwds)
+
+            # Run one E-M step.
+            try:                       
+                responsibilities, ll, message_length \
+                    = self.expectation(y, means, covs, weights, **kwds)
+
+            except ValueError:
+                logger.exception("Failed to calculate E-step")
+                # Break to adjust the delta_K
+                break
+
+            means, covs, weights = self.maximization(y, means, covs, weights,
+                                                     responsibilities, **kwds)
+
+        # Predict message lengths.
+        K_predict = np.arange(1, K)
+
+        K_skip = []
+
+        while True:
+
+            I, I_var, I_lower = self._predict_message_length(K_predict, N, D, **kwds)
+
+            # TODO: Check I_lower
+            #if np.any(I_lower > I):
+            #    keep = I > I_lower
+            #    K_predict, I, I_var, I_lower = K_predict[keep], I[keep], I_var[keep], I_lower[keep]
+
+            idx = np.argsort(I)
+
+            for K in K_predict[idx]:
+                if K in K_skip or K in self._state_K:
+                    continue
+
+                kbest = np.array(self._state_K)[np.argmin(self._state_I)]
+                print(f"Running {K}: best so far is K = {kbest}")
+
+                try:
+                    means, covs, weights, responsibilities = self.initialize(y, K, **kwds)
+
+                    # Run one E-M step.
+                    responsibilities, ll, message_length \
+                        = self.expectation(y, means, covs, weights, **kwds)
+
+                except ValueError:
+                    logger.exception("Failed to calculate E-step")
+                    # Break to adjust the delta_K
+                    K_skip.append(K)
+                    continue
+
+
+                prev_I = np.inf
+                for i in range(self.max_em_iterations):
+
+                    means, covs, weights = self.maximization(y, means, covs, weights,
+                                                             responsibilities, **kwds)
+
+                    try:
+                        responsibilities, ll, message_length \
+                            = self.expectation(y, means, covs, weights, **kwds)
+
+                    except ValueError:
+                        break
+
+
+                    I = np.sum(np.hstack(message_length.values()))
+                    if (prev_I - I) < self.threshold:
+                        break
+
+                break
+
+            else:
+                break
+
+
+        raise a
+            
 
 
     def kmeans_search(self, y, K_max=None, **kwargs):
@@ -515,6 +609,8 @@ class GaussianMixture(object):
                          snapshot=True)
 
 
+        return (I, I_var, I_lower)
+
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood,
         message_lengths):
@@ -522,6 +618,14 @@ class GaussianMixture(object):
         Record 'best' trialled states (for a given K) in order to make some
         predictions about future mixtures.
         """
+
+        # Check that the state *should* be saved.
+        I = np.sum(np.hstack(message_lengths.values()))
+
+        if not np.all(np.isfinite(np.hstack([cov.flatten(), weight,
+            log_likelihood, I]))):
+            print("Ignoring state")
+            return None
 
         self._state_K.append(weight.size)
 
@@ -534,7 +638,7 @@ class GaussianMixture(object):
 
         # Record log likelihood
         self._state_slog_likelihoods.append(np.sum(log_likelihood))
-        self._state_I.append(np.sum(np.hstack(message_lengths.values())))
+        self._state_I.append(I)
 
 
 

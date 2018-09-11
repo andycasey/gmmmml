@@ -441,8 +441,6 @@ class VisualizationHandler(object):
             scat.set_sizes(30 * np.ones(len(data)))
             scat.set_zorder(100)
 
-            print(f"{kind} {K} {I}")
-
         elif kind == "predict_I":
 
             ax = self._ax("I")

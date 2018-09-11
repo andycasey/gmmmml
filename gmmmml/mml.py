@@ -327,18 +327,21 @@ def predict_information_of_sum_log_det_covs(K, D, data):
         raise NotImplementedError("cannot predict this theoretically")
 
     slogdetcovs = np.array([np.sum(np.log(dc)) for dc in data[1]])
-    x, y = _group_over(data[0], slogdetcovs, np.mean)
+    x, y = _group_over(data[0], slogdetcovs, np.max)
     _, yerr = _group_over(data[0], slogdetcovs, np.std)
 
+    yerr = np.ones_like(y)
+
     # TODO
-    y = y*x
+    #y = y*x
 
     yerr = np.clip(yerr, 1, np.inf)
+    yerr[~np.isfinite(yerr)] = 1
 
     var_y = np.var(y)
     var_y = var_y if (np.isfinite(var_y) and var_y > 0) else 1
 
-    kernel = var_y * kernels.ExpSquaredKernel(1)
+    kernel = var_y * kernels.Matern32Kernel(1)#ExpSquaredKernel(1)
     #       + var_y * kernels.LocalGaussianKernel(location=0, log_width=0)
     #+ np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
 
@@ -370,19 +373,19 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     pred, pred_var = gp.predict(y, K, return_var=True)
 
     # TODO
-    pred /= K
-    pred_var /= K**2
+    #pred /= K
+    #pred_var /= K**2
 
     I = information_of_sum_log_det_covs(pred, D)
     I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
     # Calculate the lower bound based on the data we have.
-    max_log_det_cov = np.log(np.max(np.hstack(data[1])))
-    min_log_det_cov = np.log(np.min(np.hstack(data[1])))
+    max_log_det_cov = np.max(np.log(np.hstack(data[1])))
+    min_log_det_cov = np.min(np.log(np.hstack(data[1])))
 
 
-    I_lower = information_of_sum_log_det_covs(K * max_log_det_cov, D)
-    I_upper = information_of_sum_log_det_covs(K * min_log_det_cov, D)
+    I_lower = information_of_sum_log_det_covs(K * min_log_det_cov, D)
+    I_upper = information_of_sum_log_det_covs(K * max_log_det_cov, D)
 
     # Calculate upper bound based on the two-point autocorrelation function
 
@@ -415,19 +418,32 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
 
     """
 
-    x, y = _group_over(data[0], data[1], np.mean)
-    _, yerr = _group_over(data[0], data[1], np.std)
-    yerr = np.clip(yerr, 1, np.inf)
+    x, y = _group_over(data[0], data[1], np.min)
+    #_, yerr = _group_over(data[0], data[1], np.std)
+    #yerr = np.clip(yerr, 1, np.inf)
+    
+    # Following Li and Barron
+    #y /= x
+
+    yerr = np.ones_like(y)
 
     var_y = np.var(y)
     var_y = var_y if (var_y > 0 and np.isfinite(var_y)) else 1
 
+    class MeanModel(modeling.Model):
+        parameter_names = ("c", "a")
 
-    kernel = var_y * kernels.ExpSquaredKernel(1)
+        def get_value(self, k):
+            k = k.flatten()
+            return self.c/k + self.a
+
+    kernel = var_y * kernels.ExpSquaredKernel(1)#(order=1, log_gamma2=0)
 
     gp = george.GP(kernel=kernel,
-                   mean=np.mean(y), fit_mean=True,
+                   mean=MeanModel(c=1, a=np.mean(y)), fit_mean=True,
                    white_noise=np.log(np.sqrt(var_y)), fit_white_noise=True)
+
+    #               white_noise=np.log(np.sqrt(var_y)), fit_white_noise=True)
 
     def nll(p):
         gp.set_parameter_vector(p)
@@ -444,10 +460,13 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
 
     results = op.minimize(nll, p0, method="L-BFGS-B")
 
+    #print(results)
     gp.set_parameter_vector(results.x)
 
     pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
 
+    #pred_nll *= K
+    #pred_nll_var *= K**2
 
     # Lower bound.
     lower = predict_lower_bound_on_negative_log_likelihood(K, N, D, data)

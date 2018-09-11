@@ -16,7 +16,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(N=10000, K=50, D=10, center_box=(-50, 50))
+            y, labels, target, kwds = utils.generate_data(N=10000, K=100, D=5, center_box=(-50, 50))
 
         except:
           logging.exception("failed")
@@ -27,12 +27,15 @@ for i in range(10):
         else:
           break
 
-    visualization_handler = visualize.VisualizationHandler(
-        y, target=target, figure_path="tmp/")
+    handler = visualize.VisualizationHandler(
+        y, target=target, figure_path="tmp/jumper")
 
-    search_model = mixture.GaussianMixture(threshold=1e-1)
+    search_model = mixture.GaussianMixture(threshold=1e-1, max_em_iterations=1)
+    search_model._search_log_jumper(y, visualization_handler=handler)
+
+    raise a
     search_model.kmeans_search(y, K_max=kwds["centers"] + 25, 
-        visualization_handler=visualization_handler)
+        visualization_handler=handler)
 
     """
     K = np.array(search_model._state_K)
