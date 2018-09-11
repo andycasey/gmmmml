@@ -30,7 +30,7 @@ for i in range(10):
     handler = visualize.VisualizationHandler(
         y, target=target, figure_path="tmp/jumper")
 
-    search_model = mixture.GaussianMixture(threshold=1e-1, max_em_iterations=1)
+    search_model = mixture.GaussianMixture(threshold=1e-1, max_em_iterations=10)
     search_model._search_log_jumper(y, visualization_handler=handler)
 
     raise a

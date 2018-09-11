@@ -369,16 +369,16 @@ class GaussianMixture(object):
         # Predict message lengths.
         K_predict = np.arange(1, K)
 
+        s = 1
+
         K_skip = []
 
-        while True:
+        converged = False
+        while not converged:
+
+            print("Re-predicting")
 
             I, I_var, I_lower = self._predict_message_length(K_predict, N, D, **kwds)
-
-            # TODO: Check I_lower
-            #if np.any(I_lower > I):
-            #    keep = I > I_lower
-            #    K_predict, I, I_var, I_lower = K_predict[keep], I[keep], I_var[keep], I_lower[keep]
 
             idx = np.argsort(I)
 
@@ -388,6 +388,19 @@ class GaussianMixture(object):
 
                 kbest = np.array(self._state_K)[np.argmin(self._state_I)]
                 print(f"Running {K}: best so far is K = {kbest}")
+
+                print(np.min(I - s * np.sqrt(I_var)), np.min(self._state_I), np.min(I - s * np.sqrt(I_var)) > np.min(self._state_I))
+
+                # Stop when there is no better prediction (after accounting for 3\sqrt(var))
+                # and we have trialled +/- 1 of the K_best.
+                if np.min(I - s * np.sqrt(I_var)) > np.min(self._state_I):
+                    print("Checking")
+                    K_best = np.array(self._state_K)[np.argmin(self._state_I)]
+                    print(K_best - 1 in self._state_K, K_best + 1 in self._state_K)
+                    if K_best - 1 in self._state_K and K_best + 1 in self._state_K:
+                        print("WE ARE DONE")
+                        converged = True
+                        break
 
                 try:
                     means, covs, weights, responsibilities = self.initialize(y, K, **kwds)
