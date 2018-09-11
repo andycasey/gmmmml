@@ -12,7 +12,8 @@ import numpy as np
 from matplotlib.patches import Ellipse
 from matplotlib.ticker import MaxNLocator
 
-from . import mml
+from . import mml, utils
+
 
 mpl_style = {
     "font.size": 12.0,

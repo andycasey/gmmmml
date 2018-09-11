@@ -16,7 +16,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(N=10000, K=100, D=5, center_box=(-50, 50))
+            y, labels, target, kwds = utils.generate_data(N=1000, K=69, D=10, center_box=(-10, 10))
 
         except:
           logging.exception("failed")
@@ -30,7 +30,7 @@ for i in range(10):
     handler = visualize.VisualizationHandler(
         y, target=target, figure_path="tmp/jumper")
 
-    search_model = mixture.GaussianMixture(threshold=1e-1, max_em_iterations=10)
+    search_model = mixture.GaussianMixture(threshold=1, max_em_iterations=1000)
     search_model._search_log_jumper(y, visualization_handler=handler)
 
     raise a

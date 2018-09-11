@@ -4,6 +4,22 @@ from sklearn import datasets
 
 from sklearn.neighbors import NearestNeighbors
 
+
+def _group_over(x, y, function):
+
+    x = np.atleast_1d(x)
+    y = np.atleast_1d(y)
+
+    x_unique = np.sort(np.unique(x))
+    y_unique = np.nan * np.ones_like(x_unique)
+
+    for i, xi in enumerate(x_unique):
+        match = (x == xi)
+        y_unique[i] = function(y[match])
+
+    return (x_unique, y_unique)
+
+
 def concentration(y, K_max=None):
     """
     Calculate the maximum concentration as a function of the number of data

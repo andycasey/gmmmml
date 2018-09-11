@@ -18,6 +18,8 @@ import scipy.optimize as op
 import tqdm
 import warnings
 import os
+from scipy.special import erf
+from scipy.signal import find_peaks_cwt
 from sklearn import cluster
 from sklearn.utils import check_random_state
 from sklearn.utils.extmath import row_norms
@@ -336,38 +338,159 @@ class GaussianMixture(object):
         return (means, covs, weights)
 
 
+    def expectation_maximization(self, y, means, covs, weights, responsibilities,
+        **kwargs):
+
+        kwds = {**self._em_kwds, **kwargs}
+
+        state = (means, covs, weights)
+        responsibilities, ll, I = self.expectation(y, *state, **kwds)
+
+        prev_I = np.sum(np.hstack(I.values()))
+
+        for iteration in range(self.max_em_iterations):
+
+            state = self.maximization(y, *state, responsibilities, **kwds)
+            responsibilities, ll, I = self.expectation(y, *state, **kwds)
+
+            current_I = np.sum(np.hstack(I.values()))
+            diff = np.abs(prev_I - current_I)
+            if diff <= self.threshold:
+                break
+
+        else:
+            logger.warning(f"Convergence not reached ({diff} > {self.threshold}) "\
+                           f"after {iteration} iterations")
+
+        return (state, responsibilities, ll, I)
+
+
+
     def _search_log_jumper(self, y, **kwargs):
 
         y = np.atleast_1d(y)
 
         N, D = y.shape
         kwds = {**self._em_kwds, **kwargs}
-
         handler = kwds.get("visualization_handler", None)
 
         # Initial guesses.
-        K_inits = np.logspace(0, np.log10(N), kwds.get("K_init", 10)).astype(int)
+        K_init = kwds.get("K_init", 10)
+        K_inits = np.logspace(0, np.log10(N), K_init, dtype=int)
 
-        for K in K_inits[1:]:
+        for i, K in enumerate(K_inits):
+            
+            try:
+                *state, R = self.initialize(y, K, **kwds)
 
-            # Assign everything to the closest thing.
-            means, covs, weights, responsibilities = self.initialize(y, K, **kwds)
-
-            # Run one E-M step.
-            try:                       
-                responsibilities, ll, message_length \
-                    = self.expectation(y, means, covs, weights, **kwds)
+                # Run E-M..
+                self.expectation_maximization(y, *state, R, **kwds)
 
             except ValueError:
-                logger.exception("Failed to calculate E-step")
-                # Break to adjust the delta_K
+                #logger.exception(f"Failed to initialize at K = {K}")
                 break
 
-            means, covs, weights = self.maximization(y, means, covs, weights,
-                                                     responsibilities, **kwds)
+        # Bayesian optimization.
+        converged, prev_I, K_skip = (False, np.inf, [])
+
+        # TODO: Go twice as far as what did work?
+        # TODO: consider the time it would take to trial points?
+        Kp = 1 + np.arange(K)
+        I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
+
+
+        for iteration in range(Kp.size):
+
+            min_I = np.min(self._state_I)
+
+            chi = (min_I - I) / np.sqrt(I_var)
+            Phi = 0.5 * (1.0 + erf(chi / np.sqrt(2)))
+            phi = np.exp(-0.5 * chi**2) / np.sqrt(2 * np.pi * I_var)
+            K_ei = (min_I - I) * Phi + I_var * phi
+
+            # Use peak positions and K_ei.max()
+
+            # TODO ARGH PICK HEURISTIC
+            idx = np.hstack([
+                np.argmax(K_ei),
+                find_peaks_cwt(K_ei, [3]) - 1,
+                np.argmin(I),
+            ]).astype(int)
+
+            K_nexts = Kp[idx]
+
+            for K_next in K_nexts:
+                if K_next in self._state_K or K_next in K_skip: continue
+
+                print(f"Trying K {K_next} on iteration {iteration}")
+
+                try:
+                    *state, R = self.initialize(y, K_next, **kwds)
+
+                    # Run E-M..
+                    self.expectation_maximization(y, *state, R, **kwds)
+
+                except ValueError:
+                    #logger.exception(f"Failed to initialize at K = {K_next}")
+                    K_skip.append(K_next)
+                    continue
+
+                else:
+                    # Update predictions.
+                    I, I_var, _ = self._predict_message_length(Kp, N, D, **kwds)
+
+                    idx = np.argmin(self._state_I)
+
+                    print("Best so far is K = {} with I = {}".format(
+                        np.array(self._state_K)[idx], np.array(self._state_I)[idx]))
+
+                    min_I = np.min(I)
+
+                    print(min_I, prev_I, np.abs(min_I - prev_I))
+
+                    if np.abs(prev_I - min_I) < self.threshold:
+                        converged = True
+                        break
+
+                    prev_I = min_I
+                    break
+
+            if converged: 
+               break
+
+        else:
+            logger.warning("Bayesian optimization did not converge.")
+
+
+        raise a
+
+        raise a
+        # Update the GP parameters
+        soln = minimize(nll, gp.get_parameter_vector(), jac=True)
+
+        # Compute the acquisition function
+        mu, var = gp.predict(train_f, t, return_var=True)
+        std = np.sqrt(var)
+        f_min = np.min(train_f)
+        chi = (f_min - mu) / std
+        Phi = 0.5 * (1.0 + erf(chi / np.sqrt(2)))
+        phi = np.exp(-0.5 * chi**2) / np.sqrt(2*np.pi*var)
+        A_ei = (f_min - mu) * Phi + var * phi
+        A_max = t[np.argmax(A_ei)]
+
+        # Add a new point
+        train_theta = np.append(train_theta, A_max)
+        train_f = np.append(train_f, objective(train_theta[-1]))
+        gp.compute(train_theta)
+
+
+        raise a
+
 
         # Predict message lengths.
         K_predict = np.arange(1, K)
+
+
 
         s = 1
 
@@ -635,19 +758,21 @@ class GaussianMixture(object):
         # Check that the state *should* be saved.
         I = np.sum(np.hstack(message_lengths.values()))
 
+        slog_weights = np.sum(np.log(weight))
+        detcovs = np.linalg.det(cov)
         if not np.all(np.isfinite(np.hstack([cov.flatten(), weight,
-            log_likelihood, I]))):
+            log_likelihood, I, slog_weights]))) or np.any(detcovs <= 0):
             print("Ignoring state")
             return None
 
         self._state_K.append(weight.size)
 
         # Record determinates of covariance matrices.
-        self._state_det_covs.append(np.linalg.det(cov))
+        self._state_det_covs.append(detcovs)
 
         # Record sum of the log of the weights.
         self._state_weights.append(weight)
-        self._state_slog_weights.append(np.sum(np.log(weight)))
+        self._state_slog_weights.append(slog_weights)
 
         # Record log likelihood
         self._state_slog_likelihoods.append(np.sum(log_likelihood))

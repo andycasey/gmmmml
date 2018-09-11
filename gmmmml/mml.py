@@ -6,20 +6,7 @@ from george import (kernels, modeling)
 from scipy.special import gammaln
 
 # TODO: move to utils?
-
-def _group_over(x, y, function):
-
-    x = np.atleast_1d(x)
-    y = np.atleast_1d(y)
-
-    x_unique = np.sort(np.unique(x))
-    y_unique = np.nan * np.ones_like(x_unique)
-
-    for i, xi in enumerate(x_unique):
-        match = (x == xi)
-        y_unique[i] = function(y[match])
-
-    return (x_unique, y_unique)
+from . import utils
 
 
 
@@ -237,7 +224,7 @@ def predict_information_of_sum_log_weights(K, N, D, data=None):
     _default_f, _default_f_var = (0.5, 0.5**2)
 
     if data is not None:
-        k, sum_log_weights = _group_over(data[0], data[1], np.min)
+        k, sum_log_weights = utils._group_over(data[0], data[1], np.min)
         y = information_of_sum_log_weights(sum_log_weights, D)
 
         lower, upper = information_bounds_of_sum_log_weights(k, N, D)
@@ -327,8 +314,8 @@ def predict_information_of_sum_log_det_covs(K, D, data):
         raise NotImplementedError("cannot predict this theoretically")
 
     slogdetcovs = np.array([np.sum(np.log(dc)) for dc in data[1]])
-    x, y = _group_over(data[0], slogdetcovs, np.max)
-    _, yerr = _group_over(data[0], slogdetcovs, np.std)
+    x, y = utils._group_over(data[0], slogdetcovs, np.max)
+    _, yerr = utils._group_over(data[0], slogdetcovs, np.std)
 
     yerr = np.ones_like(y)
 
@@ -418,8 +405,8 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
 
     """
 
-    x, y = _group_over(data[0], data[1], np.min)
-    #_, yerr = _group_over(data[0], data[1], np.std)
+    x, y = utils._group_over(data[0], data[1], np.min)
+    #_, yerr = utils._group_over(data[0], data[1], np.std)
     #yerr = np.clip(yerr, 1, np.inf)
     
     # Following Li and Barron
