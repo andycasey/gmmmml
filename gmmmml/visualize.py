@@ -73,7 +73,8 @@ class VisualizationHandler(object):
         self._figure_prefix = os.path.join(self._figure_path,
             "iter_{:.0f}".format(np.random.uniform(0,  10000)))
 
-        self._fig, axes = plt.subplots(1, 5, figsize=(15.6 + 2.8, 2.8))
+
+        self._fig, axes = plt.subplots(1, 5, figsize=(15.5, 3))
 
         # lists for plotting
         self._plot_items = {}
@@ -378,7 +379,10 @@ class VisualizationHandler(object):
             self._clear_items(self._plot_items[ax])
             
             K, I, I_var = (params["K"], params["I"], params["I_var"])
+            I_lower = params["I_lower"]
+            I_upper = np.nan
 
+            bound_colour = self._colours["bounds"]
             prediction_colour = self._colours["predictions"]
 
             self._plot_items[ax].extend([
@@ -386,6 +390,41 @@ class VisualizationHandler(object):
                 ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
                                 facecolor=prediction_colour, alpha=0.3, zorder=-1),
             ])
+
+            v = np.vstack([
+                np.vstack([K, I_lower]).T,
+                np.array(self._actual_negative_log_likelihoods)
+            ])
+
+            _rescale_based_on_data(ax, *v.T)
+
+
+            # Adjust K so that it extends the region we want.
+            if K.size > 1:
+                Ks = np.hstack([K[0] - 0.5, K[1:-1], K[-1] + 0.5])
+            else:
+                Ks = K
+
+            set_upper = not np.all(np.isfinite(I_upper))
+
+            if set_upper:
+                plt.draw()
+                ylim = ax.get_ylim()
+                I_upper = np.max(ylim) * np.ones_like(I_lower)
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I_lower, c=bound_colour, lw=1)[0],
+                ax.plot(K, I_upper, c=bound_colour, lw=1)[0],
+                ax.fill_between(Ks, 
+                                I_lower, 
+                                I_upper,
+                                facecolor=bound_colour, alpha=0.3,
+                                zorder=-1)
+            ])
+
+            if set_upper:
+                ax.set_ylim(ylim)
+
 
 
         elif kind == "actual_I":
@@ -410,7 +449,10 @@ class VisualizationHandler(object):
             self._clear_items(self._plot_items[ax])
             
             K, I, I_var = (params["K"], params["I"], params["I_var"])
+            I_lower = params["I_lower"]
+            I_upper = np.nan
 
+            bound_colour = self._colours["bounds"]
             prediction_colour = self._colours["predictions"]
 
             self._plot_items[ax].extend([
@@ -418,6 +460,42 @@ class VisualizationHandler(object):
                 ax.fill_between(K, I - np.sqrt(I_var), I + np.sqrt(I_var),
                                 facecolor=prediction_colour, alpha=0.3, zorder=-1),
             ])
+
+
+            v = np.vstack([
+                np.vstack([K, I_lower]).T,
+                np.array(self._actual_message_lengths)
+            ])
+
+            _rescale_based_on_data(ax, *v.T)
+
+
+            # Adjust K so that it extends the region we want.
+            if K.size > 1:
+                Ks = np.hstack([K[0] - 0.5, K[1:-1], K[-1] + 0.5])
+            else:
+                Ks = K
+
+            set_upper = not np.all(np.isfinite(I_upper))
+
+            if set_upper:
+                plt.draw()
+                ylim = ax.get_ylim()
+                I_upper = np.max(ylim) * np.ones_like(I_lower)
+
+            self._plot_items[ax].extend([
+                ax.plot(K, I_lower, c=bound_colour, lw=1)[0],
+                ax.plot(K, I_upper, c=bound_colour, lw=1)[0],
+                ax.fill_between(Ks, 
+                                I_lower, 
+                                I_upper,
+                                facecolor=bound_colour, alpha=0.3,
+                                zorder=-1)
+            ])
+
+            if set_upper:
+                ax.set_ylim(ylim)
+
 
 
         elif kind is None:
@@ -431,6 +509,8 @@ class VisualizationHandler(object):
             self.snapshot()
 
         return None
+
+
 
 
 

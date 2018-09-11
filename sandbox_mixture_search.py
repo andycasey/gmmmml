@@ -3,7 +3,7 @@ import numpy as np
 from gmmmml import (mixture_search as mixture, visualize, utils)
 import  scipy.optimize as op
 
-np.random.seed(43)
+np.random.seed(100)
 
 # Seed 1100 is a fun one: K = 103, D = 5, N = 4249
 
@@ -16,7 +16,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(K=40, D=10, center_box=(-10, 10))
+            y, labels, target, kwds = utils.generate_data(N=10000, K=50, D=10, center_box=(-50, 50))
 
         except:
           logging.exception("failed")
@@ -30,7 +30,7 @@ for i in range(10):
     visualization_handler = visualize.VisualizationHandler(
         y, target=target, figure_path="tmp/")
 
-    search_model = mixture.GaussianMixture()
+    search_model = mixture.GaussianMixture(threshold=1e-1)
     search_model.kmeans_search(y, K_max=kwds["centers"] + 25, 
         visualization_handler=visualization_handler)
 

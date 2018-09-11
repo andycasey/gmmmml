@@ -330,28 +330,24 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     x, y = _group_over(data[0], slogdetcovs, np.mean)
     _, yerr = _group_over(data[0], slogdetcovs, np.std)
 
+    # TODO
+    y = y*x
+
     yerr = np.clip(yerr, 1, np.inf)
 
     var_y = np.var(y)
     var_y = var_y if (np.isfinite(var_y) and var_y > 0) else 1
 
-    kernel = var_y * kernels.ExpSquaredKernel(1) #\
-   #+ np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
+    kernel = var_y * kernels.ExpSquaredKernel(1)
+    #       + var_y * kernels.LocalGaussianKernel(location=0, log_width=0)
+    #+ np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
 
     #(y) * kernels.LocalGaussianKernel(location=0, log_width=0) \
-
-    class MeanModel(modeling.Model):
-
-        parameter_names = ("a", "b", "c")
-
-        def get_value(self, k):
-            k = k.flatten()
-            return self.a/(k - self.b) +  self.c
 
     white_noise = np.log(np.sqrt(var_y))
 
     gp = george.GP(kernel=kernel, 
-                   mean=MeanModel(a=1, b=0, c=np.mean(y)), fit_mean=True,
+                   mean=np.mean(y), fit_mean=True,
                    white_noise=white_noise, fit_white_noise=True)
                   
     gp.compute(x.astype(float), yerr=yerr)
@@ -373,6 +369,10 @@ def predict_information_of_sum_log_det_covs(K, D, data):
 
     pred, pred_var = gp.predict(y, K, return_var=True)
 
+    # TODO
+    pred /= K
+    pred_var /= K**2
+
     I = information_of_sum_log_det_covs(pred, D)
     I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
@@ -389,7 +389,7 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     return (I, I_var, I_lower, I_upper)
 
 
-def predict_negative_sum_log_likelihood(K, data):
+def predict_negative_sum_log_likelihood(K, N, D, data):
     r"""
     Predict the negative sum of the log likelihood for a Gaussian mixture model
     with :math:`K` components.
@@ -403,12 +403,15 @@ def predict_negative_sum_log_likelihood(K, data):
         log-likelihood of those Gaussian mixtures.
 
     :returns:
-        A two-length tuple containing:
+        A three-length tuple containing:
 
             (1) the predicted negative sum of the log likelihood for each
                 :math:`K` mixture;
 
-            (2) the variance in the predicted negative sum of the log likelihood.
+            (2) the variance in the predicted negative sum of the log likelihood
+
+            (3) the lower bound on the negative sum of the log likelihood for
+                each :math:`K` mixture.
 
     """
 
@@ -419,6 +422,7 @@ def predict_negative_sum_log_likelihood(K, data):
     var_y = np.var(y)
     var_y = var_y if (var_y > 0 and np.isfinite(var_y)) else 1
 
+
     kernel = var_y * kernels.ExpSquaredKernel(1)
 
     gp = george.GP(kernel=kernel,
@@ -427,7 +431,7 @@ def predict_negative_sum_log_likelihood(K, data):
 
     def nll(p):
         gp.set_parameter_vector(p)
-        ll = gp.log_likelihood(y, quiet=True)
+        ll = gp.log_likelihood(y, quiet=True) + gp.log_prior()
         return -ll if np.isfinite(ll) else 1e25
 
     def grad_nll(p):
@@ -438,12 +442,53 @@ def predict_negative_sum_log_likelihood(K, data):
 
     p0 = gp.get_parameter_vector()
 
-    results = op.minimize(nll, p0, jac=grad_nll, method="L-BFGS-B")
+    results = op.minimize(nll, p0, method="L-BFGS-B")
 
     gp.set_parameter_vector(results.x)
 
     pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
 
-    return (pred_nll, pred_nll_var)
 
+    # Lower bound.
+    lower = predict_lower_bound_on_negative_log_likelihood(K, N, D, data)
+
+
+    return (pred_nll, pred_nll_var, lower)
+
+
+def predict_lower_bound_on_negative_log_likelihood(K, N, D, data):
+
+
+    # weights.
+    # alternative: 
+    """
+    1): -log(K)
+
+    2): (K - 1) * (2/N) * log(2/N) + (1 - 2(K - 1)/N)log(1 - 2(K-1)/N)
+    """
+
+    w_a = 2.0/N
+    w_b = 1. - (K - 1) * w_a
+
+    I_lower = -N * ((K - 1) * w_a * np.log(w_a) + w_b * np.log(w_b))
+
+    # constants
+    I_lower += 0.5 * N * D * np.log(2 * np.pi)
+
+    # the chi squared distribution has D degrees of freedom AND I DONT KNOW WHY
+    # TODO
+    I_lower += 0.5 * N * D
+
+    # concentration.
+
+
+    # concentration
+    kt, nll, weights, det_covs = data
+
+    mean_concentration = -0.5 * np.array(
+        [np.sum(w*np.log(dc))/k for k, w, dc in zip(kt, weights, det_covs)])
+
+    I_lower += 0.5 * N * K * np.max(mean_concentration)
+
+    return I_lower
 
