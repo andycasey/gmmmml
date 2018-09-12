@@ -27,8 +27,8 @@ matplotlib.style.use(mpl_style)
 
 class VisualizationHandler(object):
 
-    def __init__(self, y, data_projection_indices=(0, 1), figure_path=None,
-        target=None, colours=None, **kwargs):
+    def __init__(self, y, data_projection_indices=(0, 1), figure_prefix=None,
+        target=None, colours=None, show_intermediate_steps=True, **kwargs):
         r"""
         Initialize a visualisation handler to show the search progress and the
         predictions of future mixtures.
@@ -40,7 +40,7 @@ class VisualizationHandler(object):
             A two-length tuple containing the indices to use when plotting the
             :math:`x` and :math:`y` projections of the data.
 
-        :param figure_path: [optional]
+        :param figure_prefix: [optional]
             The local path to store any figures generated during the search.
 
         :param target: [optional]
@@ -66,16 +66,18 @@ class VisualizationHandler(object):
         self._colours = colours
 
 
-        self._figure_path = "" if figure_path is None else figure_path
-        if not os.path.exists(os.path.dirname(self._figure_path)):
-            os.makedirs(os.path.dirname(self._figure_path), exist_ok=True)
+        self._figure_prefix = "" if figure_prefix is None else figure_prefix
+
+        if not os.path.exists(os.path.dirname(self._figure_prefix)):
+            os.makedirs(os.path.dirname(self._figure_prefix), exist_ok=True)
 
         self._figure_iter = 1
-        self._figure_prefix = os.path.join(self._figure_path,
-            "iter_{:.0f}".format(np.random.uniform(0,  10000)))
+        self._figure_path_template \
+            = "{0}_iter_{1:.0f}".format(self._figure_prefix, np.random.uniform(0,  10000))
 
 
         self._fig, axes = plt.subplots(1, 5, figsize=(15.5, 3))
+        self._show_intermediate_steps = show_intermediate_steps
 
         # lists for plotting
         self._plot_items = {}
@@ -174,7 +176,7 @@ class VisualizationHandler(object):
 
         plt.draw()
         self._fig.tight_layout()
-        path = "{0:s}_{1:05d}.png".format(self._figure_prefix, self._figure_iter)
+        path = "{0:s}_{1:05d}.png".format(self._figure_path_template, self._figure_iter)
         self._fig.savefig(path, **kwargs)
         print("Created {}".format(path))
         self._figure_iter += 1
@@ -274,6 +276,11 @@ class VisualizationHandler(object):
             scat, data = (self._scatter_actual_sum_log_weights, self._actual_sum_log_weights)
 
             data = np.array(data)
+            if not self._show_intermediate_steps:
+                data = np.vstack(utils._best_mixture_parameter_values(
+                    data.T[0], np.hstack(self._actual_message_lengths), data.T[1])).T
+                #data = np.vstack(utils._group_over(data.T[0], data.T[1], np.min)).T
+
             scat.set_offsets(data)
             scat.set_facecolor(self._colours["data"])
             scat.set_sizes(30 * np.ones(len(data)))
@@ -291,8 +298,14 @@ class VisualizationHandler(object):
             self._actual_sum_log_det_covs.append(np.hstack([K, I]))
 
             scat, data = (self._scatter_actual_sum_log_det_covs, self._actual_sum_log_det_covs)
-
             data = np.array(data)
+
+            if not self._show_intermediate_steps:
+                data = np.vstack(utils._best_mixture_parameter_values(
+                    data.T[0], np.hstack(self._actual_message_lengths), data.T[1])).T
+
+                #data = np.vstack(utils._group_over(data.T[0], data.T[1], np.min)).T
+
             scat.set_offsets(data)
             scat.set_facecolor(self._colours["data"])
             scat.set_sizes(30 * np.ones(len(data)))
@@ -363,9 +376,14 @@ class VisualizationHandler(object):
             self._actual_negative_log_likelihoods.append(np.hstack([K, I]))
 
             scat = self._scatter_actual_negative_log_likelihoods
-            data = self._actual_negative_log_likelihoods
+            data = np.array(self._actual_negative_log_likelihoods)
 
-            data = np.array(data)
+            if not self._show_intermediate_steps:
+                data = np.vstack(utils._best_mixture_parameter_values(
+                    data.T[0], np.hstack(self._actual_message_lengths), data.T[1])).T
+
+                #data = np.vstack(utils._group_over(data.T[0], data.T[1], np.min)).T
+
             scat.set_offsets(data)
             scat.set_facecolor(self._colours["data"])
             scat.set_sizes(30 * np.ones(len(data)))
@@ -434,13 +452,19 @@ class VisualizationHandler(object):
 
             self._actual_message_lengths.append(np.hstack([K, I]))
             scat = self._scatter_actual_message_lengths
-            data = self._actual_message_lengths
+            data = np.array(self._actual_message_lengths)
 
-            data = np.array(data)
+            if not self._show_intermediate_steps:
+                data = np.vstack(utils._best_mixture_parameter_values(
+                    data.T[0], np.hstack(self._actual_message_lengths), data.T[1])).T
+
+                #data = np.vstack(utils._group_over(data.T[0], data.T[1], np.min)).T
+
             scat.set_offsets(data)
             scat.set_facecolor(self._colours["data"])
             scat.set_sizes(30 * np.ones(len(data)))
             scat.set_zorder(100)
+
 
         elif kind == "predict_I":
 
@@ -513,7 +537,7 @@ class VisualizationHandler(object):
 
 
 
-    def create_movie(self, output_path, remove_snapshots=False):
+    def create_movie(self, remove_snapshots=False):
         r"""
         Create a movie of the search progress and save it to `output_path`.
 
@@ -526,11 +550,11 @@ class VisualizationHandler(object):
 
         # TODO: DOCS
 
-        os.system("ffmpeg -y -i \"{0}_iter_%05d.png\" {0}.m4v".format(
-            self._figure_path))
+        os.system("ffmpeg -y -i \"{0}_%05d.png\" {0}.m4v".format(
+            self._figure_path_template))
 
         if remove_snapshots:
-            os.system("rm -fv {0}_iter_*.png".format(self._figure_path))
+            os.system("rm -fv {0}_*.png".format(self._figure_path_template))
 
         return True
 

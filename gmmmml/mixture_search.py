@@ -15,7 +15,8 @@ import scipy
 import scipy.misc
 import scipy.stats
 import scipy.optimize as op
-import tqdm
+from time import time
+from tqdm import tqdm
 import warnings
 import os
 from scipy.special import erf
@@ -173,12 +174,18 @@ def _mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights=None,
     # TODO: this requires a thinko
     #- D * N * np.log(yerr)
     I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
+    if K.size == 33:
+        print("IN MML THING: {0}".format(I_slogdetcovs))
+
     I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
 
     I_parts = dict(
         I_mixtures=I_mixtures, I_parameters=I_parameters, 
         I_data=I_data, I_slogdetcovs=I_slogdetcovs, 
         I_weights=I_weights)
+
+    if K == 33:
+        print("K = 33", I_parts, np.sum(np.hstack(I_parts.values())))
 
     I = np.sum([I_mixtures, I_parameters, I_data, I_slogdetcovs, I_weights],
         axis=0) # [nats]
@@ -216,8 +223,8 @@ class GaussianMixture(object):
     parameter_names = ("means", "covariances", "weights")
 
     def __init__(self, covariance_type="full", covariance_regularization=0, 
-        threshold=1e-5, max_em_iterations=10000, visualization_handler=None,
-        predict=25, **kwargs):
+        threshold=1e-2, max_em_iterations=100, visualization_handler=None,
+        **kwargs):
 
         available = ("full", )
         covariance_type = covariance_type.strip().lower()
@@ -303,6 +310,9 @@ class GaussianMixture(object):
         # Do visualization stuff.
         handler = kwargs.get("visualization_handler", None)
         if handler is not None:
+            handler.emit("actual_I",
+                dict(K=weight.size, I=np.sum(np.hstack(message_length.values()))))
+
             handler.emit("actual_I_weights", 
                          dict(K=weight.size, I=message_length["I_weights"]))
 
@@ -312,9 +322,7 @@ class GaussianMixture(object):
             handler.emit("actual_I_data", 
                          dict(K=weight.size, I=-np.sum(ll)))
 
-            handler.emit("actual_I",
-                dict(K=weight.size, I=np.sum(np.hstack(message_length.values()))),
-                snapshot=kwds.get("__snapshot_every_em_step", False))
+            # TODO: emit snapshot if needed
 
 
         return (R, ll, message_length)
@@ -339,7 +347,53 @@ class GaussianMixture(object):
 
 
     def expectation_maximization(self, y, means, covs, weights, responsibilities,
-        **kwargs):
+        quiet=False, **kwargs):
+        r"""
+        Run the expectation-maximization algorithm on the given mixture.
+
+        # TODO update docs
+
+        :param y:
+            A :math:`N\times{}D` array of the observations :math:`y`,
+            where :math:`N` is the number of observations, and :math:`D` is the
+            number of dimensions per observation.
+
+        :param mu:
+            The current estimates of the Gaussian mean values.
+
+        :param cov:
+            The current estimates of the Gaussian covariance matrices.
+
+        :param weight:
+            The current estimates of the relative mixing weight.
+
+        :param responsibility: [optional]
+            The responsibility matrix for all :math:`N` observations being
+            partially assigned to each :math:`K` component. If ``None`` is given
+            then the responsibility matrix will be calculated in the first
+            expectation step.
+
+        :param covariance_type: [optional]
+            The structure of the covariance matrix for individual components.
+            The available options are: `free` for a free covariance matrix,
+            `diag` for a diagonal covariance matrix, `tied` for a common covariance
+            matrix for all components, `tied_diag` for a common diagonal
+            covariance matrix for all components (default: ``free``).
+
+        :param threshold: [optional]
+            The relative improvement in log likelihood required before stopping
+            an expectation-maximization step (default: ``1e-5``).
+
+        :param max_em_iterations: [optional]
+            The maximum number of iterations to run per expectation-maximization
+            loop (default: ``10000``).
+
+        :returns:
+            A six length tuple containing: the updated multivariate mean values,
+            the updated covariance matrices, the updated mixture weights, the
+            updated responsibility matrix, a metadata dictionary, and the change
+            in message length.
+        """
 
         kwds = {**self._em_kwds, **kwargs}
 
@@ -348,7 +402,10 @@ class GaussianMixture(object):
 
         prev_I = np.sum(np.hstack(I.values()))
 
-        for iteration in range(self.max_em_iterations):
+        K = weights.size
+        tqdm_kwds = dict(disable=True) if quiet else dict(desc=f"E-M @ K={K}")
+
+        for iteration in tqdm(range(self.max_em_iterations), **tqdm_kwds):
 
             state = self.maximization(y, *state, responsibilities, **kwds)
             responsibilities, ll, I = self.expectation(y, *state, **kwds)
@@ -358,37 +415,96 @@ class GaussianMixture(object):
             if diff <= self.threshold:
                 break
 
+            prev_I = current_I
+
         else:
-            logger.warning(f"Convergence not reached ({diff} > {self.threshold}) "\
-                           f"after {iteration} iterations")
+            logger.warning(
+                f"Convergence not reached ({diff:.1e} > {self.threshold:.1e}) "\
+                f"after {iteration + 1} iterations")
 
         return (state, responsibilities, ll, I)
 
 
+    def search(self, y, strategy="bayes-jumper", **kwargs):
+        r"""
+        Search for the optimal number of multivariate Gaussian components, and
+        the parameters of that mixture, given the data.
 
-    def _search_log_jumper(self, y, **kwargs):
+        :param y:
+            A :math:`N\times{}D` array of the observations :math:`y`,
+            where :math:`N` is the number of observations, and :math:`D` is the
+            number of dimensions per observation.
 
-        y = np.atleast_1d(y)
+        :param strategy: [optional]
+            The search strategy to use. The available search strategies include:
+
+            - `bayes-jumper`: SOME DESCRIPTION HERE TODO.
+
+            - `greedy-kmeans`: SOME DESCRIPTION HERE TODO
+
+        """
+
+        y = np.atleast_2d(y)
+
+        available_strategies = dict([
+            ("bayes-jumper", self._search_bayes_jumper),
+            ("greedy-kmeans", self._search_greedy_kmeans),
+        ])
+
+        strategy = f"{strategy}".lower()
+
+        try:
+            func = available_strategies[strategy]
+
+        except KeyError:
+            available_repr = ", ".join(available_strategies.keys())
+            raise ValueError(
+                f"Unknown strategy provided ('{strategy}'). "\
+                f"Available strategies include: {available_repr}")
+
+        else:
+            t_init = time()
+            state, R, ll, I, meta = func(y, **kwargs)
+
+        # Update the metadata.
+        meta.update(strategy=strategy,
+                    t_search=time() - t_init)
+
+        # Set the state attribuets.
+        self.means_, self.covs_, self.weights_ = state
+        self.responsibilities_, self.log_likelihoods_, self.message_lengths_ = (R, ll, I)
+        self.meta_ = meta
+
+        return self
+
+
+    def _search_bayes_jumper(self, y, expected_improvement_fraction=0.01,
+        **kwargs):
 
         N, D = y.shape
         kwds = {**self._em_kwds, **kwargs}
-        handler = kwds.get("visualization_handler", None)
-
+        
         # Initial guesses.
         K_init = kwds.get("K_init", 10)
         K_inits = np.logspace(0, np.log10(N), K_init, dtype=int)
 
+        results = {}
+
         for i, K in enumerate(K_inits):
-            
+
             try:
                 *state, R = self.initialize(y, K, **kwds)
 
-                # Run E-M..
-                self.expectation_maximization(y, *state, R, **kwds)
+                # Run E-M.
+                results[K] = self.expectation_maximization(y, *state, R, **kwds)
 
             except ValueError:
-                #logger.exception(f"Failed to initialize at K = {K}")
+                logger.warn(f"Failed to initialize at K = {K}")
                 break
+
+            else:
+                # Make predictions.
+                self._predict_message_length(1 + np.arange(2 * K), N, D, **kwds)
 
         # Bayesian optimization.
         converged, prev_I, K_skip = (False, np.inf, [])
@@ -398,9 +514,9 @@ class GaussianMixture(object):
         Kp = 1 + np.arange(K)
         I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
 
-
         for iteration in range(Kp.size):
 
+            print(f"On BJ iteration {iteration}")
             min_I = np.min(self._state_I)
 
             chi = (min_I - I) / np.sqrt(I_var)
@@ -410,29 +526,35 @@ class GaussianMixture(object):
 
             # Use peak positions and K_ei.max()
 
-            # TODO ARGH PICK HEURISTIC
+            # TODO ARGH PICK BETTER HEURISTIC
+
+            #    np.argmin(I),
             idx = np.hstack([
-                np.argmax(K_ei),
                 find_peaks_cwt(K_ei, [3]) - 1,
-                np.argmin(I),
+                np.argmax(K_ei),
+                np.argsort(I),
+
             ]).astype(int)
 
             K_nexts = Kp[idx]
 
-            for K_next in K_nexts:
-                if K_next in self._state_K or K_next in K_skip: continue
+            _, __ = np.unique(K_nexts, return_index=True)
+            K_nexts = K_nexts[np.sort(__)]
+            
+            for K in K_nexts:
+                if K in self._state_K or K in K_skip: continue
 
-                print(f"Trying K {K_next} on iteration {iteration}")
+                print(f"Trying K {K} on iteration {iteration}")
 
                 try:
-                    *state, R = self.initialize(y, K_next, **kwds)
+                    *state, R = self.initialize(y, K, **kwds)
 
                     # Run E-M..
-                    self.expectation_maximization(y, *state, R, **kwds)
+                    results[K] = self.expectation_maximization(y, *state, R, **kwds)
 
                 except ValueError:
-                    #logger.exception(f"Failed to initialize at K = {K_next}")
-                    K_skip.append(K_next)
+                    logger.warn(f"Failed to initialize mixture at K = {K}")
+                    K_skip.append(K)
                     continue
 
                 else:
@@ -444,11 +566,14 @@ class GaussianMixture(object):
                     print("Best so far is K = {} with I = {}".format(
                         np.array(self._state_K)[idx], np.array(self._state_I)[idx]))
 
-                    min_I = np.min(I)
+                    min_I = np.min(self._state_I)
+                    eif = np.abs(min_I - np.min(I))/min_I
+                    print(f"expected improvement fraction {eif}")
 
-                    print(min_I, prev_I, np.abs(min_I - prev_I))
-
-                    if np.abs(prev_I - min_I) < self.threshold:
+                    # Check predictions are within tolerance and that we have
+                    # no better predictions to make.
+                    if np.abs(prev_I - min_I) < self.threshold \
+                    and eif <= expected_improvement_fraction:
                         converged = True
                         break
 
@@ -461,227 +586,46 @@ class GaussianMixture(object):
         else:
             logger.warning("Bayesian optimization did not converge.")
 
+        # Select the best mixture.
+        result = results[self._state_K[np.argmin(self._state_I)]]
 
-        raise a
-
-        raise a
-        # Update the GP parameters
-        soln = minimize(nll, gp.get_parameter_vector(), jac=True)
-
-        # Compute the acquisition function
-        mu, var = gp.predict(train_f, t, return_var=True)
-        std = np.sqrt(var)
-        f_min = np.min(train_f)
-        chi = (f_min - mu) / std
-        Phi = 0.5 * (1.0 + erf(chi / np.sqrt(2)))
-        phi = np.exp(-0.5 * chi**2) / np.sqrt(2*np.pi*var)
-        A_ei = (f_min - mu) * Phi + var * phi
-        A_max = t[np.argmax(A_ei)]
-
-        # Add a new point
-        train_theta = np.append(train_theta, A_max)
-        train_f = np.append(train_f, objective(train_theta[-1]))
-        gp.compute(train_theta)
+        meta = dict()
+        return (*result, meta)
 
 
-        raise a
+    def _search_greedy_kmeans(self, y, K_max=None, **kwargs):
 
-
-        # Predict message lengths.
-        K_predict = np.arange(1, K)
-
-
-
-        s = 1
-
-        K_skip = []
-
-        converged = False
-        while not converged:
-
-            print("Re-predicting")
-
-            I, I_var, I_lower = self._predict_message_length(K_predict, N, D, **kwds)
-
-            idx = np.argsort(I)
-
-            for K in K_predict[idx]:
-                if K in K_skip or K in self._state_K:
-                    continue
-
-                kbest = np.array(self._state_K)[np.argmin(self._state_I)]
-                print(f"Running {K}: best so far is K = {kbest}")
-
-                print(np.min(I - s * np.sqrt(I_var)), np.min(self._state_I), np.min(I - s * np.sqrt(I_var)) > np.min(self._state_I))
-
-                # Stop when there is no better prediction (after accounting for 3\sqrt(var))
-                # and we have trialled +/- 1 of the K_best.
-                if np.min(I - s * np.sqrt(I_var)) > np.min(self._state_I):
-                    print("Checking")
-                    K_best = np.array(self._state_K)[np.argmin(self._state_I)]
-                    print(K_best - 1 in self._state_K, K_best + 1 in self._state_K)
-                    if K_best - 1 in self._state_K and K_best + 1 in self._state_K:
-                        print("WE ARE DONE")
-                        converged = True
-                        break
-
-                try:
-                    means, covs, weights, responsibilities = self.initialize(y, K, **kwds)
-
-                    # Run one E-M step.
-                    responsibilities, ll, message_length \
-                        = self.expectation(y, means, covs, weights, **kwds)
-
-                except ValueError:
-                    logger.exception("Failed to calculate E-step")
-                    # Break to adjust the delta_K
-                    K_skip.append(K)
-                    continue
-
-
-                prev_I = np.inf
-                for i in range(self.max_em_iterations):
-
-                    means, covs, weights = self.maximization(y, means, covs, weights,
-                                                             responsibilities, **kwds)
-
-                    try:
-                        responsibilities, ll, message_length \
-                            = self.expectation(y, means, covs, weights, **kwds)
-
-                    except ValueError:
-                        break
-
-
-                    I = np.sum(np.hstack(message_length.values()))
-                    if (prev_I - I) < self.threshold:
-                        break
-
-                break
-
-            else:
-                break
-
-
-        raise a
-            
-
-
-    def kmeans_search(self, y, K_max=None, **kwargs):
-
-        y = np.atleast_1d(y)
 
         N, D = y.shape
         K_max = N if K_max is None else K_max
 
         kwds = {**self._em_kwds, **kwargs}
-        handler = kwds.get("visualization_handler", None)
-
-
-        for K in range(1, K_max):
         
-            # Assign everything to the closest thing.
-            means, covs, weights, responsibilities = self.initialize(y, K, **kwargs)
+        results = {}
 
-            prev_I = np.inf
-            for i in range(self.max_em_iterations):
+        Ks = 1 + np.arange(K_max)
+        for K in Ks:
+        
+            try:
+                *state, R = self.initialize(y, K, **kwds)
 
-                means, covs, weights = self.maximization(y, means, covs, weights,
-                                                         responsibilities, **kwargs)
+                # Run E-M.
+                results[K] = self.expectation_maximization(y, *state, R, **kwds)
 
-                try:
-                    responsibilities, ll, message_length \
-                        = self.expectation(y, means, covs, weights, **kwargs)
-
-                except ValueError:
-                    logger.exception("Failed to calculate E-step")
-                    break
-
-                I = np.sum(np.hstack(message_length.values()))
-                if (prev_I - I) < self.threshold:
-                    break
-
-                prev_I = I
+            except ValueError:
+                logger.warn(f"Failed to initialize at K = {K}")
+                continue
 
             else:
-                logger.warn(f"Convergence not reached after {i+1} iterations.")
-
-            if handler is not None:
-                K_predict = np.arange(1, weights.size + 25)
-                self._predict_message_length(K_predict, N, D, **kwds)
-                
+                # Make predictions.
+                self._predict_message_length(Ks, N, D, **kwds)
 
 
+        # Select the best mixture.
+        result = results[self._state_K[np.argmin(self._state_I)]]
 
-        return None
-
-
-
-
-
-    def search(self, y, **kwargs):
-
-        kwds = dict(
-            threshold=self._threshold, 
-            max_em_iterations=self._max_em_iterations,
-            covariance_type=self.covariance_type, 
-            covariance_regularization=self._covariance_regularization,
-            visualization_handler=None)
-        kwds.update(kwargs)
-
-        # Initialize the mixture.
-        mu, cov, weight = _initialize(y, **kwds)
-        R, ll, message_length = _expectation(y, mu, cov, weight, **kwds)
-
-        # Record things for predictive purposes.
-        self._record_state_for_predictions(cov, weight, ll)
-
-
-
-        while True:
-            K = weight.size
-            best_perturbations = defaultdict(lambda: [np.inf])
-
-            for k in range(K):
-                perturbation = split_component(y, mu, cov, weight, R, k, **kwds)
-    
-                p_cov, p_weight, p_ll = (perturbation[1], perturbation[2], perturbation[-1])
-                self._record_state_for_predictions(p_cov, p_weight, p_ll)
-
-                if perturbation[-1] < best_perturbations["split"][-1]:
-                    best_perturbations["split"] = [k] + list(perturbation)
-
-            bop, bp = min(best_perturbations.items(), key=lambda x: x[1][-1])
-            b_k, b_mu, b_cov, b_weight, b_R, b_meta, b_ml = bp
-
-            
-            # Check to see if we are cooked.
-            if b_ml >= message_length: break
-            # Not cooked!
-
-            mu, cov, weight, R, meta = (b_mu, b_cov, b_weight, b_R, b_meta)
-
-            message_length = b_ml
-            ll = b_meta["log_likelihood"]
-
-            # Record things for predictive purposes.
-            self._record_state_for_predictions(cov, weight, ll)
-
-            # Predict future mixtures.
-            if visualization_handler is not None:
-
-                target_K = weight.size + np.arange(1, 10)
-
-
-                self._predict_message_length(target_K, cov, weight, y.shape[0], ll, I, **kwds)
-
-                #visualization_handler.emit("predict", dict(model=self))
-
-
-
-        raise a
-
-
+        meta = dict()
+        return (*result, meta)
 
 
     def _predict_message_length(self, K, N, D, **kwargs):
@@ -695,26 +639,31 @@ class GaussianMixture(object):
 
         K = np.atleast_1d(K)
 
+        # Prepare a dictionary that we will use for making predictions.
+        data = dict(
+            K=self._state_K,
+            I=self._state_I,
+            weights=self._state_weights,
+            det_covs=self._state_det_covs,
+            sum_log_weights=self._state_slog_weights,
+            negative_log_likelihood=-np.array(self._state_slog_likelihoods))
+
         # Constant terms.
         I_other = mml.information_of_mixture_constants(K, N, D)
 
         # Sum of the log of the weights.
         I_sum_log_weights, I_sum_log_weights_var, \
         I_sum_log_weights_lower, I_sum_log_weights_upper \
-            = mml.predict_information_of_sum_log_weights(
-                K, N, D, data=(self._state_K, self._state_slog_weights))
+            = mml.predict_information_of_sum_log_weights(K, N, D, data=data)
 
         # Sum of the log of the determinant of the covariance matrices.
         I_sum_log_det_covs, I_sum_log_det_covs_var, \
         I_sum_log_det_covs_lower, I_sum_log_det_covs_upper \
-            = mml.predict_information_of_sum_log_det_covs(
-                K, D, data=(self._state_K, self._state_det_covs))
+            = mml.predict_information_of_sum_log_det_covs(K, D, data=data)
 
         # Negative log-likelihood.
         I_data, I_data_var, I_data_lower \
-            = mml.predict_negative_sum_log_likelihood(
-                K, N, D, data=(self._state_K, -np.array(self._state_slog_likelihoods),
-                         self._state_weights, self._state_det_covs))
+            = mml.predict_negative_sum_log_likelihood(K, N, D, data=data)
 
         # Predict total, given other predictions.
         I = I_other + I_sum_log_weights + I_sum_log_det_covs + I_data
@@ -745,7 +694,9 @@ class GaussianMixture(object):
                          snapshot=True)
 
 
+
         return (I, I_var, I_lower)
+
 
 
     def _record_state_for_predictions(self, cov, weight, log_likelihood,
@@ -768,6 +719,12 @@ class GaussianMixture(object):
         self._state_K.append(weight.size)
 
         # Record determinates of covariance matrices.
+
+        if weight.size  == 33:
+            const = -0.5 * (cov.shape[1] + 2) 
+            a = const * np.sum(np.log(detcovs))
+            b  = const * np.sum(np.linalg.slogdet(cov)[1])
+            print("OK  {0} {1}".format(a, b))
         self._state_det_covs.append(detcovs)
 
         # Record sum of the log of the weights.
@@ -844,30 +801,6 @@ def responsibility_matrix(y, mu, cov, weight, covariance_type,
 
 
 
-def _parameters_per_mixture(D, covariance_type):
-    r"""
-    Return the number of parameters per Gaussian component, given the number 
-    of observed dimensions and the covariance type.
-
-    :param D:
-        The number of dimensions per data point.
-
-    :param covariance_type:
-        The structure of the covariance matrix for individual components.
-        The available options are: `full` for a free covariance matrix, or
-        `diag` for a diagonal covariance matrix.
-
-    :returns:
-        The number of parameters required to fully specify the multivariate
-        mean and covariance matrix of a :math:`D`-dimensional Gaussian.
-    """
-
-    if covariance_type == "full":
-        return int(D + D*(D + 1)/2.0)
-    elif covariance_type == "diag":
-        return 2 * D
-    else:
-        raise ValueError("unknown covariance type '{}'".format(covariance_type))
 
 
 def _initialize_with_kmeans_pp(y, K, random_state=None, **kwargs):
@@ -885,7 +818,8 @@ def _initialize_with_kmeans_pp(y, K, random_state=None, **kwargs):
     responsibility[labels, np.arange(N)] = 1.0
 
     # estimate covariance matrices.
-    cov = _estimate_covariance_matrix_full(y, responsibility, mu)
+    cov = _estimate_covariance_matrix_full(y, responsibility, mu,
+        covariance_regularization=kwargs.get("covariance_regularization", 0))
 
     # If this is K = 1, then use this as the bound limit for sumlogdetcov
     weight = responsibility.sum(axis=1)/N
@@ -1074,7 +1008,6 @@ def _estimate_covariance_matrix_diag(y, responsibility, mean,
 
     membership = np.sum(responsibility, axis=1)
 
-    I = np.eye(D)
     cov = np.empty((M, D))
     for m, (mu, rm, nm) in enumerate(zip(mean, responsibility, membership)):
 
@@ -1207,97 +1140,5 @@ def _maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
     return state 
 
 
-
-
-def _expectation_maximization(y, mu, cov, weight, responsibility=None, **kwargs):
-    r"""
-    Run the expectation-maximization algorithm on the current set of
-    multivariate Gaussian mixtures.
-
-    :param y:
-        A :math:`N\times{}D` array of the observations :math:`y`,
-        where :math:`N` is the number of observations, and :math:`D` is the
-        number of dimensions per observation.
-
-    :param mu:
-        The current estimates of the Gaussian mean values.
-
-    :param cov:
-        The current estimates of the Gaussian covariance matrices.
-
-    :param weight:
-        The current estimates of the relative mixing weight.
-
-    :param responsibility: [optional]
-        The responsibility matrix for all :math:`N` observations being
-        partially assigned to each :math:`K` component. If ``None`` is given
-        then the responsibility matrix will be calculated in the first
-        expectation step.
-
-    :param covariance_type: [optional]
-        The structure of the covariance matrix for individual components.
-        The available options are: `free` for a free covariance matrix,
-        `diag` for a diagonal covariance matrix, `tied` for a common covariance
-        matrix for all components, `tied_diag` for a common diagonal
-        covariance matrix for all components (default: ``free``).
-
-    :param threshold: [optional]
-        The relative improvement in log likelihood required before stopping
-        an expectation-maximization step (default: ``1e-5``).
-
-    :param max_em_iterations: [optional]
-        The maximum number of iterations to run per expectation-maximization
-        loop (default: ``10000``).
-
-    :returns:
-        A six length tuple containing: the updated multivariate mean values,
-        the updated covariance matrices, the updated mixture weights, the
-        updated responsibility matrix, a metadata dictionary, and the change
-        in message length.
-    """   
-
-    M = weight.size
-    N, D = y.shape
-    
-    # Calculate log-likelihood and initial expectation step.
-    _init_responsibility, ll, dl = _expectation(y, mu, cov, weight, **kwargs)
-
-    if responsibility is None:
-        responsibility = _init_responsibility
-
-    iterations = 1
-    ll_dl = [(ll.sum(), dl)]
-
-    while True:
-
-        # Perform the maximization step.
-        mu, cov, weight \
-            = _maximization(y, mu, cov, weight, responsibility, **kwargs)
-
-        # Run the expectation step.
-        responsibility, ll, dl \
-            = _expectation(y, mu, cov, weight, **kwargs)
-
-        # Check for convergence.
-        lls = np.sum(ll)
-        prev_ll, prev_dl = ll_dl[-1]
-        relative_delta_message_length = np.abs((lls - prev_ll)/prev_ll)
-        ll_dl.append([lls, dl])
-        iterations += 1
-
-        assert np.isfinite(relative_delta_message_length)
-
-        if relative_delta_message_length <= kwargs["threshold"] \
-        or iterations >= kwargs["max_em_iterations"]:
-            break
-
-    print("RAN {} E-M steps".format(iterations))
-
-    meta = dict(warnflag=iterations >= kwargs["max_em_iterations"], log_likelihood=ll)
-    if meta["warnflag"]:
-        logger.warn("Maximum number of E-M iterations reached ({}) {}".format(
-            kwargs["max_em_iterations"], kwargs.get("_warn_context", "")))
-
-    return (mu, cov, weight, responsibility, meta, dl)
 
 

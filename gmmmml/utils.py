@@ -4,6 +4,27 @@ from sklearn import datasets
 
 from sklearn.neighbors import NearestNeighbors
 
+def _best_mixture_parameter_values(K, I, value):
+    """
+    Return the mixture parameter value that has the lowest cost for each K.
+    """
+
+    K = np.atleast_1d(K)
+    I = np.atleast_1d(I)
+
+    unique_K = np.unique(K)
+    best_value = np.empty(unique_K.size)
+
+    for i, k in enumerate(unique_K):
+
+        idxs = np.where((K == k))[0]
+        min_idx = np.argmin(I[idxs])
+
+        best_value[i] = value[idxs[min_idx]]
+
+    return (unique_K, best_value)
+
+
 
 def _group_over(x, y, function):
 

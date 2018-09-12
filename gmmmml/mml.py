@@ -11,6 +11,8 @@ from . import utils
 
 
 
+
+
 def gmm_number_of_parameters(K, D):
     r"""
     Return the total number of model parameters :math:`Q`, if a full 
@@ -70,7 +72,7 @@ def information_of_mixture_constants(K, N, D):
         + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
     I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
 
-    return I_mixtures + I_parameters
+    return (I_mixtures + I_parameters)
 
 
 def _bounds_of_sum_log_weights(K, N):
@@ -197,9 +199,7 @@ def predict_information_of_sum_log_weights(K, N, D, data=None):
         The dimensionality of the data.
 
     :param data: [optional]
-        If given, this should be a two-length tuple containing (1) the number of
-        components in previously-trialled Gaussian mixtures, and (2) the sum of
-        the log of the weights for that trialled Gaussian mixture.
+        #  TODO a dictionary with required keys
 
     :returns:
         A four-length tuple containing:
@@ -224,8 +224,10 @@ def predict_information_of_sum_log_weights(K, N, D, data=None):
     _default_f, _default_f_var = (0.5, 0.5**2)
 
     if data is not None:
-        k, sum_log_weights = utils._group_over(data[0], data[1], np.min)
-        y = information_of_sum_log_weights(sum_log_weights, D)
+        I_w = information_of_sum_log_weights(data["sum_log_weights"], D)
+
+        # Chose best I_w based on the best I in each mixture.
+        k, y = utils._best_mixture_parameter_values(data["K"], data["I"], I_w)
 
         lower, upper = information_bounds_of_sum_log_weights(k, N, D)
 
@@ -313,17 +315,20 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     if data is None:
         raise NotImplementedError("cannot predict this theoretically")
 
-    slogdetcovs = np.array([np.sum(np.log(dc)) for dc in data[1]])
-    x, y = utils._group_over(data[0], slogdetcovs, np.max)
-    _, yerr = utils._group_over(data[0], slogdetcovs, np.std)
+    I_sldc = information_of_sum_log_det_covs(
+        np.array([np.sum(np.log(dc)) for dc in data["det_covs"]]), D)
+
+    x, y = utils._best_mixture_parameter_values(data["K"], data["I"], I_sldc)
+
+    #_, yerr = utils._group_over(data[0], I, np.std)
 
     yerr = np.ones_like(y)
 
     # TODO
     #y = y*x
 
-    yerr = np.clip(yerr, 1, np.inf)
-    yerr[~np.isfinite(yerr)] = 1
+    #yerr = np.clip(yerr, 1, np.inf)
+    #yerr[~np.isfinite(yerr)] = 1
 
     var_y = np.var(y)
     var_y = var_y if (np.isfinite(var_y) and var_y > 0) else 1
@@ -357,18 +362,18 @@ def predict_information_of_sum_log_det_covs(K, D, data):
 
     gp.set_parameter_vector(results.x)
 
-    pred, pred_var = gp.predict(y, K, return_var=True)
+    I, I_var = gp.predict(y, K, return_var=True)
 
     # TODO
     #pred /= K
     #pred_var /= K**2
 
-    I = information_of_sum_log_det_covs(pred, D)
-    I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
+    #I = information_of_sum_log_det_covs(pred, D)
+    #I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
     # Calculate the lower bound based on the data we have.
-    max_log_det_cov = np.max(np.log(np.hstack(data[1])))
-    min_log_det_cov = np.min(np.log(np.hstack(data[1])))
+    max_log_det_cov = np.max(np.log(np.hstack(data["det_covs"])))
+    min_log_det_cov = np.min(np.log(np.hstack(data["det_covs"])))
 
 
     I_lower = information_of_sum_log_det_covs(K * min_log_det_cov, D)
@@ -405,7 +410,10 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
 
     """
 
-    x, y = utils._group_over(data[0], data[1], np.min)
+    x, y = utils._best_mixture_parameter_values(data["K"], data["I"],
+        data["negative_log_likelihood"])
+
+    #x, y = utils._group_over(data[0], data[1], np.min)
     #_, yerr = utils._group_over(data[0], data[1], np.std)
     #yerr = np.clip(yerr, 1, np.inf)
     
@@ -489,7 +497,10 @@ def predict_lower_bound_on_negative_log_likelihood(K, N, D, data):
 
 
     # concentration
-    kt, nll, weights, det_covs = data
+    #kt, nll, weights, det_covs = data
+    kt = data["K"]
+    weights = data["weights"]
+    det_covs = data["det_covs"]
 
     mean_concentration = -0.5 * np.array(
         [np.sum(w*np.log(dc))/k for k, w, dc in zip(kt, weights, det_covs)])
