@@ -1,4 +1,4 @@
-## gmmmml
+## `gmmmml`
 
 [![Build Status](https://img.shields.io/travis/andycasey/gmmmml/master.svg)](https://travis-ci.org/andycasey/gmmmml)
 [![Documentation Status](https://readthedocs.org/projects/gmmmml/badge/?version=latest)](http://gmmmml.rtfd.io/)
