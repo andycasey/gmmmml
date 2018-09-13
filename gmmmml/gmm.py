@@ -8,6 +8,7 @@ __all__ = ["GaussianMixture"]
 import logging
 import numpy as np
 import scipy
+from collections import defaultdict
 from time import time
 from tqdm import tqdm
 from scipy.special import erf
@@ -16,7 +17,7 @@ from sklearn import cluster
 from sklearn.utils import check_random_state
 from sklearn.utils.extmath import row_norms
 
-from . import mml, em
+from . import (mml, em, operations)
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ class GaussianMixture(object):
         """
 
         kwds = {**self._em_kwds, **kwargs}
-
+        
         R, ll, I = em.expectation(y, means, covs, weights, **kwds)
 
         # Record state for predictions.
@@ -259,8 +260,7 @@ class GaussianMixture(object):
         return (means, covs, weights)
 
 
-    def expectation_maximization(self, y, means, covs, weights, responsibilities,
-                                 quiet=False, **kwargs):
+    def expectation_maximization(self, y, means, covs, weights, **kwargs):
         r"""
         Run the expectation-maximization algorithm on the given mixture.
 
@@ -282,11 +282,6 @@ class GaussianMixture(object):
             :math:`K` components. The sum of weights must equal 1. The expected 
             shape of `weights` is :math:`(K, )`.
 
-        :param responsibilities:
-            The responsibility matrix for all :math:`N` observations being
-            partially assigned to each :math:`K` component. The expected shape 
-            of `responsibilities` is :math:`(N, K)`.
-
         :param quiet: [optional]
             Optionally turn off progress bars.
 
@@ -306,32 +301,11 @@ class GaussianMixture(object):
 
         kwds = {**self._em_kwds, **kwargs}
 
-        state = (means, covs, weights)
-        responsibilities, ll, I = self.expectation(y, *state, **kwds)
+        # Overload the keywords so that we can do visualisation.
+        kwds.update(__expectation_function=self.expectation,
+                    __maximization_function=self.maximization)
 
-        prev_I = np.sum(np.hstack(I.values()))
-
-        tqdm_kwds = dict(disable=True) if quiet \
-                                       else dict(desc=f"E-M @ K={weights.size}")
-
-        for iteration in tqdm(range(self.max_em_iterations), **tqdm_kwds):
-
-            state = self.maximization(y, *state, responsibilities, **kwds)
-            responsibilities, ll, I = self.expectation(y, *state, **kwds)
-
-            current_I = np.sum(np.hstack(I.values()))
-            diff = np.abs(prev_I - current_I)
-            if diff <= self.threshold:
-                break
-
-            prev_I = current_I
-
-        else:
-            logger.warning(
-                f"Convergence not reached ({diff:.1e} > {self.threshold:.1e}) "\
-                f"after {iteration + 1} iterations")
-
-        return (state, responsibilities, ll, I)
+        return em.expectation_maximization(y, means, covs, weights, **kwds)
 
 
     def search(self, y, strategy="bayes-jumper", **kwargs):
@@ -347,9 +321,11 @@ class GaussianMixture(object):
         :param strategy: [optional]
             The search strategy to use. The available search strategies include:
 
-            - `bayes-jumper`: SOME DESCRIPTION HERE TODO.
+            - ``bayes-jumper``: SOME DESCRIPTION HERE TODO.
 
-            - `greedy-kmeans`: SOME DESCRIPTION HERE TODO
+            - ``greedy-kmeans``: SOME DESCRIPTION HERE TODO.
+
+            - ``kasarapu-allison-2015``: SOME DESCRIPTION TODO
 
         """
 
@@ -358,6 +334,7 @@ class GaussianMixture(object):
         available_strategies = dict([
             ("bayes-jumper", self._search_bayes_jumper),
             ("greedy-kmeans", self._search_greedy_kmeans),
+            ("kasarapu-allison-2015", self._search_kasarapu_allison_2015),
         ])
 
         strategy = f"{strategy}".lower()
@@ -376,8 +353,7 @@ class GaussianMixture(object):
             state, R, ll, I, meta = func(y, **kwargs)
 
         # Update the metadata.
-        meta.update(strategy=strategy,
-                    t_search=time() - t_init)
+        meta.update(strategy=strategy, t_search=time() - t_init)
 
         # Set the state attribuets.
         self.means_, self.covs_, self.weights_ = state
@@ -423,7 +399,7 @@ class GaussianMixture(object):
                 *state, R = self.initialize(y, K, **kwds)
 
                 # Run E-M.
-                results[K] = self.expectation_maximization(y, *state, R, **kwds)
+                results[K] = self.expectation_maximization(y, *state, **kwds)
 
             except ValueError:
                 logger.warn(f"Failed to initialize at K = {K}")
@@ -478,7 +454,7 @@ class GaussianMixture(object):
                     *state, R = self.initialize(y, K, **kwds)
 
                     # Run E-M..
-                    results[K] = self.expectation_maximization(y, *state, R, **kwds)
+                    results[K] = self.expectation_maximization(y, *state, **kwds)
 
                 except ValueError:
                     logger.warn(f"Failed to initialize mixture at K = {K}")
@@ -557,7 +533,7 @@ class GaussianMixture(object):
                 *state, R = self.initialize(y, K, **kwds)
 
                 # Run E-M.
-                results[K] = self.expectation_maximization(y, *state, R, **kwds)
+                results[K] = self.expectation_maximization(y, *state, **kwds)
 
             except ValueError:
                 logger.warn(f"Failed to initialize at K = {K}")
@@ -572,6 +548,82 @@ class GaussianMixture(object):
 
         meta = dict()
         return (*result, meta)
+
+
+
+    def _search_kasarapu_allison_2015(self, y, **kwargs):
+        r"""
+        Find the optimal mixture of Gaussians using the perturbation search
+        algorithm described by Kasarapu & Allison (2015).
+
+        :param y:
+            A :math:`N\times{}D` array of the observations :math:`y`,
+            where :math:`N` is the number of observations, and :math:`D` is the
+            number of dimensions per observation.
+        """
+
+        N, D = y.shape
+        kwds = {**self._em_kwds, **kwargs}
+        tqdm_format = lambda f: None if kwds.get("quiet", False) else f
+
+        # Initialize.
+        *state, R = self.initialize(y, K=1, **kwds)
+        R, ll, I = self.expectation(y, *state, **kwds)
+
+        iterations, perturbations = (0, 0)
+
+        ml = lambda I: np.sum(np.hstack(I.values()))
+
+        prev_ml = ml(I)
+
+        while True:
+
+            K = weight.size
+            best_perturbations = defaultdict(lambda: [np.inf])
+
+            # Exhaustively split all components.
+            for k in tqdm(range(K), desc=tqdm_format(f"Splitting K={K}")):
+                p = operations.split_component(y, *state, R, k, **kwds)
+
+                # Keep best split component.
+                I = ml(p[-1])
+                if I < best_perturbations["split"][0]:
+                    best_perturbations["split"] = [I, k] + list(p)
+
+            if K > 1:
+                # Exhaustively delete all components.
+                for k in tqdm(range(K), desc=tqdm_format(f"Deleting K={K}")):
+                    p = operations.delete_component(y, *state, R, k, **kwds)
+
+                    # Keep best delete component.
+                    I = ml(p[-1])
+                    if I < best_perturbations["delete"][0]:
+                        best_perturbations["delete"] = [I, k] + list(p)
+
+                # Exhaustively merge all components.
+                for k in tqdm(range(K), desc=tqdm_format(f"Merging K={K}")):
+                    p = operations.merge_component(y, *state, R, k, **kwds)
+
+                    # Keep best merged component.
+                    I = ml(p[-1])
+                    if I < best_perturbations["merge"][0]:
+                        best_perturbations["merge"] = [I, k] + list(p)
+
+            # Get best perturbation.
+            bop, bp = min(best_perturbations.items(), key=lambda x: x[1][0])
+            logger.debug(f"Best operation is {bop} on index {bp[1]}")
+
+            if bp[0] < prev_ml:
+                # Set the new state as the best perturbation.
+                prev_ml, _, *state, R, ll, I = bp
+                iterations += 1
+
+            else:
+                # Done. All perturbations are worse.
+                break
+
+        meta = dict()
+        return (state, R, ll, meta)
 
 
     def _predict_message_length(self, K, N, D, **kwargs):

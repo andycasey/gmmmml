@@ -3,11 +3,15 @@
 Expectation-Maximization.
 """
 
+import logging
 import numpy as np
 import scipy.linalg
 from scipy.special import logsumexp
+from tqdm import tqdm
 
 from .mml import gaussian_mixture_message_length
+
+logger = logging.getLogger(__name__)
 
 
 def expectation(y, means, covs, weights, **kwargs):
@@ -105,6 +109,106 @@ def maximization(y, means, covs, weights, responsibilities,
 
     return (means_, covs_, weights_)
 
+
+
+def expectation_maximization(y, means, covs, weights, covariance_type="full", 
+                             covariance_regularization=0, threshold=1e-2, 
+                             max_em_iterations=100, quiet=False, **kwargs):
+    r"""
+    Run the expectation-maximization algorithm on the given mixture.
+
+    :param y:
+        The data values, :math:`y`, which are expected to have :math:`N` 
+        samples each with :math:`D` dimensions. Expected shape of :math:`y` 
+        is :math:`(N, D)`.
+
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of `means` is :math:`(K, D)`.
+
+    :param covs:
+        The current estimate of the covariance matrices of the :math:`K`
+        components. The expected shape of `covs` is :math:`(K, D, D)`.
+
+    :param weights:
+        The current estimate of the relative weights :math:`w` of all 
+        :math:`K` components. The sum of weights must equal 1. The expected 
+        shape of `weights` is :math:`(K, )`.
+
+    :param covariance_type: [optional]
+        The structure of the covariance matrix for individual components.
+        The available options are: 
+
+        - "full": for a full-rank covariance matrix with non-zero off-diagonal
+                  terms,
+        - "diag": for a diagonal covariance matrix.
+
+    :param covariance_regularization: [optional]
+        Regularization strength to add to the diagonal of covariance matrices
+        (default: `0`).
+
+    :param threshold: [optional]
+        The relative improvement in message length required before stopping an
+        expectation-maximization step (default: `1e-2`).
+
+    :param max_em_iterations: [optional]
+        The maximum number of iterations to run per expectation-maximization
+        loop (default: `100`).
+
+    :param quiet: [optional]
+        Optionally turn off progress bars.
+
+    :returns:
+        A four-length tuple containing:
+
+        (1) a tuple containing the best estimate of the means, covariance 
+            matrices, and relative weights of the :math:`K` components
+
+        (2) the responsibility matrix
+
+        (3) the log-likelihood of each data point, given the model
+
+        (4) a dictionary containing the message length of various parts of 
+            the best model.
+    """        
+
+    e_step = kwargs.pop("__expectation_function", expectation)
+    m_step = kwargs.pop("__maximization_function", maximization)
+    R = kwargs.pop("responsibilities", None)
+
+    kwds = dict(covariance_type=covariance_type,
+                covariance_regularization=covariance_regularization)
+    kwds.update(kwargs)
+
+    state = (means, covs, weights)
+    responsibilities, ll, I = e_step(y, *state, **kwds)
+
+    # Overwrite responsibilities if explicitly given.
+    if R is not None: responsibilities = R
+
+    prev_I = np.sum(np.hstack(I.values()))
+
+    tqdm_kwds = dict(disable=True) if quiet \
+                                   else dict(desc=f"E-M @ K={weights.size}")
+
+    for iteration in tqdm(range(max_em_iterations), **tqdm_kwds):
+        
+        state = m_step(y, *state, responsibilities, **kwds)
+        responsibilities, ll, I = e_step(y, *state, **kwds)
+
+        current_I = np.sum(np.hstack(I.values()))
+        diff = np.abs(prev_I - current_I)
+        if diff <= threshold:
+            break
+
+        prev_I = current_I
+
+    else:
+        logger.warning(
+            f"Convergence not reached ({diff:.1e} > {threshold:.1e}) "\
+            f"after {iteration + 1} iterations")
+
+    return (state, responsibilities, ll, I)
 
 
 def responsibilities(y, means, covs, weights, covariance_type="full",

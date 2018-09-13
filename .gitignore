@@ -8,6 +8,8 @@ tmp/
 
 docs/_build/
 
+notebooks/
+
 article/vc.tex
 article/ms.pdf
 article/*.log

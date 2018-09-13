@@ -4,6 +4,70 @@ from sklearn import datasets
 
 from sklearn.neighbors import NearestNeighbors
 
+
+
+def kullback_leibler_for_multivariate_normals(mu_a, cov_a, mu_b, cov_b):
+    r"""
+    Return the Kullback-Leibler distance from one multivariate normal
+    distribution with mean :math:`\mu_a` and covariance :math:`\Sigma_a`,
+    to another multivariate normal distribution with mean :math:`\mu_b` and 
+    covariance matrix :math:`\Sigma_b`. The two distributions are assumed to 
+    have the same number of dimensions, such that the Kullback-Leibler 
+    distance is
+
+    .. math::
+        D_{\mathrm{KL}}\left(\mathcal{N}_{a}||\mathcal{N}_{b}\right) = 
+            \frac{1}{2}\left(\mathrm{Tr}\left(\Sigma_{b}^{-1}\Sigma_{a}\right) + \left(\mu_{b}-\mu_{a}\right)^\top\Sigma_{b}^{-1}\left(\mu_{b} - \mu_{a}\right) - k + \ln{\left(\frac{\det{\Sigma_{b}}}{\det{\Sigma_{a}}}\right)}\right)
+
+    where :math:`k` is the number of dimensions and the resulting distance is 
+    given in units of nats.
+
+    .. warning::
+        It is important to remember that 
+        :math:`D_{\mathrm{KL}}\left(\mathcal{N}_{a}||\mathcal{N}_{b}\right) \neq D_{\mathrm{KL}}\left(\mathcal{N}_{b}||\mathcal{N}_{a}\right)`.
+
+    :param mu_a:
+        The mean of the first multivariate normal distribution.
+
+    :param cov_a:
+        The covariance matrix of the first multivariate normal distribution.
+
+    :param mu_b:
+        The mean of the second multivariate normal distribution.
+        
+    :param cov_b:
+        The covariance matrix of the second multivariate normal distribution.
+    
+    :returns:
+        The Kullback-Leibler distance from distribution :math:`a` to :math:`b`
+        in units of nats. Dividing the result by :math:`\log_{e}2` will give
+        the distance in units of bits.
+    """
+
+    if len(cov_a.shape) == 1:
+        cov_a = cov_a * np.eye(cov_a.size)
+
+    if len(cov_b.shape) == 1:
+        cov_b = cov_b * np.eye(cov_b.size)
+
+    U, S, V = np.linalg.svd(cov_a)
+    Ca_inv = np.dot(np.dot(V.T, np.linalg.inv(np.diag(S))), U.T)
+
+    U, S, V = np.linalg.svd(cov_b)
+    Cb_inv = np.dot(np.dot(V.T, np.linalg.inv(np.diag(S))), U.T)
+
+    k = mu_a.size
+
+    offset = mu_b - mu_a
+    return 0.5 * np.sum([
+          np.trace(np.dot(Ca_inv, cov_b)),
+        + np.dot(offset.T, np.dot(Cb_inv, offset)),
+        - k,
+        + np.log(np.linalg.det(cov_b)/np.linalg.det(cov_a))
+    ])
+
+
+
 def _best_mixture_parameter_values(K, I, value):
     """
     Return the mixture parameter value that has the lowest cost for each K.
