@@ -10,7 +10,3 @@ Fast search methods to model multivariate data with a
 where the number of components is not known, using
     [Minimum Message Length](https://en.wikipedia.org/wiki/Minimum_message_length) (MML)
 as the objective function.
-
-## License
-Copyright 2018 the authors. The code in this repository is released under the open-source MIT License.
-See the file `LICENSE` for more details.
