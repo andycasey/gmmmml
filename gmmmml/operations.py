@@ -172,7 +172,7 @@ def delete_component(y, means, covs, weights, responsibilities, index, **kwargs)
         y, means_, covs_, weights_, responsibilities=responsibilities_, **kwargs)
 
 
-def merge_components(y, means, covs, weights, responsibilities, index, **kwargs):
+def merge_component(y, means, covs, weights, responsibilities, index, **kwargs):
     r"""
     Merge a component from the mixture with its "closest" component, as
     judged by the Kullback-Leibler distance.

@@ -570,15 +570,13 @@ class GaussianMixture(object):
         *state, R = self.initialize(y, K=1, **kwds)
         R, ll, I = self.expectation(y, *state, **kwds)
 
-        iterations, perturbations = (0, 0)
-
         ml = lambda I: np.sum(np.hstack(I.values()))
 
-        prev_ml = ml(I)
+        iterations, prev_ml = (0, ml(I))
 
         while True:
 
-            K = weight.size
+            K = state[-1].size
             best_perturbations = defaultdict(lambda: [np.inf])
 
             # Exhaustively split all components.
@@ -615,7 +613,7 @@ class GaussianMixture(object):
 
             if bp[0] < prev_ml:
                 # Set the new state as the best perturbation.
-                prev_ml, _, *state, R, ll, I = bp
+                prev_ml, _, state, R, ll, I = bp
                 iterations += 1
 
             else:
@@ -623,7 +621,7 @@ class GaussianMixture(object):
                 break
 
         meta = dict()
-        return (state, R, ll, meta)
+        return (state, R, ll, I, meta)
 
 
     def _predict_message_length(self, K, N, D, **kwargs):

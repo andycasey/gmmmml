@@ -25,19 +25,50 @@ for i in range(10):
         else:
           break
 
-    j_handler = visualize.VisualizationHandler(y, figure_prefix="tmp/bayes-jumper")
-    k_handler = visualize.VisualizationHandler(y, figure_prefix="tmp/greedy-kmeans")
+    bayesjumper_model2 = gmm.GaussianMixture()
+    bayesjumper_model2.search(y, strategy="bayes-jumper")
 
-    j_model = gmm.GaussianMixture()
-    j_model.search(y, strategy="bayes-jumper", visualization_handler=j_handler)
+    # The greedy k-means method requires a stopping criteria (K_max).
+    K_max = 50
+    gkh = visualize.VisualizationHandler(y, figure_prefix="tmp/greedy-kmeans")    
+    greedykmeans_model = gmm.GaussianMixture()
+    greedykmeans_model.search(y, 
+                              K_max=K_max,
+                              strategy="greedy-kmeans",
+                              visualization_handler=gkh)
 
 
-    k_model = gmm.GaussianMixture()
-    k_model.search(y, strategy="greedy-kmeans", visualization_handler=k_handler,
-                   K_max=50)
+    # The Kasarapu and Allison method really breaks down if you don't use a 
+    # little bit of covariance regularization.
+    # TODO: Implement visualization handler with Kasarapu & Allison method.
+    kasarapu_model = gmm.GaussianMixture()
+    kasarapu_model.search(y,
+                          strategy="kasarapu-allison-2015",
+                          covariance_regularization=1e-6)
 
-    #j_handler.create_movie()
-    #k_handler.create_movie()
+
+    bjh = visualize.VisualizationHandler(y, figure_prefix="tmp/bayes-jumper")
+
+    bayesjumper_model = gmm.GaussianMixture()
+    bayesjumper_model.search(y, 
+                             strategy="bayes-jumper",
+                             visualization_handler=bjh)
+
+
+
+    print(
+      """
+      Summary:
+
+      - Greedy K-means++ model took {0:.0f} seconds (K_max={1}; incl. visualisations)
+      - Kasarapu & Allison model took {2:.0f} seconds (with no visualisations)
+      - Bayes jumper model took {3:.0f} seconds (incl. visualisations; {4:.0f} seconds without visualisations)
+      """.format(
+        greedykmeans_model.meta_["t_search"], K_max,
+        kasarapu_model.meta_["t_search"],
+        bayesjumper_model.meta_["t_search"],
+        bayesjumper_model2.meta_["t_search"]
+    ))
 
     break
 
