@@ -3,7 +3,10 @@
 
 *.pyc
 gmmmml/__pycache__/
+
 tmp/
+
+docs/_build/
 
 article/vc.tex
 article/ms.pdf
