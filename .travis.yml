@@ -7,7 +7,6 @@ install:
 
 script:
     - source .ci/build.sh
-    - echo $PYTHON_VERSION
 
 after_success: |
     if [ -n "$GITHUB_API_KEY" ]; then
