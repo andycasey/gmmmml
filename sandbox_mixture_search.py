@@ -1,6 +1,6 @@
 
 import numpy as np
-from gmmmml import (mixture_search as mixture, visualize, utils)
+from gmmmml import (mixture, visualize, utils)
 
 np.random.seed(123)
 

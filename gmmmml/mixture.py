@@ -600,7 +600,7 @@ class GaussianMixture(object):
         K_max = N if K_max is None else K_max
 
         kwds = {**self._em_kwds, **kwargs}
-        
+
         results = {}
 
         Ks = 1 + np.arange(K_max)
