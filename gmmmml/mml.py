@@ -9,7 +9,78 @@ from scipy.special import gammaln
 from . import utils
 
 
+# TODO: improve these docs. they are not consistent and the math is borked.
 
+def gaussian_mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights):
+    """
+    Estimate the message length of a gaussian mixture model.
+
+    :param K:
+        The number of mixtures. This can be an array.
+
+    :param N:
+        The number of data points.
+    
+    :param D:
+        The dimensionality of the data.
+
+    :param log_likelihood:
+        The estimated sum of the log likelihood of the future mixtures.
+
+    :param slogdetcov:
+        The estimated sum of the log of the determinant of the covariance 
+        matrices of the future mixtures.
+
+    :param weights: [optional]
+        The estimated weights of future mixtures. If `None` is given then the
+        upper bound for a losslessly-encoded multinomial distribution of values
+        will be used to calculate the message length:
+
+        .. math::
+
+            \sum_{k=1}^{K}\log{w_k} \approx -K\log{K}
+
+    :param yerr: [optional]
+        The homoscedastic noise in y for each data point.
+    """
+
+    K = np.atleast_1d(K)
+    slogdetcov = np.atleast_1d(slogdetcov)
+    log_likelihood = np.atleast_1d(log_likelihood)
+    
+    if K.size != slogdetcov.size:
+        raise ValueError("the size of K and slogdetcov are different")
+
+    if K.size != log_likelihood.size:
+        raise ValueError("the size of K and log_likelihood are different")
+
+    # Calculate the different contributions of the message length so we can
+    # predict them.
+    w_size = np.array([len(w) for w in weights])
+    if not np.all(w_size == K):
+        raise ValueError("the size of the weights does not match K")
+    slogw = np.array([np.sum(np.log(w)) for w in weights])
+
+    Q = gmm_number_of_parameters(K, D)
+
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+    
+    I_data = -log_likelihood 
+    # TODO: this requires a thinko
+    #- D * N * np.log(yerr)
+    I_slogdetcovs = -0.5 * (D + 2) * slogdetcov
+
+    I_weights = (0.25 * D * (D + 3) - 0.5) * slogw
+
+    I_parts = dict(
+        I_mixtures=I_mixtures, I_parameters=I_parameters, 
+        I_data=I_data, I_slogdetcovs=I_slogdetcovs, 
+        I_weights=I_weights)
+
+
+    return I_parts
 
 
 
@@ -18,7 +89,7 @@ def gmm_number_of_parameters(K, D):
     Return the total number of model parameters :math:`Q`, if a full 
     covariance matrix structure is assumed.
 
-    .. math:
+    .. math::
 
         Q = \frac{K}{2}\left[D(D+3) + 2\right] - 1
 
@@ -43,16 +114,20 @@ def information_of_mixture_constants(K, N, D):
     information to encode the number of parameters and the constant terms
     related to the mixture itself:
 
-    .. math:
+    .. math::
 
-        I_{mixture} = (1 - \frac{D}{2})K\log{2} + \Gamma\log{K} 
+        I_{mixture} = (1 - \frac{D}{2})K\log{2} + \Gamma\left(\log{K}\right)
                     + \frac{1}{4}(2(K - 1) + KD(D+3))\log{N}
+
+    and
+
+    .. math::
 
         I_{parameters} = \frac{1}{2}\log{Q\pi} - \frac{Q}{2}\log{2\pi}
 
     where :math:`Q` is the total number of model parameters
 
-    .. math:
+    .. math::
 
         Q = \frac{KD(D + 3)}{2} + K - 1
 
@@ -79,7 +154,7 @@ def _bounds_of_sum_log_weights(K, N):
     r"""
     Return the analytical bounds of the function:
 
-    .. math:
+    .. math::
 
         \sum_{k=1}^{K}\log{w_k}
 
@@ -87,7 +162,7 @@ def _bounds_of_sum_log_weights(K, N):
     distribution. The bounded function for when :math:`w` are uniformly
     distributed is:
 
-    .. math:
+    .. math::
 
         \sum_{k=1}^{K}\log{w_k} \lteq -K\log{K}
 
@@ -96,7 +171,7 @@ def _bounds_of_sum_log_weights(K, N):
     (physically realistic) weight of two data points. In that extreme case,
     the bound becomes:
 
-    .. math:
+    .. math::
     
         \sum_{k=1}^{K}\log{w_k} \gteq (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
 
@@ -116,26 +191,26 @@ def _bounds_of_sum_log_weights(K, N):
 
 
 def information_bounds_of_sum_log_weights(K, N, D):
-    """
+    r"""
     Return the lower and upper bounds on the information of the sum of the log
     of the weights. Specifically, the lower bound is given when all weight is
     locked up in one mixture
 
-    .. math:
+        .. math::
 
-        I_w \gteq C\left[(K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}\right]
+            I_w > C\left[(K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}\right]
 
     and the upper bound is given when the weights are uniformly distributed
 
-    .. math:
+        .. math::
 
-        I_w \lteq -CK\log{K}
-    
+            I_w < -CK\log{K}
+        
     where the constant :math:`C` in both cases is
 
-    .. math:
+        .. math::
 
-        C = \frac{D(D + 3)}{4} - \frac{1}{2}
+            C = \frac{D(D + 3)}{4} - \frac{1}{2}
 
     The information bounds are given in units of nats.
 
@@ -159,15 +234,10 @@ def information_of_sum_log_weights(sum_log_weights, D):
     r"""
     Return the information content on the sum of the log of the weights:
 
-    .. math:
+    .. math::
 
-        I_w = C\sum_{k=1}^{K}\log{w_k}
+        I_w = \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum_{k=1}^{K}\log{w_k}
 
-    where 
-
-    .. math:
-
-        C = \frac{D(D+3)}{4} - \frac{1}{2}
 
     :param sum_log_weights:
         The sum of the log of the weights for a Gaussian mixture.
@@ -180,8 +250,6 @@ def information_of_sum_log_weights(sum_log_weights, D):
         of nats.
     """
     return (0.25 * D * (D + 3) - 0.5) * np.array(sum_log_weights)
-
-
 
 
 def predict_information_of_sum_log_weights(K, N, D, data=None):
@@ -253,15 +321,11 @@ def information_of_sum_log_det_covs(sum_log_det_covs, D):
     Return the information content on the sum of the log of the determinant of
     the covariance matrices:
 
-    .. math:
+    .. math::
 
-        I_c = C\sum_{k=1}^{K}\log\det{C_k}
+        I_C = -\frac{1}{2}(D + 2)\sum_{k=1}^{K}\log|{C_k}|
 
-    where 
-
-    .. math:
-
-        C = -\frac{1}{2}(D + 2)
+    where :math:`D` is the dimensionality of the data.
     
     :param sum_log_det_covs:
         The sum of the log of the determinant for a given Gaussian mixture.
@@ -281,9 +345,9 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     the covariance matrices for a Gaussian mixture model containing :math:`K`
     components. Specifically, the information is given by:
 
-    .. math:
+    .. math::
 
-        I_C = -\frac{1}{2}(D + 2)\sum_{k=1}^{K}\log\det{C_k}
+        I_C = -\frac{1}{2}(D + 2)\sum_{k=1}^{K}\log|{C_k}|
 
     :param K:
         The number of components in the target Gaussian mixture.
@@ -320,24 +384,13 @@ def predict_information_of_sum_log_det_covs(K, D, data):
 
     x, y = utils._best_mixture_parameter_values(data["K"], data["I"], I_sldc)
 
-    #_, yerr = utils._group_over(data[0], I, np.std)
 
     yerr = np.ones_like(y)
-
-    # TODO
-    #y = y*x
-
-    #yerr = np.clip(yerr, 1, np.inf)
-    #yerr[~np.isfinite(yerr)] = 1
 
     var_y = np.var(y)
     var_y = var_y if (np.isfinite(var_y) and var_y > 0) else 1
 
     kernel = var_y * kernels.Matern32Kernel(1)#ExpSquaredKernel(1)
-    #       + var_y * kernels.LocalGaussianKernel(location=0, log_width=0)
-    #+ np.var(y) * kernels.LinearKernel(log_gamma2=0, order=1)
-
-    #(y) * kernels.LocalGaussianKernel(location=0, log_width=0) \
 
     white_noise = np.log(np.sqrt(var_y))
 
@@ -363,13 +416,6 @@ def predict_information_of_sum_log_det_covs(K, D, data):
     gp.set_parameter_vector(results.x)
 
     I, I_var = gp.predict(y, K, return_var=True)
-
-    # TODO
-    #pred /= K
-    #pred_var /= K**2
-
-    #I = information_of_sum_log_det_covs(pred, D)
-    #I_var = information_of_sum_log_det_covs(np.sqrt(pred_var), D)**2
 
     # Calculate the lower bound based on the data we have.
     max_log_det_cov = np.max(np.log(np.hstack(data["det_covs"])))
@@ -413,13 +459,6 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
     x, y = utils._best_mixture_parameter_values(data["K"], data["I"],
         data["negative_log_likelihood"])
 
-    #x, y = utils._group_over(data[0], data[1], np.min)
-    #_, yerr = utils._group_over(data[0], data[1], np.std)
-    #yerr = np.clip(yerr, 1, np.inf)
-    
-    # Following Li and Barron
-    #y /= x
-
     yerr = np.ones_like(y)
 
     var_y = np.var(y)
@@ -438,7 +477,6 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
                    mean=MeanModel(c=1, a=np.mean(y)), fit_mean=True,
                    white_noise=np.log(np.sqrt(var_y)), fit_white_noise=True)
 
-    #               white_noise=np.log(np.sqrt(var_y)), fit_white_noise=True)
 
     def nll(p):
         gp.set_parameter_vector(p)
@@ -455,23 +493,17 @@ def predict_negative_sum_log_likelihood(K, N, D, data):
 
     results = op.minimize(nll, p0, method="L-BFGS-B")
 
-    #print(results)
     gp.set_parameter_vector(results.x)
 
     pred_nll, pred_nll_var = gp.predict(y, K, return_var=True)
 
-    #pred_nll *= K
-    #pred_nll_var *= K**2
-
     # Lower bound.
     lower = predict_lower_bound_on_negative_log_likelihood(K, N, D, data)
-
 
     return (pred_nll, pred_nll_var, lower)
 
 
 def predict_lower_bound_on_negative_log_likelihood(K, N, D, data):
-
 
     # weights.
     # alternative: 

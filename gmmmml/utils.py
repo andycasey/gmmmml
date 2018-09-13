@@ -218,26 +218,6 @@ def aggregate(x, y, function):
 
 
 
-# TODO: REPEATED CODE MOVE THIS
-def _estimate_covariance_matrix_full(y, responsibility, mean, 
-    covariance_regularization=0):
-
-    N, D = y.shape
-    M, N = responsibility.shape
-
-    membership = np.sum(responsibility, axis=1)
-
-    I = np.eye(D)
-    cov = np.empty((M, D, D))
-    for m, (mu, rm, nm) in enumerate(zip(mean, responsibility, membership)):
-
-        diff = y - mu
-        denominator = nm - 1 if nm > 1 else nm
-
-        cov[m] = np.dot(rm * diff.T, diff) / denominator \
-               + covariance_regularization * I
-
-    return cov
 
 
 
@@ -269,16 +249,18 @@ def generate_data(N=None, D=None, K=None, cluster_std=1.0,
     for k in range(K):
         mean[k] = np.sum(responsibility[k] * X.T, axis=1) / membership[k]
 
-    cov = _estimate_covariance_matrix_full(X, responsibility, mean)
+    from .em import responsibilities, _estimate_covariance_matrix_full
+    from .mml import gaussian_mixture_message_length
+
+    cov = _estimate_covariance_matrix_full(X, mean, responsibility)
     
     weight = responsibility.sum(axis=1)/N
 
     # TODO: REFACTOR
 
-    from .mixture_search import responsibility_matrix, _mixture_message_length
 
     
-    responsibility, log_likelihood = responsibility_matrix(
+    responsibility, log_likelihood = responsibilities(
         X, mean, cov, weight, full_output=True, covariance_type="full")
 
     nll = -np.sum(log_likelihood)
@@ -286,8 +268,8 @@ def generate_data(N=None, D=None, K=None, cluster_std=1.0,
     #    full_output=True, covariance_type="full")
 
     _, slogdetcovs = np.linalg.slogdet(cov)
-    I_parts = _mixture_message_length(K, N, D, -nll, np.sum(slogdetcovs),
-        weights=[weight])
+    I_parts = gaussian_mixture_message_length(K, N, D, -nll, np.sum(slogdetcovs),
+        [weight])
 
     I = np.sum(I_parts.values())
 

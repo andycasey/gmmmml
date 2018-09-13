@@ -12,3 +12,6 @@ handler.setFormatter(logging.Formatter(
 logger.addHandler(handler)
 
 del handler, logger, logging
+
+from . import (em, mml, gmm)
+from .gmm import GaussianMixture

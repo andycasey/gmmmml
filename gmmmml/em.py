@@ -1,126 +1,173 @@
 
 """
-Functions related to expectation-maximization steps.
+Expectation-Maximization.
 """
 
 import numpy as np
-import scipy
-from sklearn import cluster
-from sklearn.utils import check_random_state
-from sklearn.utils.extmath import row_norms
+import scipy.linalg
+from scipy.special import logsumexp
 
-from .mml import mixture_message_length
+from .mml import gaussian_mixture_message_length
 
 
-def _initialise_by_kmeans_pp(y, K, covariance_regularization=0, 
-    random_state=None):
-    """
-    Initialise by k-means++ and assign hard responsibilities to the closest
-    centroid.
+def expectation(y, means, covs, weights, **kwargs):
+    r"""
+    Perform the expectation step of the expectation-maximization algorithm.
 
     :param y:
-        The data :math:`y`.
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
 
-    :param K:
-    `   The number of Gaussian mixtures to initialise with.
-    
-    :param random_state: [optional]
-        The state to use for the random number generator.
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
 
-    :param covariance_regularization: [optional]
+    :param covs:
+        The current estimate of the covariance matrices of the :math:`K`
+        components. The expected shape of ``covs`` is :math:`(K, D, D)`.
 
+    :param weights:
+        The current estimate of the relative weights :math:`w` of all :math:`K`
+        components. The sum of weights must equal 1. The expected shape of
+        ``weights`` is :math:`(K, )`.
 
     :returns:
-        A four-length tuple containing:
-
-        (1) the initialised centroids :math:`\mu`;
-
-        (2) the initialsied covariance matrices :math:`C`;
-
-        (3) the initialised weights for each mixture :math:`w`;
-
-        (4) the responsibility matrix.
+        A three-length tuple containing the responsibility matrix,
+        the log-likelihood, and a dictionary containing the message lengths of
+        various parts of the mixture.
     """
 
-    if 1 > K:
-        raise ValueError("the number of mixtures must be a positive integer")
+    R, ll = responsibilities(y, means, covs, weights, full_output=True, **kwargs)
 
-    K = int(K)
-    y = np.atleast_2d(y)
-    N, D = y.shape
+    K, N, D = (weights.size, *y.shape)
 
-    random_state = check_random_state(random_state)
-    squared_norms = row_norms(y, squared=True)
-
-    mu = cluster.k_means_._k_init(y, K, x_squared_norms=squared_norms,
-        random_state=random_state)
-
-    # Assign everything to the closest mixture.
-    labels = np.argmin(scipy.spatial.distance.cdist(mu, y), axis=0)
-
-    # Generate responsibility matrix.
-    responsibility = np.zeros((K, N))
-    responsibility[labels, np.arange(N)] = 1.0
-
-    # Calculate weights.
-    weight = np.sum(responsibility, axis=1)/N
-
-    # Estimate covariance matrices.
-    cov = _estimate_covariance_matrix_full(y, responsibility, mu, 
-        covariance_regularization=covariance_regularization)
-
-    return (mu, cov, weight, responsibility)
+    I = gaussian_mixture_message_length(K, N, D, np.sum(ll), 
+                                        np.sum(np.linalg.slogdet(covs)[1]),
+                                        [weights])
+    return (R, ll, I)
 
 
-def _compute_log_det_cholesky(cholesky_matrices, covariance_type, n_features):
+
+def maximization(y, means, covs, weights, responsibilities, 
+                 parent_responsibilities=1, **kwargs):
     r"""
-    Compute the log-determinant of the Cholesky decomposition of the given
-    matrices.
+    Perform the maximization step of the expectation-maximization algorithm
+    on all components.
+
+    :param y:
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
+
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
+
+    :param covs:
+        The current estimate of the covariance matrices of the :math:`K`
+        components. The expected shape of ``covs`` is :math:`(K, D, D)`.
+
+    :param weights:
+        The current estimate of the relative weights :math:`w` of all :math:`K`
+        components. The sum of weights must equal 1. The expected shape of
+        ``weights`` is :math:`(K, )`.
+
+    :param responsibilities:
+        The responsibility matrix for all :math:`N` observations being
+        partially assigned to each :math:`K` component. The expected shape of
+        `responsibilities` is :math:`(N, K)`.
     
-    
-    :param cholesky_matrices:
-        The Cholesky decomposition of the matrices. The expected shape of this
-        array depends on the `covariance_type`:
-
-        - 'full': shape of (`n_components`, `n_features`, `n_features`)
-
-        - 'tied': shape of (`n_features`, `n_features`)
-
-        - 'diag': shape of (`n_components`, `n_features`)
-
-        - 'spherical': shape of (`n_components`, )
-
-    :param covariance_type:
-        The type of the covariance matrix. Must be one of 'full', 'tied',
-        'diag', or 'spherical'.
-
-    :param n_features:
-        The number of features.
+    :param parent_responsibilities: [optional]
+        An array of length :math:`N` giving the parent component 
+        responsibilities (default: ``1``). Only useful if the maximization
+        step is to be performed on sub-mixtures with parent responsibilities.
 
     :returns:
-        The log of the determinant of the precision matrix for each component.
+        A three length tuple containing the new estimate on the component means,
+        the component covariance matrices, and the relative mixture weights.
     """
 
-    if covariance_type == "full":
-        n_components, _, _ = cholesky_matrices.shape
-        log_det_chol = (np.sum(np.log(
-            cholesky_matrices.reshape(
-                n_components, -1)[:, ::n_features + 1]), 1))
+    K, N, D = (weights.size, *y.shape)
+    
+    effective_membership = np.sum(responsibilities, axis=1)
+    weights_ = (effective_membership + 0.5)/(N + K/2.0)
 
-    elif covariance_type == "tied":
-        log_det_chol = (np.sum(np.log(np.diag(cholesky_matrices))))
+    weighted_responsibilities = parent_responsibilities * responsibilities
+    w_effective_membership = np.sum(weighted_responsibilities, axis=1)
 
-    elif covariance_type == "diag":
-        log_det_chol = (np.sum(np.log(cholesky_matrices), axis=1))
+    means_, covs_ = (np.zeros_like(means), np.zeros_like(covs))
+    for k in range(K):
+        means_[k] = np.sum(weighted_responsibilities[k] * y.T, axis=1) \
+                  / w_effective_membership[k]
 
-    elif covariance_type == "spherical":
-        log_det_chol = n_features * (np.log(cholesky_matrices))
+    covs_ = _estimate_covariance_matrix(y, means_, responsibilities, **kwargs)
 
-    else:
-        raise ValueError("unrecognised covariance type")
+    return (means_, covs_, weights_)
 
-    return log_det_chol
 
+
+def responsibilities(y, means, covs, weights, covariance_type="full",
+                     full_output=False, **kwargs):
+    r"""
+    Return the responsibility matrix,
+
+    .. math::
+
+        r_{ij} = \frac{w_{j}f\left(y_i;\theta_j\right)}{\sum_{k=1}^{K}{w_k}f\left(y_i;\theta_k\right)}
+
+
+    where :math:`r_{ij}` denotes the conditional probability of a datum
+    :math:`x_i` belonging to the :math:`j`-th component. The effective 
+    membership associated with each component is then given by
+
+    .. math::
+
+        n_j = \sum_{i=1}^{N}r_{ij}
+        \quad \textrm{and} \quad
+        \sum_{k=1}^{K}n_{k} = N
+
+    
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
+
+    :param covs:
+        The current estimate of the covariance matrices of the :math:`K`
+        components. The expected shape of ``covs`` is :math:`(K, D, D)`.
+
+    :param weights:
+        The current estimate of the relative weights :math:`w` of all :math:`K`
+        components. The sum of weights must equal 1. The expected shape of
+        ``weights`` is :math:`(K, )`.
+
+    :param covariance_type: [optional]
+        The structure of the covariance matrices. Available types include:
+
+            - "full": full covariance matrix with non-zero off-diagonal terms
+
+            - "diag": diagonal covariance matrix.
+
+    :param full_output: [optional]
+        If ``True``, return the responsibility matrix, and the log likelihood,
+        which is evaluated for free (default: ``False``).
+
+    :returns:
+        The responsibility matrix. If ``full_output`` is ``True``, then the
+        log-likelihood (per observation) will also be returned.
+    """
+
+    precision_cholesky = _compute_precision_cholesky(covs, covariance_type)
+    lp = _gaussian_log_prob(y, means, weights, precision_cholesky,
+                            covariance_type)
+        
+    ll = logsumexp(lp, axis=1)
+    with np.errstate(under="ignore"):
+        log_R = lp - ll[:, np.newaxis]
+
+    R = np.exp(log_R).T
+
+    return (R, ll) if full_output else R
 
 
 def _compute_precision_cholesky(covariances, covariance_type):
@@ -129,204 +176,87 @@ def _compute_precision_cholesky(covariances, covariance_type):
     matrices provided.
 
     :param covariances:
-        An array of covariance matrices.
+        An array of covariance matrices. Given :math:`K` covariance matrices
+        that have :math:`D` dimensions, the expected shape of ``covariances``
+        depends on ``covariance_type``:
+
+            - "full": :math:`(K, D, D)`
+
+            - "diag": :math:`(K, D)`
 
     :param covariance_type:
         The structure of the covariance matrix for individual components.
-        The available options are: `full` for a free covariance matrix, or
-        `diag` for a diagonal covariance matrix.
+        The available options are:
+
+        -   "full" for a free covariance matrix, or
+        -   "diag" for a diagonal covariance matrix.
 
     :returns:
-        The Cholesky decomposition of the precision of the given covariance
-        matrices.
+        The Cholesky decomposition of the precision of the covariance matrices.
     """
 
     singular_matrix_error = "Failed to do Cholesky decomposition"
 
     if covariance_type in "full":
-        M, D, _ = covariances.shape
+        K, D, _ = covariances.shape
 
-        cholesky_precision = np.empty((M, D, D))
-        for m, covariance in enumerate(covariances):
+        I = np.eye(D)
+
+        cholesky_precision = np.empty((K, D, D))
+        for k, covariance in enumerate(covariances):
             try:
                 cholesky_cov = scipy.linalg.cholesky(covariance, lower=True) 
 
             except scipy.linalg.LinAlgError:
                 raise ValueError(singular_matrix_error)
 
-            cholesky_precision[m] = scipy.linalg.solve_triangular(
-                cholesky_cov, np.eye(D), lower=True).T
+            cholesky_precision[k] = scipy.linalg.solve_triangular(
+                                    cholesky_cov, I, lower=True).T
 
     elif covariance_type in "diag":
         if np.any(np.less_equal(covariances, 0.0)):
             raise ValueError(singular_matrix_error)
-
         cholesky_precision = covariances**(-0.5)
 
     else:
-        raise NotImplementedError("covariance type not recognised")
+        raise NotImplementedError(f"unknown covariance type '{covariance_type}'")
 
     return cholesky_precision
 
 
-def _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type, full_output=False):
+def _estimate_covariance_matrix(y, means, responsibilities, covariance_type,
+                                covariance_regularization=0, **kwargs):
     r"""
-    Estimate the log of the Gaussian probability of the mixture model, for
-    each datum given each mixture.
+    Estimate the covariance matrix given the data, the responsibility matrix,
+    and an estimate of the means of the Gaussian components.
 
     :param y:
-        The data :math;`y`.
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
 
-    :param mu:
-        The mixture centroids :math:`\mu`.
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
 
-    :param precision_cholesky:
-        The Cholesky decomposition of the precision of the covariance matrices
-        for the given mixtures.
+    :param responsibilities:
+        The responsibility matrix for all :math:`N` observations being
+        partially assigned to each :math:`K` component. The expected shape of
+        ``responsibilities`` is :math:`(N, K)`.
 
     :param covariance_type:
-        The covariance matrix type: must be either 'full', 'tied', 'diag', or 
-        'spherical'.
+        The structure of the covariance matrices. Available types include:
 
-    :returns:
-        The log of the gaussian probability for each datum belonging to each
-        component in the mixture.
-    """
+            - "full": full covariance matrix with non-zero off-diagonal terms
 
-    N, D = y.shape
-    K, _ = mu.shape
-
-    # Get this tattooed: det(precision_chol) is half of det(precision)
-    log_det = _compute_log_det_cholesky(precision_cholesky, covariance_type, D)
-
-    if covariance_type in "full":
-        log_prob = np.empty((N, K))
-        for k, (mu, prec_chol) in enumerate(zip(mu, precision_cholesky)):
-            diff = np.dot(y, prec_chol) - np.dot(mu, prec_chol)
-            log_prob[:, k] = np.sum(np.square(diff), axis=1)
-
-    elif covariance_type in "diag":
-        precisions = precision_cholesky**2
-        log_prob = (np.sum((mu ** 2 * precisions), 1) \
-                 - 2.0 * np.dot(y, (mu * precisions).T) \
-                 + np.dot(X**2, precisions.T))
-
-    else:
-        raise ValueError("unrecognised covariance type")
-
-    if not full_output:
-        return -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
-    else:
-        foo =  -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
-        return (foo, log_prob, log_det)
-    
-
-def _estimate_covariance_matrix_diag(y, responsibility, mu, 
-    covariance_regularization=0):
-    r"""
-    Estmiate the diagonal covariance matrix for the given data and mixtures.
-    Where relevant, The Neyman-Scott correction is applied.
-
-    :param y:
-        The data :math:`y`.
-
-    :param responsibility:
-        The responsibility matrix.
-
-    :param mu:
-        The centroids of the mixtures.
+            - "diag": diagonal covariance matrix.
 
     :param covariance_regularization: [optional]
-        The regularization to apply to the diagonal of the covariance matrices
-        in oder to maintain stability (default = 0).
+        A regularization term that is added to the diagonal of the covariance
+        matrices. Default is 0.
 
     :returns:
-        The estimated covariance matrices of the :math:`K` mixtures.
-    """
-
-    N, D = y.shape
-    M, N = responsibility.shape
-
-    denominator = np.sum(responsibility, axis=1)
-    denominator[denominator > 1] = denominator[denominator > 1] - 1
-
-    membership = np.sum(responsibility, axis=1)
-
-    I = np.eye(D)
-    cov = np.empty((M, D))
-    for m, (mu, rm, nm) in enumerate(zip(mu, responsibility, membership)):
-        diff = y - mu
-        denominator = nm - 1 if nm > 1 else nm
-        cov[m] = np.dot(rm, diff**2) / denominator + covariance_regularization
-
-    return cov
-
-
-def _estimate_covariance_matrix_full(y, responsibility, mu, 
-    covariance_regularization=0):
-    """
-    Estimate the full (off-diagonal) covariance matrix for the given data and
-    mixtures. Where relevant, the Neyman-Scott correction is applied.
-
-    :param y:
-        The data :math:`y`.
-
-    :param responsibility:
-        The responsibility matrix.
-
-    :param mu:
-        The centroids of the mixtures.
-
-    :param covariance_regularization: [optional]
-        The regularization to apply to the diagonal of the covariance matrices
-        in order to maintain stability (default = 0).
-
-    :returns:
-        The estimated covariance matrices of the :math:`K` mixtures.
-    """
-
-    N, D = y.shape
-    M, N = responsibility.shape
-
-    membership = np.sum(responsibility, axis=1)
-
-    I = np.eye(D)
-    cov = np.empty((M, D, D))
-    for m, (mu, rm, nm) in enumerate(zip(mu, responsibility, membership)):
-
-        diff = y - mu
-        denominator = nm - 1 if nm > 1 else nm
-
-        cov[m] = np.dot(rm * diff.T, diff) / denominator \
-               + covariance_regularization * I
-
-    return cov
-
-
-def estimate_covariance_matrix(y, responsibility, mu, covariance_type,
-    covariance_regularization=0, **kwargs):
-    """
-    Estimate the covariance matrix for the given data and mixtures.
-
-    :param y:
-        The data :math:`y`.
-
-    :param responsibility:
-        The responsibility matrix.
-
-    :param mu:
-        The centroids of the mixtures.
-
-    :param covariance_type:
-        The type of covariance structure to employ. Available options include
-        'diag' or 'full'.
-
-    :param covariance_regularization: [optional]
-        The regularization strength to apply to the diagonal of the covariance
-        matrices in order to maintain stability (default = 0).
-
-    :returns:
-        The estimated covariance matrices of the :math:`K` mixtures.
+        An estimate of the covariance matrices of the Gaussian components.
     """
 
     available = {
@@ -338,172 +268,200 @@ def estimate_covariance_matrix(y, responsibility, mu, covariance_type,
         function = available[covariance_type]
 
     except KeyError:
-        raise ValueError("unknown covariance type")
+        raise ValueError(f"unknown covariance type '{covariance_type}'")
 
-    return function(y, responsibility, mu, covariance_regularization)
+    return function(y, means, responsibilities, covariance_regularization)
 
 
-
-def responsibility_matrix(y, mu, cov, weight, covariance_type, **kwargs):
+def _estimate_covariance_matrix_full(y, means, responsibilities,
+                                     covariance_regularization=0):
     r"""
-    Return the responsibility matrix,
-
-    .. math::
-
-        r_{ij} = \frac{w_{j}f\left(x_i;\theta_j\right)}{\sum_{k=1}^{K}{w_k}f\left(x_i;\theta_k\right)}
-
-
-    where :math:`r_{ij}` denotes the conditional probability of a datum
-    :math:`x_i` belonging to the :math:`j`-th component. The effective 
-    membership associated with each component is then given by
-
-    .. math::
-
-        n_j = \sum_{i=1}^{N}r_{ij}
-        \textrm{and}
-        \sum_{j=1}^{M}n_{j} = N
-
-
-    where something.
-    
-    :param y:
-        The data values, :math:`y`.
-
-    :param mu:
-        The mean values of the :math:`K` multivariate normal distributions.
-
-    :param cov:
-        The covariance matrices of the :math:`K` multivariate normal
-        distributions. The shape of this array will depend on the 
-        ``covariance_type``.
-
-    :param weight:
-        The current estimates of the relative mixing weight.
-
-    :param full_output: [optional]
-        If ``True``, return the responsibility matrix, and the log likelihood,
-        which is evaluated for free (default: ``False``).
-
-    :returns:
-        A two-length tuple containing the responsibility matrix and the log
-        likelihood (per observation in each component of the mixture).
-    """
-
-    precision_cholesky = _compute_precision_cholesky(cov, covariance_type)
-    weighted_log_prob = np.log(weight) + \
-        _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type)
-
-    log_likelihood = scipy.misc.logsumexp(weighted_log_prob, axis=1)
-    with np.errstate(under="ignore"):
-        log_responsibility = weighted_log_prob - log_likelihood[:, np.newaxis]
-    
-    """
-    if weight.size > 1:
-        N, D = y.shape
-
-        wlp, log_prob, log_det = _estimate_log_gaussian_prob(y, mu, precision_cholesky, covariance_type, True)
-
-        raise a
-    """
-    responsibility = np.exp(log_responsibility).T
-    
-
-
-    return (responsibility, log_likelihood) 
-
-
-def expectation(y, mu, cov, weight, **kwargs):
-    r"""
-    Perform the expectation step of the expectation-maximization algorithm.
+    Estimate the covariance matrix given the data, the responsibility matrix,
+    and an estimate of the means of the Gaussian components. The covariance
+    matrix is assumed to be full rank.
 
     :param y:
-        The data values, :math:`y`.
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
 
-    :param mu:
-        The current best estimates of the (multivariate) means of the :math:`K`
-        components.
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
 
-    :param cov:
-        The current best estimates of the covariance matrices of the :math:`K`
-        components.
-
-    :param weight:
-        The current best estimates of the relative weight of all :math:`K`
-        components.
-
-    :returns:
-        A three-length tuple containing the responsibility matrix, the log 
-        likelihood, and the calculated message length for this mixture, given
-        the data.
-    """
-
-    responsibility, log_likelihood = responsibility_matrix(y, mu, cov, weight,
-                                                           **kwargs)
-    K = weight.size
-    N, D = y.shape
-    nll = -np.sum(log_likelihood) # the negative log likelihood
-
-    I, I_parts = mixture_message_length(K, N, D, cov, weight, -nll, **kwargs)
-
-    return (responsibility, log_likelihood, I)
-
-
-def maximization(y, mu, cov, weight, responsibility, parent_responsibility=1,
-    **kwargs):
-    r"""
-    Perform the maximization step of the expectation-maximization algorithm
-    on all components.
-
-    :param y:
-        The data values, :math:`y`.
-
-    :param mu:
-        The current estimates of the Gaussian mean values.
-
-    :param cov:
-        The current estimates of the Gaussian covariance matrices.
-
-    :param weight:
-        The current best estimates of the relative weight of all :math:`K`
-        components.
-
-    :param responsibility:
+    :param responsibilities:
         The responsibility matrix for all :math:`N` observations being
-        partially assigned to each :math:`K` component.
-    
-    :param parent_responsibility: [optional]
-        An array of length :math:`N` giving the parent component 
-        responsibilities (default: ``1``). Only useful if the maximization
-        step is to be performed on sub-mixtures with parent responsibilities.
+        partially assigned to each :math:`K` component. The expected shape of
+        ``responsibilities`` is :math:`(N, K)`.
+
+    :param covariance_regularization: [optional]
+        A regularization term that is added to the diagonal of the covariance
+        matrices. Default is 0.
 
     :returns:
-        A three length tuple containing the updated multivariate mean values,
-        the updated covariance matrices, and the updated mixture weights. 
+        An estimate of the covariance matrices of the Gaussian components.
     """
 
-    M = weight.size 
+    N, D, = y.shape
+    K, N = responsibilities.shape
+
+    membership = np.sum(responsibilities, axis=1)
+
+    I = np.eye(D)
+    covs = np.empty((K, D, D))
+    for k, (mean, R, M) in enumerate(zip(means, responsibilities, membership)):
+        diff = y - mean
+        denominator = M - 1 if M > 1 else M
+
+        covs[k] = np.dot(R * diff.T, diff) / denominator \
+                + covariance_regularization * I
+
+    return covs
+
+
+def _estimate_covariance_matrix_diag(y, means, responsibilities,
+                                     covariance_regularization=0):
+    r"""
+    Estimate the covariance matrix given the data, the responsibility matrix,
+    and an estimate of the means of the Gaussian components. The covariance
+    matrix is assumed to have zero elements in off-diagonal entries.
+
+    :param y:
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
+
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
+
+    :param responsibilities:
+        The responsibility matrix for all :math:`N` observations being
+        partially assigned to each :math:`K` component. The expected shape of
+        ``responsibilities`` is :math:`(N, K)`.
+
+    :param covariance_type:
+        The structure of the covariance matrices. Available types include:
+
+            - "full": full covariance matrix with non-zero off-diagonal terms
+
+            - "diag": diagonal covariance matrix.
+
+    :param covariance_regularization: [optional]
+        A regularization term that is added to the diagonal of the covariance
+        matrices. Default is 0.
+
+    :returns:
+        An estimate of the covariance matrices of the Gaussian components.
+    """
+
     N, D = y.shape
+    K, N = responsibilities.shape
+
+    denominator = np.sum(responsibilities, axis=1)
+    denominator[denominator > 1] = denominator[denominator > 1] - 1
+    memberships = np.sum(responsibilities, axis=1)
+
+    covs = np.empty((K, D))
+    for k, (mean, R, M) in enumerate(zip(means, responsibilities, memberships)):
+        diff = y - mean
+        denominator = M - 1 if M > 1 else M
+        covs[k] = np.dot(R, diff**2) / denominator + covariance_regularization
+
+    return covs
+
     
-    # Update the weights.
-    effective_membership = np.sum(responsibility, axis=1)
-    new_weight = (effective_membership + 0.5)/(N + M/2.0)
 
-    w_responsibility = parent_responsibility * responsibility
-    w_effective_membership = np.sum(w_responsibility, axis=1)
+def _log_det_cholesky(cholesky_decomposition, covariance_type, D):
+    r"""
+    Compute the log-determinant of the Cholesky decomposition of matrices.
 
-    new_mu = np.zeros_like(mu)
-    new_cov = np.zeros_like(cov)
-    for m in range(M):
-        new_mu[m] = np.sum(w_responsibility[m] * y.T, axis=1) \
-                  / w_effective_membership[m]
+    :param cholesky_decomposition:
+        The Cholesky decomposition of the covariance matrices.
 
-    new_cov = estimate_covariance_matrix(y, responsibility, new_mu, **kwargs)
+    :param covariance_type:
+        The structure of the covariance matrices. Available types include:
 
-    state = (new_mu, new_cov, new_weight)
+            - "full": full covariance matrix with non-zero off-diagonal terms
 
-    assert np.all(np.isfinite(new_mu))
-    assert np.all(np.isfinite(new_cov))
-    assert np.all(np.isfinite(new_weight))
+            - "diag": diagonal covariance matrix.
+
+    :param D:
+        The dimensionality of the covariance matrices.
+
+    :returns:
+        The log-determinant of the precision matrix for each covariance matrix.
+    """
+
+    if covariance_type == "full":
+        K, _, _ = cholesky_decomposition.shape
+        log_det_chol = (np.sum(np.log(
+            cholesky_decomposition.reshape(
+                K, -1)[:, ::D + 1]), 1))
+
+    elif covariance_type == "tied":
+        log_det_chol = (np.sum(np.log(np.diag(cholesky_decomposition))))
+
+    elif covariance_type == "diag":
+        log_det_chol = (np.sum(np.log(cholesky_decomposition), axis=1))
+
+    else:
+        log_det_chol = D * (np.log(cholesky_decomposition))
+
+    return log_det_chol
 
 
-    return state 
+def _gaussian_log_prob(y, means, weights, precision_cholesky, covariance_type):
+    r"""
+    Estimate the weighted log-probability of a Gaussian mixture, given the data.
+
+    :param y:
+        The data values, :math:`y`, which are expected to have :math:`N` samples
+        each with :math:`D` dimensions. Expected shape of ``y`` is 
+        :math:`(N, D)`.
+
+    :param means:
+        The current estimate of the multivariate means of the :math:`K`
+        components. The expected shape of ``means`` is :math:`(K, D)`.
+
+    :param weights:
+        The current estimate of the relative weights :math:`w` of all :math:`K`
+        components. The sum of weights must equal 1. The expected shape of
+        ``weights`` is :math:`(K, )`.
+
+    :param precision_cholesky:
+        The Cholesky decomposition of the precision of the covariance
+        matrices of the mixture.
+
+    :param covariance_type:
+        The structure of the covariance matrices. Available types include:
+
+            - "full": full covariance matrix with non-zero off-diagonal terms
+
+            - "diag": diagonal covariance matrix.
+
+    :returns:
+        The weighted log-probability of the data, given the model.
+    """
+
+    N, D = y.shape
+    K, D = means.shape
+
+    # Remember: det(precision_chol) is half of det(precision)
+    log_det = _log_det_cholesky(precision_cholesky, covariance_type, D)
+
+    if covariance_type in 'full':
+        log_prob = np.empty((N, K))
+        for k, (mean, prec_chol) in enumerate(zip(means, precision_cholesky)):
+            diff = np.dot(y, prec_chol) - np.dot(mean, prec_chol)
+            log_prob[:, k] = np.sum(np.square(diff), axis=1)
+
+    elif covariance_type in 'diag':
+        precisions = precision_cholesky**2
+        log_prob = (np.sum((means**2 * precisions), 1) \
+                 - 2.0 * np.dot(y, (means * precisions).T) \
+                 + np.dot(y**2, precisions.T))
+
+    ll = -0.5 * (D * np.log(2 * np.pi) + log_prob) + log_det
+    return np.log(weights) + ll
+
