@@ -3,7 +3,7 @@ import scipy.optimize as op
 
 import george
 from george import (kernels, modeling)
-from scipy.special import gammaln
+from scipy.special import (gammaln, logsumexp)
 
 # TODO: move to utils?
 from . import utils
@@ -82,6 +82,25 @@ def gaussian_mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights
 
     return I_parts
 
+
+def gmm_relative_component_contributions_to_message_length(log_likelihoods, covs, weights):
+    """
+    Return the component-wise contributions to the message length.
+    """
+    N, K = log_likelihoods.shape
+    K, D, _ = covs.shape
+
+    # TODO: Refactor with gaussian_mixture_message_length
+    I_data = -logsumexp(log_likelihoods, axis=0)
+    slogdetcovs = np.linalg.slogdet(covs)[1]
+    I_slogdetcovs = -0.5 * (D + 2) * slogdetcovs
+
+    I_weights = (0.25 * D * (D + 3) - 0.5) * np.log(weights)
+
+    I_relative = I_data + I_slogdetcovs + I_weights
+    I_relative /= I_relative.sum()
+
+    return I_relative
 
 
 def gmm_number_of_parameters(K, D):
