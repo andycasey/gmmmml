@@ -14,7 +14,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(N=1000, K=35, D=9, center_box=(-10, 10))
+            y, labels, target, kwds = utils.generate_isotropic_data(N=1000, K=35, D=9, center_box=(-10, 10))
 
         except:
           logging.exception("failed")

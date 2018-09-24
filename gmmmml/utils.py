@@ -1,7 +1,8 @@
 
 import numpy as np
-from sklearn import datasets
+from scipy.special import beta
 
+from sklearn import datasets
 from sklearn.neighbors import NearestNeighbors
 
 
@@ -282,10 +283,116 @@ def aggregate(x, y, function):
 
 
 
+def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05,
+                  random_seed=None, **kwargs):
+    r"""
+    Generate data from a mixture of multivariate Gaussian components with full
+    rank covariance matrices with non-zero off-diagonal terms.
+
+    :param N:
+        The number of samples to draw.
+
+    :param D:
+        The dimensionality of the data.
+
+    :param K: [optional]
+        The number of components to model. If ``None`` is given then a random
+        number will be drawn from a log-uniform (base 10) distribution between
+        :math:`K = 1` and :math:`K = \floor{N/2}`.
+
+    :param dirichlet_concentration: [optional]
+        A metric representing the uniformity of the relative weights of the
+        mixture. This is the concentration parameter for a symmetric Dirichlet
+        distribution to draw the weights of the components. The concentration
+        parameter must be greater than zero. A concentration parameter much
+        less than one indicates most of the data will be drawn from one
+        component. A concentration parameter much greater than one indicates
+        that the support will be distributed evenly between the components.
+
+    #  TODO
+    """
+
+    np.random.seed(random_seed)
+
+    N, D = (int(N), int(D))
+
+    if K is None:
+        K = int(np.round(10**np.random.uniform(0, np.log10(N/2.0))))
+
+    if K >= N/2.0:
+        raise ValueError(f"K must be less than N/2 ({2*K} > {N})")
+
+    if 0 >= dirichlet_concentration:
+        raise ValueError("dirichlet_concentration must be positive")
+
+    # Generate the weights.
+    min_weight = 2.0/N
+    max_weight = 1 - min_weight * (K - 1)
+
+    alphas = np.ones(K) * dirichlet_concentration
+    for iteration in range(kwargs.pop("dirichlet_draws", 100000)):
+        weights = np.random.dirichlet(alphas).flatten()
+
+        # Check the weights.
+        if np.min(weights) >= min_weight and np.max(weights) <= max_weight:
+            break
+
+    else:
+        raise ValueError(f"No suitable sampling of mixture weights found! "\
+                          "Try adjusting dirichlet_distribution or increasing "\
+                          "dirichlet_draws.")
+    
+    # Generate means.
+    #means = np.random.normal(0, 1, size=(K, D))
+    means = np.random.uniform(-1, 1, size=(K, D))
+
+    # Generate correlation coefficients.
+    rho = lambda N=1: ((1 - np.random.uniform(-1, 1, N)**2)**(isotropy - 4)/2.) \
+                    / beta(0.5, (isotropy - 2)/2)
+
+    # Generate covariance matrices.
+    phi = np.abs(np.random.normal(0, psi, size=(K, D)))
+
+    I = np.eye(D)
+    covariances = np.empty((K, D, D))
+    for k, diag in enumerate(phi):
+
+        covariances[k] = I * diag
+
+        for i, j in zip(*np.tril_indices(D, -1)):
+            value = rho(1) * diag[i] * diag[j]
+            covariances[k, i, j] = covariances[k, j, i] = value
+
+    # Draw samples from each component to generate the data.
+    members = np.round(N * weights).astype(int)
+
+    X = np.empty((N, D))
+    R = np.zeros(N, dtype=int)
+
+    for i, (m, mean, cov) in enumerate(zip(members, means, covariances)):
+        si = int(np.sum(members[:i]))
+        X[si:si + m] = np.random.multivariate_normal(mean, cov, size=m)[:N-si]
+        R[si:si + m] = i
+
+    # Shuffle the order.
+    idx = np.random.choice(np.arange(N), N, replace=False)
+    X, R = (X[idx], R[idx])
+
+    meta = dict(K=K, N=N, D=D, dirichlet_concentration=dirichlet_concentration, 
+                isotropy=isotropy, psi=psi, random_seed=random_seed,
+                responsibilities=R, truths=dict(
+                    means=means,
+                    weights=weights,
+                    covariances=covariances
+                ))
+
+    return (X, meta)
 
 
 
-def generate_data(N=None, D=None, K=None, cluster_std=1.0, 
+
+
+def generate_isotropic_data(N=None, D=None, K=None, cluster_std=1.0, 
     center_box=(-10, 10.0), shuffle=True, random_state=None):
 
     if K is None:
