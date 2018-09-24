@@ -143,7 +143,25 @@ class GaussianMixture(object):
             (4) a responsibility matrix that assigns each datum to a component.
         """
 
-        return _initialize_with_kmeans_pp(y, K, **kwargs)
+        if K == 1 or len(self._results) == 0:
+            return _initialize_with_kmeans_pp(y, K, **kwargs)
+
+        kwds = {**self._em_kwds, **kwargs}
+
+        # get closest in K
+        K_trialled = np.hstack(self._results.keys())
+        K_diff = np.abs(K - K_trialled)
+
+        index = K_trialled[np.argmin(K_diff)]
+
+        (means, covs, weights), responsibilities, ll, I = self._results[index]
+
+        (means, covs, weights), responsibilities, ll, I \
+            = operations.iteratively_operate_components(y, means, covs, weights, K, **kwds)
+
+        return (means, covs, weights, responsibilities)
+
+        #return _initialize_with_kmeans_pp(y, K, **kwargs)
 
 
     def expectation(self, y, means, covs, weights, **kwargs):
@@ -308,7 +326,7 @@ class GaussianMixture(object):
         return em.expectation_maximization(y, means, covs, weights, **kwds)
 
 
-    def search(self, y, strategy="bayes-jumper", **kwargs):
+    def search(self, y, search_strategy="bayes-jumper", **kwargs):
         r"""
         Search for the optimal number of multivariate Gaussian components, and
         the parameters of that mixture, given the data.
@@ -318,7 +336,7 @@ class GaussianMixture(object):
             where :math:`N` is the number of observations, and :math:`D` is the
             number of dimensions per observation.
 
-        :param strategy: [optional]
+        :param search_strategy: [optional]
             The search strategy to use. The available search strategies include:
 
             - ``bayes-jumper``: SOME DESCRIPTION HERE TODO.
@@ -331,21 +349,21 @@ class GaussianMixture(object):
 
         y = np.atleast_2d(y)
 
-        available_strategies = dict([
+        available_search_strategies = dict([
             ("bayes-jumper", self._search_bayes_jumper),
             ("greedy-kmeans", self._search_greedy_kmeans),
             ("kasarapu-allison-2015", self._search_kasarapu_allison_2015),
         ])
 
-        strategy = f"{strategy}".lower()
+        search_strategy = f"{search_strategy}".lower()
 
         try:
-            func = available_strategies[strategy]
+            func = available_search_strategies[search_strategy]
 
         except KeyError:
-            available_repr = ", ".join(available_strategies.keys())
+            available_repr = ", ".join(available_search_strategies.keys())
             raise ValueError(
-                f"Unknown strategy provided ('{strategy}'). "\
+                f"Unknown search strategy provided ('{search_strategy}'). "\
                 f"Available strategies include: {available_repr}")
 
         else:
@@ -353,7 +371,7 @@ class GaussianMixture(object):
             state, R, ll, I, meta = func(y, **kwargs)
 
         # Update the metadata.
-        meta.update(strategy=strategy, t_search=time() - t_init)
+        meta.update(search_strategy=search_strategy, t_search=time() - t_init)
 
         # Set the state attribuets.
         self.means_, self.covs_, self.weights_ = state
@@ -391,6 +409,7 @@ class GaussianMixture(object):
         # Initial guesses.
         K_inits = np.logspace(0, np.log10(N), K_init, dtype=int)
 
+        self._results = {}
         results = {}
 
         for i, K in enumerate(K_inits):
@@ -409,15 +428,18 @@ class GaussianMixture(object):
                 # Make predictions.
                 self._predict_message_length(1 + np.arange(2 * K), N, D, **kwds)
 
+        self._results.update(results)
+
         # Bayesian optimization.
         converged, prev_I, K_skip = (False, np.inf, [])
 
         # TODO: Go twice as far as what did work?
         # TODO: consider the time it would take to trial points?
-        Kp = 1 + np.arange(K)
-        I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
+        for iteration in range(1000):
 
-        for iteration in range(Kp.size):
+            Kp = (1 + 1.1 * np.arange(np.max(np.hstack(self._results.keys()))))
+            Kp = np.unique(Kp).astype(int)
+            I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
 
             min_I = np.min(self._state_I)
 
@@ -454,10 +476,10 @@ class GaussianMixture(object):
                     *state, R = self.initialize(y, K, **kwds)
 
                     # Run E-M..
-                    results[K] = self.expectation_maximization(y, *state, **kwds)
+                    self._results[K] = self.expectation_maximization(y, *state, **kwds)
 
                 except ValueError:
-                    logger.warn(f"Failed to initialize mixture at K = {K}")
+                    logger.exception(f"Failed to initialize mixture at K = {K}")
                     K_skip.append(K)
                     continue
 
@@ -491,7 +513,7 @@ class GaussianMixture(object):
             logger.warning("Bayesian optimization did not converge.")
 
         # Select the best mixture.
-        result = results[self._state_K[np.argmin(self._state_I)]]
+        result = self._results[self._state_K[np.argmin(self._state_I)]]
 
         meta = dict(K_init=K_init,
                     expected_improvement_fraction=expected_improvement_fraction)
