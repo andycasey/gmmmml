@@ -156,7 +156,15 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
 
 
     else:
-        K_available = np.ceil(I_components/np.min(I_components)).astype(int) - 1
+
+        # Approximate something like min(I_components), while ensuring that we
+        # will meet the required constraint.
+
+        # TODO: This strategy is ad-hoc and probably wrong.
+        #       If anything, it should be better explained.
+        alpha = np.sum(I_components)/(new_K + K)
+
+        K_available = np.round(I_components/alpha).astype(int) - 1
 
         # Need an array of components to split, and how much we should split them.
         N_splits = np.sum(K_available > 0)
@@ -169,9 +177,7 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
             indices[i] = index
             splits[i] = min(K_available[index], new_K - np.sum(splits))
 
-        if indices.size > 1:
-
-            raise a
+        assert sum(splits) == new_K
 
         state = (means, covs, weights)
         for index, split in zip(indices, splits):
