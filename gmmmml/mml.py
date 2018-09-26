@@ -83,24 +83,34 @@ def gaussian_mixture_message_length(K, N, D, log_likelihood, slogdetcov, weights
     return I_parts
 
 
-def gmm_relative_component_contributions_to_message_length(log_likelihoods, covs, weights):
+def gmm_component_contributions_to_message_length(responsibilities, 
+                                                  log_likelihoods, 
+                                                  covs, weights):
     """
     Return the component-wise contributions to the message length.
     """
-    N, K = log_likelihoods.shape
+    K, N = responsibilities.shape
     K, D, _ = covs.shape
 
     # TODO: Refactor with gaussian_mixture_message_length
-    I_data = -logsumexp(log_likelihoods, axis=0)
-    slogdetcovs = np.linalg.slogdet(covs)[1]
-    I_slogdetcovs = -0.5 * (D + 2) * slogdetcovs
+    I_data = responsibilities @ -log_likelihoods
 
+    Q = gmm_number_of_parameters(K, D)
+
+    I_mixtures = K * np.log(2) * (1 - D/2.0) + gammaln(K) \
+        + 0.25 * (2.0 * (K - 1) + K * D * (D + 3)) * np.log(N)
+    I_parameters = 0.5 * np.log(Q * np.pi) - 0.5 * Q * np.log(2 * np.pi)
+    
+
+    I_slogdetcovs = -0.5 * (D + 2) * np.linalg.slogdet(covs)[1]
     I_weights = (0.25 * D * (D + 3) - 0.5) * np.log(weights)
 
-    I_relative = I_data + I_slogdetcovs + I_weights
-    I_relative /= I_relative.sum()
+    I_components = (I_mixtures + I_parameters)/K \
+                 + I_data + I_slogdetcovs + I_weights
 
-    return I_relative
+    if K > 15:
+        raise a
+    return I_components
 
 
 def gmm_number_of_parameters(K, D):

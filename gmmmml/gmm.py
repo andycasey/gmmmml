@@ -200,6 +200,8 @@ class GaussianMixture(object):
 
         kwds = {**self._em_kwds, **kwargs}
         
+        print("in expectation")
+
         R, ll, I = em.expectation(y, means, covs, weights, **kwds)
 
         # Record state for predictions.
@@ -264,6 +266,8 @@ class GaussianMixture(object):
             (3) an updated estimate of the relative weights of the Gaussian
                 components.
         """
+
+        print("in maximization")
 
         kwds = {**self._em_kwds, **kwargs}
         means, covs, weights = em.maximization(y, means, covs, weights, 
@@ -350,6 +354,7 @@ class GaussianMixture(object):
         y = np.atleast_2d(y)
 
         available_search_strategies = dict([
+            ("bayes-stepper", self._search_bayes_stepper),
             ("bayes-jumper", self._search_bayes_jumper),
             ("greedy-kmeans", self._search_greedy_kmeans),
             ("kasarapu-allison-2015", self._search_kasarapu_allison_2015),
@@ -367,6 +372,7 @@ class GaussianMixture(object):
                 f"Available strategies include: {available_repr}")
 
         else:
+            logger.info(f"Using search strategy: {search_strategy}")
             t_init = time()
             state, R, ll, I, meta = func(y, **kwargs)
 
@@ -381,8 +387,142 @@ class GaussianMixture(object):
         return self
 
 
+
     def _search_bayes_jumper(self, y, expected_improvement_fraction=0.01,
-                             K_init=10, **kwargs):
+                             K_init=1, **kwargs):
+
+        # like bayes stepper but a different partition strategy
+        N, D = y.shape
+        kwds = {**self._em_kwds, **kwargs}
+        
+        # Initial guesses.
+        K_inits = np.logspace(0, np.log10(N), K_init, dtype=int)
+
+        self._results = {}
+        results = {}
+
+        for i, K in enumerate(K_inits):
+
+            try:
+                *state, R = self.initialize(y, K, **kwds)
+
+                # Run E-M.
+                results[K] = self.expectation_maximization(y, *state, **kwds)
+
+            except ValueError:
+                logger.warn(f"Failed to initialize at K = {K}")
+                break
+
+            else:
+                # Make predictions.
+                self._predict_message_length(1 + np.arange(2 * K), N, D, **kwds)
+
+        self._results.update(results)
+
+        # Bayesian optimization.
+        converged, prev_I, K_skip = (False, np.inf, [])
+
+        for iteration in range(1000):
+
+            Kmax = 10 + np.max(np.hstack(self._results.keys()))
+            Kp = np.unique(np.arange(1, 1 + Kmax)).astype(int)
+            I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
+
+            min_I = np.min(self._state_I)
+
+            # Calculate the acquisition function.
+            chi = (min_I - I) / np.sqrt(I_var)
+            Phi = 0.5 * (1.0 + erf(chi / np.sqrt(2)))
+            phi = np.exp(-0.5 * chi**2) / np.sqrt(2 * np.pi * I_var)
+            K_ei = (min_I - I) * Phi + I_var * phi
+
+            # The next K values should be places where we expect the greatest
+            # improvement in our predictions, and the greatest improvement in
+            # the message length.
+
+            # TODO ARGH PICK BETTER HEURISTICS BASED ON TIME TO EVALUATE?
+            """
+            idx = np.hstack([
+                find_peaks_cwt(K_ei, [3]) - 1,
+                np.argmax(K_ei),
+                np.argsort(I),
+
+            ]).astype(int)
+            """
+            idx = np.argsort(I)
+
+            K_nexts = Kp[idx]
+
+            _, __ = np.unique(K_nexts, return_index=True)
+            K_nexts = K_nexts[np.sort(__)]
+            
+            for K in K_nexts:
+                if K in self._state_K or K in K_skip: continue
+
+                logger.info(f"Trying K {K} on iteration {iteration}")
+
+                # Find the closest mixture.
+                index = operations.preferred_mixture_index(K, self._state_K)
+
+                # Re-partition that mixture.
+                previous_state, _R, _ll, _I = self._results[self._state_K[index]]
+
+                try:
+                    state, responsibilities, ll, I = operations.repartition_mixture(y, *previous_state, K,
+                                                            **kwds)
+
+                    self._results[K] = self.expectation_maximization(y, *state, **kwds)
+
+                except ValueError:
+                    logger.exception(f"Failed to repartition mixture at K = {K}")
+                    K_skip.append(K)
+                    raise
+                    continue
+
+                else:
+
+                    # Update predictions.
+                    I, I_var, _ = self._predict_message_length(Kp, N, D, **kwds)
+
+                    idx = np.argmin(self._state_I)
+
+                    best_K, best_I = (self._state_K[idx], self._state_I[idx])
+                    logger.info(f"Best so far is K = {best_K} with I = {best_I:.0f} nats")
+
+                    min_I = np.min(self._state_I)
+                    eif = np.abs(min_I - np.min(I))/min_I
+                    logger.info(f"Expected improvement fraction: {eif}")
+
+                    # Check predictions are within tolerance and that we have
+                    # no better predictions to make.
+                    
+                    if np.abs(prev_I - min_I) < self.threshold \
+                    and eif <= expected_improvement_fraction \
+                    and K > 10:
+                        # TODO HACK REMOVE ME JUST TESTING
+                        #and np.all((I - np.sqrt(I_var)) > min_I):
+                        converged = True
+                        break
+
+                    prev_I = min_I
+                    break
+
+            if converged: 
+               break
+
+        else:
+            logger.warning("Bayesian optimization did not converge.")
+
+        # Select the best mixture.
+        result = self._results[self._state_K[np.argmin(self._state_I)]]
+
+        meta = dict(K_init=K_init,
+                    expected_improvement_fraction=expected_improvement_fraction)
+
+        return (*result, meta)
+
+    def _search_bayes_stepper(self, y, expected_improvement_fraction=0.01,
+                             K_init=1, **kwargs):
         r"""
         Perform Bayesian optimisation to estimate the optimal number of Gaussian
         components :math:`K`, and the optimal parameters of that mixture.
@@ -437,8 +577,8 @@ class GaussianMixture(object):
         # TODO: consider the time it would take to trial points?
         for iteration in range(1000):
 
-            Kp = (1 + 1.1 * np.arange(np.max(np.hstack(self._results.keys()))))
-            Kp = np.unique(Kp).astype(int)
+            Kmax = 10 + np.max(np.hstack(self._results.keys()))
+            Kp = np.unique(np.arange(1, 1 + Kmax)).astype(int)
             I, I_var, I_lower = self._predict_message_length(Kp, N, D, **kwds)
 
             min_I = np.min(self._state_I)
@@ -454,13 +594,15 @@ class GaussianMixture(object):
             # the message length.
 
             # TODO ARGH PICK BETTER HEURISTICS BASED ON TIME TO EVALUATE?
-
+            """
             idx = np.hstack([
                 find_peaks_cwt(K_ei, [3]) - 1,
                 np.argmax(K_ei),
                 np.argsort(I),
 
             ]).astype(int)
+            """
+            idx = np.argsort(I)
 
             K_nexts = Kp[idx]
 
@@ -472,15 +614,22 @@ class GaussianMixture(object):
 
                 logger.info(f"Trying K {K} on iteration {iteration}")
 
+                # Just go one step in the direction of?
+                K_diff = np.array(self._state_K) - K
+                K_abs_diff = np.abs(K_diff)
+
+                K_goto = self._state_K[np.argmin(K_abs_diff)]
+                K_goto = K_goto + 1 if K > K_goto else K_goto - 1
+                
                 try:
-                    *state, R = self.initialize(y, K, **kwds)
+                    *state, R = self.initialize(y, K_goto, **kwds)
 
                     # Run E-M..
-                    self._results[K] = self.expectation_maximization(y, *state, **kwds)
+                    self._results[K_goto] = self.expectation_maximization(y, *state, **kwds)
 
                 except ValueError:
-                    logger.exception(f"Failed to initialize mixture at K = {K}")
-                    K_skip.append(K)
+                    logger.exception(f"Failed to initialize mixture at K = {K_goto}")
+                    K_skip.append(K_goto)
                     continue
 
                 else:
@@ -498,8 +647,10 @@ class GaussianMixture(object):
 
                     # Check predictions are within tolerance and that we have
                     # no better predictions to make.
+                    
                     if np.abs(prev_I - min_I) < self.threshold \
                     and eif <= expected_improvement_fraction:
+                        #and np.all((I - np.sqrt(I_var)) > min_I):
                         converged = True
                         break
 

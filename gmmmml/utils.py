@@ -324,7 +324,7 @@ def generate_data(N=None, D=None, K=None, cluster_std=1.0,
 
 
     
-    responsibility, log_likelihood, lp = responsibilities(
+    responsibility, log_likelihood = responsibilities(
         X, mean, cov, weight, full_output=True, covariance_type="full")
 
     nll = -np.sum(log_likelihood)
