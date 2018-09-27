@@ -435,7 +435,7 @@ def iteratively_split_components(y, means, covs, weights, K, **kwargs):
     return (state, responsibilities, ll, I)
 
 
-def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
+def simultaneously_split_mixture(y, means, covs, weights, K, **kwargs):
     r"""
     Split the components of a mixture until we reach the target distribution of
     :math:`K` components.
@@ -502,7 +502,7 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
 
 
 
-def _repartition_merge_mixture(y, means, covs, weights, K, **kwargs):
+def simultaneously_merge_mixture(y, means, covs, weights, K, **kwargs):
 
     print("don't know how to do this yet -- requires a thinko")
 
@@ -510,16 +510,16 @@ def _repartition_merge_mixture(y, means, covs, weights, K, **kwargs):
                                                   **kwargs)
 
 
-def repartition_mixture(y, means, covs, weights, K, **kwargs):
+def simultaneously_operate_on_components(y, means, covs, weights, K, **kwargs):
 
-    func = _repartition_merge_mixture if weights.size > K \
-                                      else _repartition_split_mixture
+    func = simultaneously_merge_mixture if weights.size > K \
+                                        else simultaneously_split_mixture
 
     return func(y, means, covs, weights, K, **kwargs)
 
 
 
-def iteratively_operate_components(y, means, covs, weights, K, **kwargs):
+def iteratively_operate_on_components(y, means, covs, weights, K, **kwargs):
 
     func = iteratively_split_components if K > weights.size \
                                         else iteratively_remove_components

@@ -28,7 +28,7 @@ class IterativelyRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
 
         # Get nearest mixture.
         state, R, ll, I = _nearest_mixture(self.model._results, K)
-        return (K, op.iteratively_operate_components(y, *state, K, **kwargs))
+        return (K, op.iteratively_operate_on_components(y, *state, K, **kwargs))
 
 
 class RepartitionMixtureUsingKMeansPP(BaseRepartitionPolicy):
@@ -42,8 +42,12 @@ class SimultaneousRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
     def repartition(self, y, K, **kwargs):
 
         # Get nearest mixture.
-        raise a
+        state, R, ll, I = _nearest_mixture(self.model._results, K)
+        result = op.simultaneously_operate_on_components(y, *state, K, **kwargs)
+        
+        return (K, result)
 
+        
 
 class GreedilyPerturbNearestMixturePolicy(BaseRepartitionPolicy):
 
