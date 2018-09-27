@@ -22,7 +22,7 @@ class BaseRepartitionPolicy(Policy):
 
 
 
-class RepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
+class IterativelyRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
     
     def repartition(self, y, K, **kwargs):
 
@@ -36,6 +36,13 @@ class RepartitionMixtureUsingKMeansPP(BaseRepartitionPolicy):
     def repartition(self, y, K, **kwargs):
         return (K, op.kmeans_pp(y, K, **kwargs))
 
+
+class SimultaneousRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
+
+    def repartition(self, y, K, **kwargs):
+
+        # Get nearest mixture.
+        raise a
 
 
 class GreedilyPerturbNearestMixturePolicy(BaseRepartitionPolicy):

@@ -9,7 +9,7 @@ __all__ = ["BayesStepper", "BayesJumper", "GreedyKMeans", "KasarapuAllison2015"]
 class BayesStepper(initialisation.DefaultInitialisationPolicy,
                    prediction.DefaultPredictionPolicy,
                    movement.StepTowardsMMLMixtureMovementPolicy,
-                   repartition.RepartitionFromNearestMixturePolicy,
+                   repartition.IterativelyRepartitionFromNearestMixturePolicy,
                    convergence.DefaultConvergencePolicy):
     pass
 
@@ -17,7 +17,8 @@ class BayesStepper(initialisation.DefaultInitialisationPolicy,
 class BayesJumper(initialisation.DefaultInitialisationPolicy,
                   prediction.DefaultPredictionPolicy,
                   movement.MoveTowardsMMLMixtureMovementPolicy,
-                  repartition.RepartitionFromNearestMixturePolicy):
+                  repartition.IterativelyRepartitionFromNearestMixturePolicy,
+                  convergence.ConvergedWithSuccessivelyWorseIterations):
     pass
 
 

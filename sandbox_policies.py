@@ -36,12 +36,13 @@ for i in range(10):
     model = gmm.GaussianMixture(**gmm_kwds)
     t_init = time()
     
-    model.search(y, search_strategy="BayesStepper")
-    t_bs = time() - t_init
+    model.search(y, search_strategy="BayesJumper")
+    t_bj = time() - t_init
 
+    """
     model2 = gmm.GaussianMixture(**gmm_kwds)
     t_init = time()
     model2.search(y, search_strategy="KasarapuAllison2015")
     t_ka = time() - t_init
-
+    """
     raise a

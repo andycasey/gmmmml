@@ -6,7 +6,16 @@ from .base import Policy
 logger_name, *_ = __name__.split(".")
 logger = logging.getLogger(logger_name)
 
-class DefaultConvergencePolicy(Policy):
+class BaseConvergencePolicy(Policy):
+
+    @property
+    def converged(self):
+        raise NotImplementedError("this should be implemented by sub-classes")
+
+
+
+
+class DefaultConvergencePolicy(BaseConvergencePolicy):
     
     @property
     def converged(self):
@@ -39,3 +48,26 @@ class DefaultConvergencePolicy(Policy):
                     f" (@ prev_K = {prev_K}) ({delta:.0f})")
         
         return converged
+
+
+class ConvergedWithSuccessivelyWorseIterations(BaseConvergencePolicy):
+
+    @property
+    def converged(self):
+
+        N = 5
+
+        if len(set(self.model._state_K)) < N:
+            return False
+
+        ml = lambda I: I if isinstance(I, float) else np.sum(np.hstack(I.values()))
+
+        # Check to see if the last X iterations were worse.
+        K = np.hstack(self.model._results.keys())[-N:]
+        I = np.hstack([ml(self.model._results[k][-1]) for k in K])
+
+        min_I = np.min(self.model._state_I)
+        converged = np.all(I > min_I)
+
+        return converged
+
