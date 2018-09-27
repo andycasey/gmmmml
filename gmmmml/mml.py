@@ -108,8 +108,6 @@ def gmm_component_contributions_to_message_length(responsibilities,
     I_components = (I_mixtures + I_parameters)/K \
                  + I_data + I_slogdetcovs + I_weights
 
-    if K > 15:
-        raise a
     return I_components
 
 

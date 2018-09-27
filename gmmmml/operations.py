@@ -148,15 +148,15 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
                                                      **kwargs)
 
     # How many new components do we need?
-    new_K = K - weights.size
+    K_new = K - weights.size
 
     if weights.size == 1:
         # Trivial.
-        return split_component(y, means, covs, weights, R, 0, 1 + new_K, **kwargs)
+        return split_component(y, means, covs, weights, R, 0, 1 + K_new, **kwargs)
 
 
     else:
-
+        """
         # Approximate something like min(I_components), while ensuring that we
         # will meet the required constraint.
 
@@ -164,7 +164,7 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
         #       If anything, it should be better explained.
         alpha = np.sum(I_components)/(new_K + K)
 
-        K_available = np.round(I_components/alpha).astype(int) - 1
+        K_available = np.ceil(I_components/alpha).astype(int) - 1
 
         # Need an array of components to split, and how much we should split them.
         N_splits = np.sum(K_available > 0)
@@ -177,17 +177,40 @@ def _repartition_split_mixture(y, means, covs, weights, K, **kwargs):
             indices[i] = index
             splits[i] = min(K_available[index], new_K - np.sum(splits))
 
-        assert sum(splits) == new_K
+        assert sum(splits) >= new_K
+        if sum(splits) > new_K:
+            raise a
 
         state = (means, covs, weights)
         for index, split in zip(indices, splits):
             state, R, ll, I = split_component(y, *state, R, index, 1 + split,
                                               **kwargs)
+        """
+
+        # Split the top K_new in half.
+        idx = np.argsort(I_components)[::-1][:K_new]
+
+        indices = np.zeros(K_new, dtype=int)
+        splits = np.zeros(K_new, dtype=int)
+
+        for i, index in enumerate(idx):
+            indices[i] = index
+            splits[i] = 2
+
+        state = (means, covs, weights)
+        for index, split in zip(indices, splits):
+            state, R, ll, I = split_component(y, *state, R, index, split, **kwargs)
 
         return (state, R, ll, I)
 
+
+
 def _repartition_merge_mixture(y, means, covs, weights, K, **kwargs):
-    raise NotImplementedError
+
+    print("don't know how to do this yet -- requires a thinko")
+
+    return iteratively_remove_components_greedily(y, means, covs, weights, K,
+                                                  **kwargs)
 
 
 def repartition_mixture(y, means, covs, weights, K, **kwargs):
