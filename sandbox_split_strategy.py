@@ -25,7 +25,7 @@ for i in range(10):
         else:
           break
 
-    gmm_kwds = dict(threshold=1e-5, expected_improvement_fraction=1e-2,
+    gmm_kwds = dict(threshold=1e-5, expected_improvement_fraction=1e-5,
                     covariance_regularization=1e-2)
 
     #bayesjumper_model2 = gmm.GaussianMixture()

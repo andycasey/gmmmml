@@ -408,14 +408,12 @@ class GaussianMixture(object):
             # greedy repartition policies).
             self._results.update([strategy.repartition(y, K, **kwds)])
 
-            index = np.argmin(self._state_I)
 
+            index = np.argmin(self._state_I)
             K_best = self._state_K[index]
             I_best = self._state_I[index]
             logger.info(f"Best so far is K = {K_best} with I = {I_best}")
-
             
-        K_best = self._state_K[np.argmin(self._state_I)]
         result = self._results[K_best]
 
         meta = dict()
