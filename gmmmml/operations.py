@@ -5,10 +5,68 @@ Operations to apply to gaussian mixtures.
 
 import logging
 import numpy as np
+import scipy
+from sklearn import cluster
+from sklearn.utils import check_random_state
+from sklearn.utils.extmath import row_norms
+
 
 from . import (em, mml, utils)
 
 logger = logging.getLogger(__name__)
+
+
+
+
+def kmeans_pp(y, K, random_state=None, **kwargs):
+    r"""
+    Initialize a Gaussian mixture model using the K-means++ algorithm.
+
+    :param y:
+        The data values, :math:`y`, which are expected to have :math:`N` 
+        samples each with :math:`D` dimensions. Expected shape of :math:`y` 
+        is :math:`(N, D)`.
+
+    :param K:
+        The number of Gaussian components in the mixture.
+    
+    :param random_state: [optional]
+        The state to provide to the random number generator.
+
+    :returns:
+        A four-length tuple containing:
+
+        (1) an estimate of the means of the components
+
+        (2) an estimate of the covariance matrices of the components
+
+        (3) an estimate of the relative mixings of the components
+
+        (4) the responsibility matrix for each data point to each component.
+    """
+
+    random_state = check_random_state(random_state)
+    squared_norms = row_norms(y, squared=True)
+    means = cluster.k_means_._k_init(y, K,
+                                     random_state=random_state,
+                                     x_squared_norms=squared_norms)
+
+    labels = np.argmin(scipy.spatial.distance.cdist(means, y), axis=0)
+
+    N, D = y.shape
+    responsibilities = np.zeros((K, N))
+    responsibilities[labels, np.arange(N)] = 1.0
+
+    covs = em._estimate_covariance_matrix_full(y, means, responsibilities, 
+        covariance_regularization=kwargs.get("covariance_regularization", 0))
+
+    weights = responsibilities.sum(axis=1)/N
+
+    return (means, covs, weights, responsibilities)
+
+
+
+
 
 def preferred_mixture_index(K, previous_K):
 

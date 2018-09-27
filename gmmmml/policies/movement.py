@@ -12,7 +12,7 @@ class BaseMovementPolicy(Policy):
 
 
 
-class DefaultMovementPolicy(BaseMovementPolicy):
+class MoveTowardsMMLMixtureMovementPolicy(BaseMovementPolicy):
 
     def move(self, y, **kwargs):
 
@@ -58,13 +58,13 @@ class DefaultMovementPolicy(BaseMovementPolicy):
 
 
 
-class SingleMovementPolicy(DefaultMovementPolicy):
+class StepTowardsMMLMixtureMovementPolicy(MoveTowardsMMLMixtureMovementPolicy):
 
     def move(self, y, **kwargs):
 
-        # Make a prediction using the DefaultMovementPolicy, but then just move
-        # one step in that direction.
-        for K in super(SingleMovementPolicy, self).move(y):
+        # Make a prediction using the StepTowardsMMLMixtureMovementPolicy, 
+        # but then just move one step in that direction.
+        for K in super(StepTowardsMMLMixtureMovementPolicy, self).move(y):
 
             diff = np.array(self.model._state_K) - K
             abs_diff = np.abs(diff)
@@ -72,10 +72,37 @@ class SingleMovementPolicy(DefaultMovementPolicy):
             K_nearest = self.model._state_K[np.argmin(abs_diff)]
             K_actual = K_nearest + 1 if K > K_nearest else K_nearest - 1
 
-            logger.info(f"Overriding movement policy. Moving to K = {K_actual}")
+            if K_actual != K:
+                logger.info(f"Over-riding policy: moving to K = {K_actual}")
 
             yield K_actual
 
 
+class GreedyMovementPolicy(BaseMovementPolicy):
+
+    def move(self, y, **kwargs):
+        # Our Policy is not to make any movement decision, under the assumption
+        # that the partition strategy will take care of it.
+
+        # So here we just continue to *allow* movements until convergence is
+        # detected, or if there was no better perturbation found.
+
+        while not self.converged:
+
+            trials = len(self.model._results)
+            
+            yield None
+
+            if len(self.model._results) == trials:
+                break
+
+            
 
 
+
+class IncreasingComponentsPolicy(BaseMovementPolicy):
+    def move(self, y, **kwargs):
+
+        while not self.converged:
+            K_max = np.max(self.model._state_K)
+            yield 1 + K_max

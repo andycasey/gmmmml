@@ -190,6 +190,8 @@ def expectation_maximization(y, means, covs, weights, covariance_type="full",
 
     e_step = kwargs.pop("__expectation_function", expectation)
     m_step = kwargs.pop("__maximization_function", maximization)
+    callback_step = kwargs.pop("__callback_function", None)
+
     R = kwargs.pop("responsibilities", None)
 
     kwds = dict(covariance_type=covariance_type,
@@ -224,6 +226,8 @@ def expectation_maximization(y, means, covs, weights, covariance_type="full",
             f"Convergence not reached ({diff:.1e} > {threshold:.1e}) "\
             f"after {iteration + 1} iterations")
 
+    if callback_step is not None:
+        callback_step(state, R, ll, I)
     return (state, responsibilities, ll, I)
 
 
