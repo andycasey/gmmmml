@@ -3,15 +3,23 @@
 \journal{Artificial Intelligence Journal}
 \usepackage{bm,url,amsmath,amssymb}
 %\usepackage{boldsymbol}
+\usepackage{minted}
 \usepackage{color,colortbl} % for \todo command
 \usepackage{verbatim} % for \begin{comment}'ing out sections.
 \usepackage{algorithm,algorithmicx}
 \usepackage{algpseudocode}
 
 % For revision history
-\IfFileExists{vc.tex}{\input{vc.tex}}{
-    \newcommand{\githash}{UNKNOWN}
-    \newcommand{\giturl}{UNKNOWN}}
+\newcommand{\vcpath}{vc.tex}
+
+\IfFileExists{\vcpath}{\input{\vcpath}}{
+	\newcommand{\giturl}{UNKNOWN}
+	\newcommand{\gitslug}{UNKNOWN}
+	\newcommand{\githash}{UNKNOWN}
+	\newcommand{\gitdate}{UNKNOWN}
+	\newcommand{\gitauthor}{UNKNOWN}
+}
+
 
 \newcommand{\todo}[1]{\textcolor{red}{#1}}
 \usepackage[T1]{fontenc}
@@ -53,6 +61,7 @@
 \newcommand{\gaia}{\project{Gaia}}
 \newcommand{\Cspace}{$\mathcal{C}$-space }
 \newcommand{\Cspaceno}{$\mathcal{C}$-space}
+
 % Common terms
 \newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
 \renewcommand{\vec}[1]{\vect{#1}}
@@ -74,6 +83,9 @@
 \newcommand{\fisher}[1]{\mathcal{F}\left(#1\right)}
 \newcommand{\detfisher}[1]{\left|\fisher{#1}\right|}
 \newcommand{\prior}[1]{p\left(#1\right)}
+
+\newcommand{\bashcommand}[1]{\noindent\texttt{#1}\\}
+
 
 % Affiliation(s)
 \newcommand{\moca}{
@@ -99,8 +111,8 @@
 \author[fit]{Aldeida Aleti\corref{mycorrespondingauthor}}
 \cortext[mycorrespondingauthor]{Corresponding author}
 \ead{aldeida.aleti@monash.edu}
-\author[moca,fit]{Andy Casey}
-\author[moca]{John Lattanzio}
+\author[moca,fit]{Andrew R. Casey}
+\author[moca]{John C. Lattanzio}
 \author[fit]{David L. Dowe}
 \address[moca]{School of Physics and Astronomy, Monash University, Melbourne, Clayton VIC 3800, Australia}
 \address[fit]{Faculty of Information Technology, Monash University, Melbourne, Clayton VIC 3800, Australia}
@@ -113,7 +125,7 @@
         
         
         \begin{keyword}
-            Search\sep Minimum Message Length\sep MML\sep mixture models\sep Galactic Archaeology
+            Search\sep Minimum Message Length\sep MML\sep gaussian mixture models\sep Galactic Archaeology
         \end{keyword}
     \end{frontmatter}
 \section{Introduction} 
@@ -130,11 +142,11 @@ The contributions of this paper are:
 % "Galaxy produces ‘molecular forests’"
 % https://CosmosMagazine.com/space/galaxy-produces-molecular-forests
 Galactic Archaeology~\cite{freeman2002new} aims at reconstructing the history 
-of our Galaxy by identifying ancient star formation events. Most stars are 
+of our galaxy by identifying ancient star formation events. Most stars are 
 born in clusters (of order $10^0$ to $10^6$ stars at a time), and all approximately
 share the same chemical composition of the gas cloud that they form from.
 Stars in clusters often do not remain gravitationally bound, and disperse 
-throughout the disk of our Galaxy within about $10^9\,{\rm yr}$. %citation needed.
+throughout the disk of our galaxy within about $10^9\,{\rm yr}$. %citation needed.
 As a consequence, where a star is now does not reflect its formation site, 
 complicating our understanding of galaxy formation and evolution. However, the
 observable chemical composition of a star remains largely the same throughout
@@ -493,7 +505,11 @@ the message length expression\cite{WallaceFreeman1987}:
 \end{equation}
 
 Here $\prior{\vec{\theta}}$ is the prior, $Q$ is the number of free parameters
-in the model, $\kappa(Q)$ is a function to approximate the lattice quantisation
+in the model,
+\begin{eqnarray}
+	Q = \frac{KD(D+3)}{2} + K - 1 \quad ,
+\end{eqnarray}
+\noindent{}$\kappa(Q)$ is a function to approximate the lattice quantisation
 constant for $Q$ free parameters\cite{ConwaySloane1984}, and $|\fisher{\vec{\theta}}|$
 is the determinant of the \emph{expected} Fisher information matrix (the second
 order partial derivatives of the negative log-likelihood function $-\log\likelihood\left(\vec{\data}|\vec{\theta}\right)$).
@@ -512,6 +528,249 @@ model $\vec{\mathcal{M}}$. Whatever the message length required to encode to
 class of model $\vec{\mathcal{M}}$, under consideration, it would be a constant 
 added to the message length regardless of the number of components in our mixture. 
 
+In Appendix \ref{app:mml_derivation} we define our priors and describe the 
+individual contributions to the mixture message length. For the sake of brevity we
+denote the full set of model parameters as $\vec{\psi} = \{K, \vec{\weight}, \vecmean, \veccov\}$.
+The total message length $I(\vec{\data}|\vec{\psi}, N, D)$ to model some $N \times D$ dimensional data $\vec{\data}$ with a mixture of multivariate Gaussian components is given by:
+\begin{eqnarray}
+	I(\vec{\data}|\vec{\psi}, N, D) &=& -\log\mathcal{L}\left(\vec{\data}|\vectheta\right) - \frac{(D + 2)}{2}\sum_{k=1}^{K}\log{|{\cov}_k|} \nonumber \\
+	&& \cdots\ + \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum_{k=1}^{K}\log{\weight_k} + K\left(1-\frac{D}{2}\right)\log{2} \nonumber \\ && \cdots\ + \log\Gamma{(K)} + \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \frac{Q}{2}\log{N} \,\,\,\, . 
+	\label{eq:objective_function}
+\end{eqnarray}
+
+\subsection{Expectation-Maximization}
+
+\todo{Derivations and updates to the mixture parameters through E-M}
+
+\subsection{Theoretical lower bounds on the message length of future mixtures}
+
+Knowing how some of the model parameters are distributed allows us to derive theoretical
+bounds on the message length for individual components. These bounds allow us to describe
+the lower and upper bounds on \emph{some components of} the message length of a Gaussian mixture
+model, before estimating the model parameters (or running expectation-maximisation). For the
+purposes of this work we will describe such mixtures as \emph{future mixtures} as they have
+not been trialled yet. 
+
+In Appendix \ref{app:mml_limits} we describe four useful bounds. The first two are lower and upper bounds on the   message length to encode the sum of the log of the weights $\sum_{k=1}^{K}\weight_k$
+for any future mixture. The third is an approximation to the lower bound of the negative log-likelihood $-\log\mathcal{L}\left(\vec{\data}|\vec{\theta}\right)$, and the fourth is an approximation on the message length required to encode
+the sum of the log of the determinant of the covariance matrices $\sum_{k=1}^{K}\log|\cov_k|$. These are the  most important components in the objective function described
+in Equation \ref{eq:objective_function}, because their values are not known until some set of model parameters $\vec{\psi}$ is trialled -- and the optimal set of model parameters is not known \emph{a priori} -- and all other terms in Equation \ref{eq:objective_function} are deterministic, depending only on $K$, $N$, and $D$.
+While we do provide both a lower and upper bound on the message length to encode the weights, no such upper bound exists on the
+negative log-likelihood because this could be arbitrarily high for an increasingly poor estimate of the mixture
+parameters. Some upper limit likely exists for $\sum\log|\cov_k|$, but that limit would depend on how the data are separated. Nevertheless, it is the lower bound on these quantities that is most useful for optimisation.
+
+
+Empirically we found that when the dimensionality of the data $D$ is small, these theoretical limits can efficiently describe a lower bound to the message length for any given Gaussian mixture of $K$ components. This allows, in some situations, to efficiently place a useful upper limit on the maximum number of components $K$, $K_{max}$ (useful in that $K_{max} << N$). 
+
+\subsection{Predicting the message length of future mixtures}
+
+The objective function in Equation \ref{eq:objective_function} remains valid across a class of 
+Gaussian mixture models where $N > K$. However, we still require a strategy to minimise this
+objective function over all possible mixture parameters $\vec{\psi}$. Here we describe methods to predict
+the \emph{minimum} message length of future (untrialled) mixtures, which we will then use in conjunction 
+with search strategies (Section \ref{sec:search}).
+
+% TODO: Predicting the sum of the log of the weights.
+
+% TODO: Predicting the negative log-likelihood.
+
+% TODO: Predicting the sum of the log of the determinant of the covariance matrices.
+
+% Combining it together.
+
+
+
+\section{Search Strategies} \label{sec:search}
+
+We introduce and evaluate two search strategies that make use of the objective function in Equation \ref{eq:objective_function}. These search strategies are compared against an existing state-of-the-art method, which we describe in Section \ref{sec:experimental-design}.
+
+\subsection{The Message-Breaking Method} \label{sec:mbm}
+The first strategy, \emph{The Message-Breaking Method}, does not make any predictions on
+the message length of future mixtures. Instead it starts from 
+a $K=1$ mixture and iteratively splits the component with the largest message length until 
+the total message length no longer improves (Algorithm~\ref{alg:MBM}). We evaluate the message length of each component
+by re-ordering Equation \ref{eq:objective_function} and weighting the negative log-likelihood
+$-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility matrix $\mathcal{R}$ with entries
+\begin{eqnarray}
+	\mathcal{R}_{nk} = \frac{\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}{\sum_{k=1}^{K}\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}
+\end{eqnarray}
+\noindent{}such that the message length of the $k$th component is
+\begin{eqnarray}
+	I_k &=& -\sum_{n=1}^{N}\mathcal{R}_{nk}\log{\weight_{k}f(\data_{n}|\vecmean_k,\veccov_k)} -\frac{(D + 2)}{2}\log{|\cov_k|} \nonumber \\
+		&& \cdots\ + \left(\frac{D(D+3)}{4}-\frac{1}{2}\right)\log{\weight_k} + \left(1 - \frac{D}{2}\right)\log{2} \nonumber \\
+		&& \cdots + \frac{1}{K}\left[\log\Gamma(K) + \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \frac{Q}{2}\log{N}\right]
+\end{eqnarray}
+\noindent{}and the total message length remains the sum of the message lengths of the components
+\begin{eqnarray}
+	I(\vec\data|\vec\psi, N, D) = \sum_{k=1}^{K}I_{k} \quad .
+\end{eqnarray}
+
+The component-wise calculation of the message length is performed as part of the 
+expectation step of the expectation-maximisation algorithm, adding negligible computational overhead.
+
+When splitting the component with the largest message length, we split this component into two child components. Initially we 
+set the means of the child mixtures as positive and negative eigenvalues along the principal
+eigenvector of the component covariance matrix. A matrix of child responsibilities is then
+calculated based on the Euclidean distance between each datum and the child means (i.e., hard
+association), which we use to estimate the covariance matrices and weights of the child
+components. After the parameters of the child components are initialised, we run \emph{partial}
+expectation-maximization to iteratively update the parameter estimates of the child components. 
+By \emph{partial} expectation-maximization we refer to the process of keeping the parameters of
+all other components fixed, and only updating the estimates of the parameters of the child
+components \citep{kasarapu2015minimum}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
+
+One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. However, as we show in Section \ref{sec:results}, this hypothetical situation was not observed in any of the $\todo{5000}$ generated datasets.
+
+\begin{algorithm}[H]
+\caption{The Message-Breaking Method.}
+\label{alg:MBM}
+{\bf Input:} $\vec{\data}$ \Comment{The $N \times D$ dimensional data.}\\
+{\bf Output:} $\vec{\psi}$ \Comment{The optimal mixture parameters.} 
+\begin{algorithmic}[1]
+\State current $\leftarrow$ one component mixture
+\While{TRUE}
+\State $m$ $\leftarrow$ \Call{ComponentMessageLength}{current}
+\State $i$ $\leftarrow$ \Call{ArgMax}{$m$} 
+\State perturbation $\leftarrow$ \Call{Split}{current, components[i]} \label{line:mbm-split}
+\State $\Delta{}I \leftarrow$ \Call{MessageLength}{perturbation} - \Call{MessageLength}{current} 
+\If{$\Delta I < 0$} \Comment{Check for improvement.}
+\State current $\leftarrow$ perturbation
+\State {\bf \sc Continue}
+\EndIf
+\State {\bf \sc Break} \label{line:end}
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+
+\subsection{Component-Jumping Method}
+
+The \emph{Component-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of model evaluations.
+
+\begin{algorithm}[H]
+
+\algblock[TryCatchFinally]{try}{endtry}
+\algcblock[TryCatchFinally]{TryCatchFinally}{finally}{endtry}
+\algcblockdefx[TryCatchFinally]{TryCatchFinally}{catch}{endtry}
+	[1]{\textbf{catch} #1}
+	{\textbf{end try}}
+
+
+\caption{The Component-Jumping Method.}
+\label{alg:component-jumping-method}
+{\bf Input:} $\vec\data$, $K_{i}$, $I_\epsilon$ \\
+{\bf Output:} $\vec\psi$ \Comment{The optimal mixture parameters.}
+\begin{algorithmic}[1]
+\State s $\leftarrow (K_{i})^{-1}\log_{10}{N}$ \Comment{Initial step size in $K$.}
+\State v $\leftarrow [0, 1, ..., K_{i}]$ 
+\State $K_{inits} \leftarrow$ \Call{Power}{10, vs} \Comment{Set initial $K$ values to trial.}
+\State list $K_{t}$ \Comment{Create a list to save trialled $K$ values.}
+\For{$k\in K_{inits}$} 
+  \State $K_{t}$.append($k$) \Comment{Remember that we trialled this $K$ value.}
+  \try 
+	  \State mix $\leftarrow$ \Call{KMeans$^{++}$}{k} \Comment{Initialise with K-means++.}
+	  \State mix $\leftarrow$ \Call{ExpectationMaximization}{mix}
+  \catch
+  	  \State {\bf \sc Break} \Comment{Do not trial any higher $K$ values.}
+  \finally 
+      \State mixture[k] $\leftarrow$ mix 
+      \State state[k] $\leftarrow$ \Call{MessageLength}{mixture[k]}
+  \endtry
+\EndFor
+\State converged $\leftarrow$ FALSE
+\While{not converged}
+	\State $K_{predict} \leftarrow [1, \cdots, 2\Call{Max}{K_{t}}]$ \Comment{Predict future message lengths.}
+	\State $I_{predict} \leftarrow$ \Call{PredictMessageLength}{$K_{predict}$}
+	% argsort.
+	\State $K_{next} \leftarrow$ \Call{ArgSort}{$I_{predict}$} \Comment{Sort $K$ by predicted message length.}
+	\For{$k\in K_{next}$}
+		% Check if the mixture at K was good?
+		\If{$k\in K_{t}$}
+			\State converged $\leftarrow$ TRUE
+			\State {\bf \sc Break}
+		\Else
+			\State $K_{t}$.append($k$) \Comment{Remember that we trialled this $K$ value.}
+	   	  \try 
+		    \State mix $\leftarrow$ \Call{KMeans$^{++}$}{k} \Comment{Initialise with K-means++.}
+	   	    \State mix $\leftarrow$ \Call{ExpectationMaximization}{mix}
+		  \catch
+  	        \State {\bf \sc Continue} \Comment{Move on to next $K$ trial.}
+		  \endtry 
+		\EndIf
+	\EndFor
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+
+
+
+\section{Experimental Design}
+
+To evaluate the proposed search algorithms, we conduct a set of experiments on synthetic and real datasets. As the output of the algorithms depends on the starting seed, and some of the methods can be affected by randomness, we perform 50 runs for each search scheme and dataset. 
+
+The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.  \andy{Huh?}
+
+
+\subsection{Benchmark Method}
+We use the search algorithm proposed by Kasarapu and Allison as a benchmark for comparison, which
+has been shown to be the state-of-the art
+% in what sense has this been shown?
+~\cite{kasarapu2015minimum}. 
+\begin{algorithm}[H]
+\caption{The benchmark method~\cite{kasarapu2015minimum}.}
+\label{alg:kasarapu}
+\begin{algorithmic}[1]
+\State {\bf \sc input:} $K$ \Comment{Number of components.}
+\State current $\leftarrow$ one component mixture
+\While{TRUE}
+\State components $\leftarrow$ current
+  \For{$i\in K$}\label{line:splitBegin}\Comment{Exhaustively split all components}
+    \State splits[i]$\leftarrow$ \Call{Split}{current,components[i]}
+  \EndFor
+\State  bestSplit$\leftarrow$\Call{Best}{splits}\label{line:splitEnd} \Comment{Record the best split.}
+\If{K>1}
+  \For{$i\in K$}\label{line:deleteBegin}\Comment{Exhaustively delete all components}
+    \State deletes[i]$\leftarrow$ \Call{Delete}{current,components[i]}
+  \EndFor
+\State  bestDelete$\leftarrow$\Call{Best}{deletes} \label{line:deleteEnd}\Comment{Record the best delete.}
+\EndIf
+  \For{$i\in K$}\label{line:MergeBegin}\Comment{Exhaustively merge all components}
+    \State j$\leftarrow$ \Call{closestComponent}{i}
+    \State merges[i]$\leftarrow$ \Call{Merge}{merges}
+  \EndFor
+\State  bestMerge$\leftarrow$\Call{Best}{merges} \label{line:MergeEnd}\Comment{Record the best merge.}
+\State bestPerturbation $\leftarrow$ \Call{Best}{bestSplit, bestDelete,bestMerge} \Comment{Select the best perturbation.}
+\State $\Delta I \leftarrow$ \Call{MessageLength}{bestPerturbation}-\Call{MessageLength}{current} \Comment{Check for improvement.}
+\If{$\Delta I < 0$}
+\State current $\leftarrow$ bestPerturbation
+\State {\bf \sc Continue}
+\EndIf
+\State {\bf \sc Break} \label{line:end}
+\EndWhile
+\State {\bf \sc output:} current
+\end{algorithmic}
+\end{algorithm}
+
+The method is presented in Algorithm~\ref{alg:kasarapu}. It starts with one component and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). 
+
+\subsection{Dataset}
+
+\alda{Andy, can you please include the details?}
+\paragraph{Simulations}
+
+\paragraph{GA data}
+
+\subsection{Criteria for Comparison}
+
+\section{Results}
+\section{References}
+\bibliographystyle{elsarticle-num}
+\bibliography{mmlbibliography}
+
+\section{Appendices}
+\subsection{The MML objective function}
+\label{app:mml_derivation}
 In the following subsections we provide expressions for the message length of
 each component listed above, and our prior beliefs, before describing our
 full objective function.
@@ -589,9 +848,9 @@ that
 However,  the MML principle requires proper priors. In practice we make 
 this prior proper by assuming the bounds on $\prior{\vecmean}$ are very large, but 
 we do so without actually specifying the value of the bounds because they add 
-only a constant value to the total message length\todo{\cite{someone}}.
+only a constant value to the total message length.
 We adopt a conjugate inverted Wishart prior for the covariance matrix of an
-individual mixture \cite[Section 5.2.3]{Schafer_1997}:
+individual mixture \cite[Section 5.2.3 of][]{Schafer_1997}:
 
 \begin{equation}
   \prior{{\vecmean_k, \veccov_k}} \propto |\veccov_k|^{\frac{D+1}{2}} \quad .
@@ -694,50 +953,8 @@ all model parameters (including the number of mixtures, $K$):
 \end{equation}
 
 
-%\begin{eqnarray}
-%I_K & = & K\log{2} % I_k
-%    + \frac{(K - 1)}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{w_k} - \log{|\Gamma(K)|} % I_w
-%    +\mathcal{L}(\data|\vectheta) \nonumber \\
-%    & -& DN\log{y_{err}} % Likelihood
-%   +  \frac{1}{2}\sum_{k=1}^{K}\left[\frac{D(D+3)}{2}\log{{Nw_k}} - (D + 2)\log{|\veccov_k|} - D\log{2}\right]\nonumber \\% I_t
-%    &-& \frac{Q}{2}\log(2\pi) + \frac{\log{Q\pi}}{2} % lattice, minus the lattice of part 2
-%%\end{eqnarray}
+\section{Bounds on components of the message length}
 
-%\noindent{}where $Q = \frac{1}{2}DK(D + 3) + K - 1$, the number of free parameters, and
-%$\mathcal{L}$ is the log-likelihood of a multivariate Gaussian distribution.
-
-While we can evaluate the objective function $I(\vec{\data}|\vec{\psi})$, 
-where for the sake of brevity we denote $\vec{\psi} = \{K, N, D, \vec{\weight}, 
-\vecmean, \veccov\}$, and we can meaningfully compare models with different 
-numbers of components or parameter values, we require a search strategy in 
-order to efficiently find the global solution: the minimum message length 
-over a class of finite mixture models (where $N > K$). Before we introduce and 
-compare search strategies, let us first make some comments and quantitative 
-descriptions on how the message length $I$ will vary with the model parameters. 
-Specifically, we will re-arrange Equation \ref{eq:objective_function} to be a 
-sum of three smaller functions, and we will derive limits and predictions for 
-those quantites. In an ideal scenario, those limits and predictions would be 
-able to provide us with an estimate of the message length for a Gaussian 
-mixture before computing the mixture (i.e., before performing 
-expectation-maximization.We begin by re-casting Eq. \ref{eq:objective_function} 
-as
-\begin{eqnarray}
-I(\vec{\data}|\vec{\psi}) = I_{1}(K, N, D, \vec{\weight}) 
-                          + I_{2}(K, N, \veccov)
-                          + I_{3}(\vec{\psi}) \quad ,
-\end{eqnarray}
-\noindent{}where:
-\begin{eqnarray}
-    I_{1} &=& \left(1-\frac{D}{2}\right)K\log{2} + \log{\Gamma(K)} + \frac{1}{4}\left[2\left(K - 1\right) + KD\left(D+3\right)\right]\log{N} \nonumber \\
-          &+& \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \left(\frac{D(D+3) - 2}{4}\right)\sum_{k=1}^{K}\log{\weight_k} \todo{+ \kappa} \quad , \label{eq:I1} \\
-    I_{2} &=& -\left(1 + \frac{D}{2}\right)\sum_{k=1}^{K}\log{|\veccov_k|} \quad \textrm{and},\\
-    I_{3} &=& -\log\likelihood\left(\vec{\data}|\vec{\theta}\right) - DN\log{\mathcal{E}} \quad .
-\end{eqnarray}
-The nomenclature for $I_1$, $I_2$ and $I_3$ bear no relation to the two-part 
-message that we introduced earlier to describe message length. Rather we are
-simply re-arranging the objective function because, as we will show, there are
-useful theoretical bounds and predictions that we can make for each part of
-this re-arranged expression.
 
 In Eq. \ref{eq:I1} it can be seen that for any finite mixture, $I_1$ can be
 almost directly computed just from knowing the number of mixture components
@@ -913,14 +1130,43 @@ The remaining term in Eq. \ref{eq:logl-lower-bound}, $\frac{1}{2}N\sum_{k=1}^{K}
 \andy{here}
 
 
+\subsection{Reproducibility} \label{sec:reproducibility}
+
+\noindent{}This project was developed in a public \texttt{git} repository that is 
+accessible at:
+\begin{center}
+\giturl
+\end{center}
+\noindent{}This repository includes a well-tested \texttt{Python 3.6} implementation
+of the algorithms described here, scripts to reproduce our results, and \LaTeX\ to compile this manuscript. This research can be reproduced in full using
+the following commands in a modern terminal:\\\\
+\bashcommand{git clone https://github.com/andycasey/gmmmml.git gmmmml}
+\bashcommand{cd gmmmml/}
+\bashcommand{git checkout \githash}
+\bashcommand{./reproduce}
+
+Reproducing these results will require at least \todo{X}\,Gb of free disk space
+and \todo{Y}\,hours of compute time, mostly because of the extensive algorithm 
+comparisons performed.
 
 
 
 
+%---------
+% COMMENTS
+%---------
 
 
+\begin{comment}
+We employ two criteria for comparing the proposed search methods to the benchmark: the message length and the Kullback Leibler divergence~\cite{kullback1951information}.
 
-\section{Search Methods}
+\paragraph{Message Length}
+
+\paragraph{Kullback Leibler divergence}
+\end{comment}
+
+
+\begin{comment}
 
 \subsection{The MML$_{K+D}$ Method}
 Say we wanted to calculate whether another mixture was warranted. If another
@@ -1000,19 +1246,10 @@ As $K \rightarrow \infinity$ then $2(K-1)/DK(D+3) \rightarrow 1$ and as $D \righ
 &-& \left.\left(D+2\right)\left(\sum_{k=1}^{K+1}\log{|\veccov_k|^{(new)}} - \sum_{k=1}^{K+1}\log{|\veccov_k|^{(old)}}\right)\right] \nonumber \\
 & +& \frac{\log(2\pi)}{2}(-\frac{1}{2}D(D+3) + 2K  - 1) + \frac{\pi}{2}\left(\log{(K + 1)} - \log{K}\right)
 \end{eqnarray}
+\end{comment}
 
-\begin{algorithm}[H]
-\caption{The MML$_{K+D}$ Method.}
-\label{alg:MMLKD}
-\begin{algorithmic}[1]
-\State {\bf \sc input:} $K$ \Comment{Number of initial components.}
-\State current $\leftarrow$ $K$ component mixture
-\While{TRUE}
-\EndWhile
-\State {\bf \sc output:} 
-\end{algorithmic}
-\end{algorithm}
 
+\begin{comment}
 \subsection{Method of Moments}
 % \alda{This is a copy paste from David's email with minor changes}
 %
@@ -1076,7 +1313,9 @@ As an
 % another
 example of this algorithm, consider a first moment of $0$, a $2^{\rm nd}$ moment of $6$ and a $4^{\rm th}$ moment of $3 \times 37.2 = 111.6$.
 Solving the simultaneous equations gives us $0.6 N(0, 2^2) +  0.4 N(0, 3^2)$.
+\end{comment}
 
+\begin{comment}
 \subsection{The k-means++ algorithm}
 
 The k-means++ algorithm extends the k-means method with an efficient way of choosing centres. Let $D(x)$ denote the shortest distance from a data point $x$ to the closest centre that has already been selected. The k-means++ has the following steps:
@@ -1089,74 +1328,9 @@ The k-means++ algorithm extends the k-means method with an efficient way of choo
 \end{enumerate}
 
 k-means++ is $O(\log k)$-Competitive.
-
-\section{Experimental Design}
-
-To evaluate the proposed search algorithms, we conduct a set of experiments on synthetic and real datasets. As the output of the algorithms depends on the starting seed, and some of the methods can be affected by randomness, we perform 50 runs for each search scheme and dataset. 
-
-The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.  
+\end{comment}
 
 
-\subsection{Benchmark Method}
-We use the search algorithm proposed by Kasarapu and Allison as a benchmark for comparison, which
-has been shown to be the state-of-the art
-% in what sense has this been shown?
-~\cite{kasarapu2015minimum}. 
-\begin{algorithm}[H]
-\caption{The benchmark method~\cite{kasarapu2015minimum}.}
-\label{alg:kasarapu}
-\begin{algorithmic}[1]
-\State {\bf \sc input:} $K$ \Comment{Number of components.}
-\State current $\leftarrow$ one component mixture
-\While{TRUE}
-\State components $\leftarrow$ current
-  \For{$i\in K$}\label{line:splitBegin}\Comment{Exhaustively split all components}
-    \State splits[i]$\leftarrow$ \Call{Split}{current,components[i]}
-  \EndFor
-\State  bestSplit$\leftarrow$\Call{Best}{splits}\label{line:splitEnd} \Comment{Record the best split.}
-\If{K>1}
-  \For{$i\in K$}\label{line:deleteBegin}\Comment{Exhaustively delete all components}
-    \State deletes[i]$\leftarrow$ \Call{Delete}{current,components[i]}
-  \EndFor
-\State  bestDelete$\leftarrow$\Call{Best}{deletes} \label{line:deleteEnd}\Comment{Record the best delete.}
-\EndIf
-  \For{$i\in K$}\label{line:MergeBegin}\Comment{Exhaustively merge all components}
-    \State j$\leftarrow$ \Call{closestComponent}{i}
-    \State merges[i]$\leftarrow$ \Call{Merge}{merges}
-  \EndFor
-\State  bestMerge$\leftarrow$\Call{Best}{merges} \label{line:MergeEnd}\Comment{Record the best merge.}
-\State bestPerturbation $\leftarrow$ \Call{Best}{bestSplit, bestDelete,bestMerge} \Comment{Select the best perturbation.}
-\State $\Delta I \leftarrow$ \Call{MessageLength}{bestPerturbation}-\Call{MessageLength}{current} \Comment{Check for improvement.}
-\If{$\Delta I < 0$}
-\State current $\leftarrow$ bestPerturbation
-\State {\bf \sc Continue}
-\EndIf
-\State {\bf \sc Break} \label{line:end}
-\EndWhile
-\State {\bf \sc output:} current
-\end{algorithmic}
-\end{algorithm}
 
-The method is presented in Algorithm~\ref{alg:kasarapu}. It starts with one component and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). 
-
-\subsection{Dataset}
-
-\alda{Andy, can you please include the details?}
-\paragraph{Simulations}
-
-\paragraph{GA data}
-
-\subsection{Criteria for Comparison}
-
-We employ two criteria for comparing the proposed search methods to the benchmark: the message length and the Kullback Leibler divergence~\cite{kullback1951information}.
-
-\paragraph{Message Length}
-
-\paragraph{Kullback Leibler divergence}
-
-\section{Results}
-\section{References}
-\bibliographystyle{elsarticle-num}
-\bibliography{mmlbibliography}
 
 \end{document}

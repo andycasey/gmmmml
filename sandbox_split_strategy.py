@@ -1,6 +1,6 @@
 
 import numpy as np
-from gmmmml import (gmm, visualize, utils, operations)
+from gmmmml import (gmm, visualize, utils)
 
 np.random.seed(101)
 
@@ -14,7 +14,7 @@ for i in range(10):
         print(i, j)
         j += 1
         try:
-            y, labels, target, kwds = utils.generate_data(N=10000, K=35, D=3, center_box=(-10, 10))
+            y, labels, target, kwds = utils.generate_data(N=1000, K=35, D=9, center_box=(-10, 10))
 
         except:
           logging.exception("failed")
@@ -25,31 +25,19 @@ for i in range(10):
         else:
           break
 
-    gkh = visualize.VisualizationHandler(y, figure_prefix="jump-tmp/bj")    
+    gmm_kwds = dict(threshold=1e-5, expected_improvement_fraction=1e-5,
+                    covariance_regularization=1e-2)
 
-    model = gmm.GaussianMixture()
-    model.search(y, strategy="bayes-jumper", visualization_handler=gkh)
-
-
-    raise a
-
-    # Take this to try the split stuff
-    kwds = model._em_kwds.copy()
-    kwds.update(covariance_regularization=1e-1, threshold=1e-1)
+    #bayesjumper_model2 = gmm.GaussianMixture()
+    #bayesjumper_model2.search(y, search_strategy="bayes-jumper", **gmm_kwds)
 
 
-    means, covs, weights = model.means_, model.covs_, model.weights_
-    means, covs, weights, _ = model.initialize(y, 15)
+    bjh = visualize.VisualizationHandler(y, figure_prefix="splitter/bj")
 
-    (means, covs, weights), R, ll, I = operations.iteratively_split_components(y, means, covs, weights, K=165,
-                                            **kwds)
-
-    foo = operations.iteratively_remove_components(y, means, covs, weights, K=15, **kwds)
-
-
+    bayesjumper_model = gmm.GaussianMixture()
+    bayesjumper_model.search(y, 
+                             search_strategy="bayes-jumper",
+                             visualization_handler=bjh,
+                             **gmm_kwds)
 
     raise a
-
-    break
-
-print("Fin")

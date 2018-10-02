@@ -29,7 +29,7 @@ common_kwds = dict(D=5, dirichlet_concentration=100, isotropy=10,
 for K in Ks:
     print(f"Generating data with K = {K} and {common_kwds}")
 
-    X, meta = utils.generate_data(K=K, N = 10*K, **common_kwds)
+    X, meta = utils.generate_data(K=K, N=10*K, **common_kwds)
 
     with open(path_format.format(K=K), "wb") as fp:
         pickle.dump((X, meta), fp, -1)

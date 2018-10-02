@@ -5,154 +5,69 @@ Operations to apply to gaussian mixtures.
 
 import logging
 import numpy as np
+import scipy
+from sklearn import cluster
+from sklearn.utils import check_random_state
+from sklearn.utils.extmath import row_norms
+
 
 from . import (em, mml, utils)
 
 logger = logging.getLogger(__name__)
 
 
-def iteratively_remove_components(y, means, covs, weights, K, **kwargs):
+
+
+def kmeans_pp(y, K, random_state=None, **kwargs):
     r"""
-    Iteratively remove components in a mixture until we reach a target
-    distribution of :math:`K` Gaussian components.
+    Initialize a Gaussian mixture model using the K-means++ algorithm.
 
     :param y:
-        A :math:`N\times{}D` array of the observations :math:`y`,
-        where :math:`N` is the number of observations, and :math:`D` is the
-        number of dimensions per observation.
-
-    :param means:
-        The current estimates of the Gaussian mean values.
-
-    :param covs:
-        The current estimates of the Gaussian covariance matrices.
-
-    :param weights:
-        The current estimates of the relative mixing weights.
+        The data values, :math:`y`, which are expected to have :math:`N` 
+        samples each with :math:`D` dimensions. Expected shape of :math:`y` 
+        is :math:`(N, D)`.
 
     :param K:
-        The number of target Gaussian components.
+        The number of Gaussian components in the mixture.
+    
+    :param random_state: [optional]
+        The state to provide to the random number generator.
+
+    :returns:
+        A four-length tuple containing:
+
+        (1) an estimate of the means of the components
+
+        (2) an estimate of the covariance matrices of the components
+
+        (3) an estimate of the relative mixings of the components
+
+        (4) the responsibility matrix for each data point to each component.
     """
 
-    if weights.size <= K:
-        raise ValueError(f"the given mixture already has <={K} components")
+    random_state = check_random_state(random_state)
+    squared_norms = row_norms(y, squared=True)
+    means = cluster.k_means_._k_init(y, K,
+                                     random_state=random_state,
+                                     x_squared_norms=squared_norms)
 
-    Ks = []
-    Is = []
-    while K < weights.size:
+    labels = np.argmin(scipy.spatial.distance.cdist(means, y), axis=0)
 
-        # Delete the component with the largest message length.
-        R, ll, I_components = em._component_expectations(y, means, covs, weights,
-                                                         **kwargs)
-        index = np.argsort(I_components)[-1]
-        #index = np.random.choice(np.arange(I_components.size))
+    N, D = y.shape
+    responsibilities = np.zeros((K, N))
+    responsibilities[labels, np.arange(N)] = 1.0
 
-        (means, covs, weights), responsibilities, ll, I = merge_component(
-            y, means, covs, weights, R, index, **kwargs)
+    covs = em._estimate_covariance_matrix_full(y, means, responsibilities, 
+        covariance_regularization=kwargs.get("covariance_regularization", 0))
 
-        print("Current state is (K = {}; I = {})".format(
-            weights.size, np.sum(np.hstack(I.values()))))
+    weights = responsibilities.sum(axis=1)/N
 
-        Ks.append(weights.size)
-        Is.append(np.sum(np.hstack(I.values())))
-
-    """
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.scatter(Ks, Is)
-
-    raise a
-    """
-    return (means, covs, weights, responsibilities, ll, I)
-
-
-def iteratively_split_components(y, means, covs, weights, K, **kwargs):
-    r"""
-    Iteratively split and refine a mixture until we reach a target distribution
-    of :math:`K` Gaussian components.
-
-    :param y:
-        A :math:`N\times{}D` array of the observations :math:`y`,
-        where :math:`N` is the number of observations, and :math:`D` is the
-        number of dimensions per observation.
-
-    :param means:
-        The current estimates of the Gaussian mean values.
-
-    :param covs:
-        The current estimates of the Gaussian covariance matrices.
-
-    :param weights:
-        The current estimates of the relative mixing weights.
-
-    :param K:
-        The number of target Gaussian components.
-    """
-
-    if weights.size >= K:
-        raise ValueError(f"the given mixture already has >={K} components")
-
-
-    Ks = []
-    Is = []
-    while K > weights.size:
-
-        # Split the component with the largest message length.
-        R, ll, I_components = em._component_expectations(y, means, covs, weights, 
-                                                         **kwargs)
-
-        index = np.argsort(I_components)[-1]
-        #index = np.random.choice(np.arange(I_components.size))
-
-        # TODO: Allow us to get back the component-wise relative message lengths
-        #       so we don't have to calculate the expectation step twice.
-
-        (state, responsibilities, ll, I) = split_component(
-            y, means, covs, weights, R, index, **kwargs)
-
-        means, covs, weights = state
-
-
-        Ks.append(weights.size)
-        Is.append(np.sum(np.hstack(I.values())))
-
-        print("Current state (K = {}; I = {})".format(Ks[-1], Is[-1]))
-
-    """
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.scatter(Ks, Is)
-    """
-
-    return (state, responsibilities, ll, I)
-
-
-def iteratively_operate_components(y, means, covs, weights, K, **kwargs):
-
-    func = iteratively_split_components if K > weights.size \
-                                        else iteratively_remove_components
-
-    return func(y, means, covs, weights, K, **kwargs)
-        
-
-
-def split_components(y, means, covs, weights, responsibilities, K,
-                     split_strategy="iterative", **kwargs):
-    r"""
-    Split a mixture into multiple components and determine the new optimal
-    state. The component to split, and the strategy for splitting, is given
-    by the ``split_strategy``, which can be one of:
-
-        - "iterative": iteratively split the component with the largest message
-                       length until the target distribution is reached
-
-    """
-
-    raise NotImplementedError
+    return (means, covs, weights, responsibilities)
 
 
 
-def split_component(y, means, covs, weights, responsibilities, index, **kwargs):
+def split_component(y, means, covs, weights, responsibilities, index, split=2,
+                    **kwargs):
     r"""
     Split a component from the current mixture and determine the new optimal
     state.
@@ -177,8 +92,11 @@ def split_component(y, means, covs, weights, responsibilities, index, **kwargs):
 
     :param index:
         The index of the component to be split.
-    """
 
+    :param split: [optional]
+        The number of components to split the component into. Default to 2, so
+        one component will be split into two.
+    """
     logger.debug("Splitting component {} of {}".format(index, weights.size))
 
     K, N, D = (weights.size, *y.shape)
@@ -187,16 +105,18 @@ def split_component(y, means, covs, weights, responsibilities, index, **kwargs):
     # locate two points which are one standard deviation away on either side.
     U, S, V = _svd(covs[index], **kwargs)
 
-    child_means = means[index] - np.vstack([+V[0], -V[0]]) * S[0]**0.5
+    # Pick points along the eigenvector.
+    sigma_points = np.atleast_2d(np.linspace(-3, 3, 2 + split)[1:-1])
+    projection = np.atleast_2d(V[0] * S[0]**0.5)
+
+    child_means = means[index] + sigma_points.T @ projection
 
     # Responsibilities are initialized by allocating the data points to the 
-    # closest of the two means.
-    distance = np.vstack([
-        np.sum((y - child_means[0])**2, axis=1),
-        np.sum((y - child_means[1])**2, axis=1)
-    ])
+    # closest of the means.
+    # TODO: I'm sure there's a better way to do this.
+    distance = np.vstack([np.sum((y - cmu)**2, axis=1) for cmu in child_means])
     
-    child_responsibilities = np.zeros((2, N))
+    child_responsibilities = np.zeros((split, N))
     child_responsibilities[np.argmin(distance, axis=0), np.arange(N)] = 1.0
 
     # Calculate the child covariance matrices.
@@ -233,18 +153,18 @@ def split_component(y, means, covs, weights, responsibilities, index, **kwargs):
 
     if K > 1:
 
-        # Integrate the M + 1 components and run expectation-maximization
-        weights = np.hstack([weights, [parent_weights * child_weights[1]]])
+        # Integrate the K + delta_K components and run expectation-maximization
+        weights = np.hstack([weights, parent_weights * child_weights[1:]])
         weights[index] = parent_weights * child_weights[0]
 
         responsibilities = np.vstack([responsibilities, 
-            [parent_responsibilities * child_responsibilities[1]]])
+            parent_responsibilities * child_responsibilities[1:]])
         responsibilities[index] = parent_responsibilities * child_responsibilities[0]
         
-        means = np.vstack([means, [child_means[1]]])
+        means = np.vstack([means, child_means[1:]])
         means[index] = child_means[0]
 
-        covs = np.vstack([covs, [child_covs[1]]])
+        covs = np.vstack([covs, child_covs[1:]])
         covs[index] = child_covs[0]
 
         state, responsibilities, ll, I = em.expectation_maximization(
@@ -391,5 +311,220 @@ def _svd(covariance, covariance_type, **kwargs):
 
     else:
         raise ValueError("unknown covariance type")
+
+
+
+def preferred_mixture_index(K, previous_K):
+
+    previous_K = np.atleast_1d(previous_K)
+    diff = K - previous_K
+    abs_diff = np.abs(diff)
+
+    # Get the closest thing, with a preference for split over merge.
+    idx = np.argsort(abs_diff)
+
+    if idx.size > 1 and diff[idx[0]] == diff[idx[1]]:
+        return idx[np.argmax(diff[idx[:2]])]
+
+    return idx[0]
+
+
+def iteratively_remove_components(y, means, covs, weights, K, **kwargs):
+    r"""
+    Iteratively remove components in a mixture until we reach a target
+    distribution of :math:`K` Gaussian components.
+
+    :param y:
+        A :math:`N\times{}D` array of the observations :math:`y`,
+        where :math:`N` is the number of observations, and :math:`D` is the
+        number of dimensions per observation.
+
+    :param means:
+        The current estimates of the Gaussian mean values.
+
+    :param covs:
+        The current estimates of the Gaussian covariance matrices.
+
+    :param weights:
+        The current estimates of the relative mixing weights.
+
+    :param K:
+        The number of target Gaussian components.
+    """
+
+    if weights.size <= K:
+        raise ValueError(f"the given mixture already has <={K} components")
+
+    Ks = []
+    Is = []
+    while K < weights.size:
+
+        # Delete the component with the largest message length.
+        R, ll, I_components = em._component_expectations(y, means, covs, weights,
+                                                         **kwargs)
+        index = np.argsort(I_components)[-1]
+        
+        (means, covs, weights), responsibilities, ll, I = merge_component(
+            y, means, covs, weights, R, index, **kwargs)
+
+        print("Current state is (K = {}; I = {})".format(
+            weights.size, np.sum(np.hstack(I.values()))))
+
+        Ks.append(weights.size)
+        Is.append(np.sum(np.hstack(I.values())))
+
+    return (means, covs, weights, responsibilities, ll, I)
+
+
+def iteratively_split_components(y, means, covs, weights, K, **kwargs):
+    r"""
+    Iteratively split and refine a mixture until we reach a target distribution
+    of :math:`K` Gaussian components.
+
+    :param y:
+        A :math:`N\times{}D` array of the observations :math:`y`,
+        where :math:`N` is the number of observations, and :math:`D` is the
+        number of dimensions per observation.
+
+    :param means:
+        The current estimates of the Gaussian mean values.
+
+    :param covs:
+        The current estimates of the Gaussian covariance matrices.
+
+    :param weights:
+        The current estimates of the relative mixing weights.
+
+    :param K:
+        The number of target Gaussian components.
+    """
+
+    if weights.size >= K:
+        raise ValueError(f"the given mixture already has >={K} components")
+
+
+    Ks = []
+    Is = []
+    while K > weights.size:
+
+        # Split the component with the largest message length.
+        R, ll, I_components = em._component_expectations(y, means, covs, weights, 
+                                                         **kwargs)
+        index = np.argsort(I_components)[-1]
+        
+        # TODO: Allow us to get back the component-wise relative message lengths
+        #       so we don't have to calculate the expectation step twice.
+
+        (state, responsibilities, ll, I) = split_component(
+            y, means, covs, weights, R, index, **kwargs)
+
+        means, covs, weights = state
+
+
+        Ks.append(weights.size)
+        Is.append(np.sum(np.hstack(I.values())))
+
+        print("Current state (K = {}; I = {})".format(Ks[-1], Is[-1]))
+
+    """
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.scatter(Ks, Is)
+    """
+
+    return (state, responsibilities, ll, I)
+
+
+def simultaneously_split_mixture(y, means, covs, weights, K, **kwargs):
+    r"""
+    Split the components of a mixture until we reach the target distribution of
+    :math:`K` components.
+    """
+
+    R, ll, I_components = em._component_expectations(y, means, covs, weights,
+                                                     **kwargs)
+
+    # How many new components do we need?
+    K_new = K - weights.size
+
+    if weights.size == 1:
+        # Trivial.
+        return split_component(y, means, covs, weights, R, 0, 1 + K_new, **kwargs)
+
+
+    else:
+        """
+        # Approximate something like min(I_components), while ensuring that we
+        # will meet the required constraint.
+
+        # TODO: This strategy is ad-hoc and probably wrong.
+        #       If anything, it should be better explained.
+        alpha = np.sum(I_components)/(new_K + K)
+
+        K_available = np.ceil(I_components/alpha).astype(int) - 1
+
+        # Need an array of components to split, and how much we should split them.
+        N_splits = np.sum(K_available > 0)
+
+        indices = np.zeros(N_splits, dtype=int)
+        splits = np.zeros(N_splits, dtype=int)
+        idxs = np.argsort(I_components)[::-1]
+
+        for i, index in enumerate(idxs[:N_splits]):
+            indices[i] = index
+            splits[i] = min(K_available[index], new_K - np.sum(splits))
+
+        assert sum(splits) >= new_K
+        if sum(splits) > new_K:
+            raise a
+
+        state = (means, covs, weights)
+        for index, split in zip(indices, splits):
+            state, R, ll, I = split_component(y, *state, R, index, 1 + split,
+                                              **kwargs)
+        """
+
+        # Split the top K_new in half.
+        idx = np.argsort(I_components)[::-1][:K_new]
+
+        indices = np.zeros(K_new, dtype=int)
+        splits = np.zeros(K_new, dtype=int)
+
+        for i, index in enumerate(idx):
+            indices[i] = index
+            splits[i] = 2
+
+        state = (means, covs, weights)
+        for index, split in zip(indices, splits):
+            state, R, ll, I = split_component(y, *state, R, index, split, **kwargs)
+
+        return (state, R, ll, I)
+
+
+
+def simultaneously_merge_mixture(y, means, covs, weights, K, **kwargs):
+
+    print("don't know how to do this yet -- requires a thinko")
+
+    return iteratively_remove_components_greedily(y, means, covs, weights, K,
+                                                  **kwargs)
+
+
+def simultaneously_operate_on_components(y, means, covs, weights, K, **kwargs):
+
+    func = simultaneously_merge_mixture if weights.size > K \
+                                        else simultaneously_split_mixture
+
+    return func(y, means, covs, weights, K, **kwargs)
+
+
+
+def iteratively_operate_on_components(y, means, covs, weights, K, **kwargs):
+
+    func = iteratively_split_components if K > weights.size \
+                                        else iteratively_remove_components
+
+    return func(y, means, covs, weights, K, **kwargs)
+        
 
 

@@ -20,13 +20,13 @@ data_paths = glob("data/?????_data.pkl")
 
 data_paths = sorted(data_paths)
 
-gmm_kwds = dict(threshold=1e-5, max_em_iterations=1000)
+gmm_kwds = dict(threshold=1e-5, 
+                max_em_iterations=1000,
+                covariance_regularization=1e-10)
 
 comparison_kwds = dict([
-    ("kasarapu-allison-2015", dict(covariance_regularization=1e-10)),
-    ("bayes-jumper", dict()),
-])
-
+    ("KasarapuAllison2015", dict()),
+    ("BayesJumper", dict())
 
 
 times = {}
@@ -47,7 +47,7 @@ for i, data_path in enumerate(data_paths):
 
         model = GaussianMixture(**gmm_kwds)
         try:
-            model.search(X, strategy=strategy, **search_kwds)
+            model.search(X, search_strategy=strategy, **search_kwds)
 
         except:
             result = np.nan

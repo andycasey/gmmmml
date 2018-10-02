@@ -25,8 +25,29 @@ for i in range(10):
         else:
           break
 
-    bayesjumper_model2 = gmm.GaussianMixture()
-    bayesjumper_model2.search(y, strategy="bayes-jumper")
+    gmm_kwds = dict(threshold=1e-5, expected_improvement_fraction=1e-2,
+                    covariance_regularization=1e-2)
+
+    #bayesjumper_model2 = gmm.GaussianMixture()
+    #bayesjumper_model2.search(y, search_strategy="bayes-jumper", **gmm_kwds)
+
+
+    bjh = visualize.VisualizationHandler(y, figure_prefix="tmp2/bayes-jumper")
+
+    bayesjumper_model = gmm.GaussianMixture()
+    bayesjumper_model.search(y, 
+                             search_strategy="bayes-stepper",
+                             visualization_handler=bjh, **gmm_kwds)
+
+
+    kasarapu_model = gmm.GaussianMixture()
+    kasarapu_model.search(y,
+                          search_strategy="kasarapu-allison-2015",
+                          **gmm_kwds)
+    raise a
+
+
+    raise a
 
     # The greedy k-means method requires a stopping criteria (K_max).
     K_max = 50
@@ -34,25 +55,16 @@ for i in range(10):
     greedykmeans_model = gmm.GaussianMixture()
     greedykmeans_model.search(y, 
                               K_max=K_max,
-                              strategy="greedy-kmeans",
+                              search_strategy="greedy-kmeans",
                               visualization_handler=gkh)
 
 
     # The Kasarapu and Allison method really breaks down if you don't use a 
     # little bit of covariance regularization.
     # TODO: Implement visualization handler with Kasarapu & Allison method.
-    kasarapu_model = gmm.GaussianMixture()
-    kasarapu_model.search(y,
-                          strategy="kasarapu-allison-2015",
-                          covariance_regularization=1e-6)
 
 
-    bjh = visualize.VisualizationHandler(y, figure_prefix="tmp/bayes-jumper")
 
-    bayesjumper_model = gmm.GaussianMixture()
-    bayesjumper_model.search(y, 
-                             strategy="bayes-jumper",
-                             visualization_handler=bjh)
 
 
 

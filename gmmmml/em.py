@@ -10,7 +10,7 @@ from scipy.special import logsumexp
 from tqdm import tqdm
 
 from .mml import (gaussian_mixture_message_length,
-                  gmm_relative_component_contributions_to_message_length)
+                  gmm_component_contributions_to_message_length)
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,8 @@ def expectation(y, means, covs, weights, **kwargs):
     kwds = kwargs.copy()
     kwds.pop("full_output", False)
 
-    R, ll, lp = responsibilities(y, means, covs, weights, 
-                                 full_output=True, **kwds)
+    R, ll = responsibilities(y, means, covs, weights, 
+                             full_output=True, **kwds)
 
     K, N, D = (weights.size, *y.shape)
 
@@ -60,11 +60,11 @@ def expectation(y, means, covs, weights, **kwargs):
 
 def _component_expectations(y, means, covs, weights, **kwargs):
 
-    R, ll, lp = responsibilities(y, means, covs, weights, 
-                                 full_output=True, **kwargs)
+    R, ll = responsibilities(y, means, covs, weights, 
+                             full_output=True, **kwargs)
 
-    I_components = \
-        gmm_relative_component_contributions_to_message_length(lp, covs, weights)
+
+    I_components = gmm_component_contributions_to_message_length(R, ll, covs, weights)
 
     return (R, ll, I_components)
     
@@ -190,6 +190,8 @@ def expectation_maximization(y, means, covs, weights, covariance_type="full",
 
     e_step = kwargs.pop("__expectation_function", expectation)
     m_step = kwargs.pop("__maximization_function", maximization)
+    callback_step = kwargs.pop("__callback_function", None)
+
     R = kwargs.pop("responsibilities", None)
 
     kwds = dict(covariance_type=covariance_type,
@@ -224,6 +226,8 @@ def expectation_maximization(y, means, covs, weights, covariance_type="full",
             f"Convergence not reached ({diff:.1e} > {threshold:.1e}) "\
             f"after {iteration + 1} iterations")
 
+    if callback_step is not None:
+        callback_step(state, R, ll, I)
     return (state, responsibilities, ll, I)
 
 
@@ -287,7 +291,7 @@ def responsibilities(y, means, covs, weights, covariance_type="full",
 
     R = np.exp(log_R).T
 
-    return (R, ll, lp) if full_output else R
+    return (R, ll) if full_output else R
 
 
 def _compute_precision_cholesky(covariances, covariance_type):
