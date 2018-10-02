@@ -27,8 +27,6 @@ gmm_kwds = dict(threshold=1e-5,
 comparison_kwds = dict([
     ("KasarapuAllison2015", dict()),
     ("BayesJumper", dict())
-])
-
 
 
 times = {}
