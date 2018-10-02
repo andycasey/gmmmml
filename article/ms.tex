@@ -3,7 +3,6 @@
 \journal{Artificial Intelligence Journal}
 \usepackage{bm,url,amsmath,amssymb}
 %\usepackage{boldsymbol}
-\usepackage{minted}
 \usepackage{color,colortbl} % for \todo command
 \usepackage{verbatim} % for \begin{comment}'ing out sections.
 \usepackage{algorithm,algorithmicx}
@@ -647,6 +646,13 @@ One advantage to the Message-Breaking Method is that the total number of E-M ste
 
 The \emph{Component-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of model evaluations.
 
+\todo{initialisation, how kmeans++ breaks when too big unless covariance regularisation\\}
+
+\todo{Run E-M, make predictions\\}
+
+\todo{Advantage in being able to jump many $\Delta{}K$ at once}
+
+
 \begin{algorithm}[H]
 
 \algblock[TryCatchFinally]{try}{endtry}
@@ -709,12 +715,11 @@ The \emph{Component-Jumping Method} seeks to find the mixture parameters $\vec\p
 
 To evaluate the proposed search algorithms, we conduct a set of experiments on synthetic and real datasets. As the output of the algorithms depends on the starting seed, and some of the methods can be affected by randomness, we perform 50 runs for each search scheme and dataset. 
 
-The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.  \andy{Huh?}
+\andy{The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.}
 
 
 \subsection{Benchmark Method}
-We use the search algorithm proposed by Kasarapu and Allison as a benchmark for comparison, which
-has been shown to be the state-of-the art
+We use the search algorithm proposed \citep{kasarapu2015minimum} as a benchmark for comparison, which has been shown to be the state-of-the-art.
 % in what sense has this been shown?
 ~\cite{kasarapu2015minimum}. 
 \begin{algorithm}[H]
