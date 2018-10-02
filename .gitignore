@@ -5,6 +5,9 @@
 gmmmml/__pycache__/
 
 tmp/
+attic/
+
+data/
 
 docs/_build/
 
@@ -17,3 +20,4 @@ article/*.bbl
 article/*.aux
 article/*.blg
 article/*.spl
+article/*.synctex.gz
