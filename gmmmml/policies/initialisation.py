@@ -44,6 +44,7 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
 
             except ValueError:
                 logger.warn(f"Failed to initialise at K = {K}")
+                raise
                 break
 
 

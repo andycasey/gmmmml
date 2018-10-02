@@ -362,7 +362,8 @@ class GaussianMixture(object):
         logger.info(f"Best mixture has K = {K_best} and I = {I_best:.0f}")
 
         state, R, ll, I = self._results[K_best]
-        meta = dict(strategy=strategy_class.__name__, t_search=time() - t_init)
+        meta = dict(strategy=search_strategy_class.__name__, 
+                    t_search=time() - t_init)
 
         # Set the state attribuets.
         self.means_, self.covs_, self.weights_ = state
