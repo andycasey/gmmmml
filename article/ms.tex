@@ -581,15 +581,59 @@ with search strategies (Section \ref{sec:search}).
 
 \section{Search Strategies} \label{sec:search}
 
-We introduce and evaluate two search strategies that make use of the objective function in Equation \ref{eq:objective_function}. These search strategies are compared against an existing state-of-the-art method, which we describe in Section \ref{sec:experimental-design}.
+We introduce and evaluate two search strategies that make use of the objective function in Equation \ref{eq:objective_function}. These strategies are benchmarked against an existing state-of-the-art search method, which we have adapted to use the same objective function in Equation~\ref{eq:objective_function} in order to facilitate a fair comparison. 
+
+
+\subsection{Benchmark Method}
+
+We use the search algorithm proposed \citep{kasarapu2015minimum} as a benchmark for comparison. The method is presented in Algorithm \ref{alg:kasarapu}. It starts with a single component mixture and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). This is a greedy approach, which is advantageous in that it is guaranteed to only accept perturbations that minimise the message length, but that guarantee comes with a computational cost. 
+% in what sense has this been shown?
+\begin{algorithm}[H]
+\caption{The benchmark method~\cite{kasarapu2015minimum}.}
+\label{alg:kasarapu}
+{\bf Input:} $\vec\data$ \\
+{\bf Output:} $\vec\psi$
+\begin{algorithmic}[1]
+\State current $\leftarrow$ one component mixture
+\While{TRUE}
+\State components $\leftarrow$ current
+  \For{$i\in K$}\label{line:splitBegin}\Comment{Exhaustively split all components}
+    \State splits[i]$\leftarrow$ \Call{Split}{current,components[i]}
+  \EndFor
+\State  bestSplit$\leftarrow$\Call{Best}{splits}\label{line:splitEnd} \Comment{Record the best split.}
+\If{K>1}
+  \For{$i\in K$}\label{line:deleteBegin}\Comment{Exhaustively delete all components}
+    \State deletes[i]$\leftarrow$ \Call{Delete}{current,components[i]}
+  \EndFor
+\State  bestDelete$\leftarrow$\Call{Best}{deletes} \label{line:deleteEnd}\Comment{Record the best delete.}
+\EndIf
+  \For{$i\in K$}\label{line:MergeBegin}\Comment{Exhaustively merge all components}
+    \State j$\leftarrow$ \Call{closestComponent}{i}
+    \State merges[i]$\leftarrow$ \Call{Merge}{merges}
+  \EndFor
+\State  bestMerge$\leftarrow$\Call{Best}{merges} \label{line:MergeEnd}\Comment{Record the best merge.}
+\State bestPerturbation $\leftarrow$ \Call{Best}{bestSplit, bestDelete,bestMerge} \Comment{Select the best perturbation.}
+\State $\Delta I \leftarrow$ \Call{MessageLength}{bestPerturbation}-\Call{MessageLength}{current} \Comment{Check for improvement.}
+\If{$\Delta I < 0$}
+\State current $\leftarrow$ bestPerturbation
+\State {\bf \sc Continue}
+\EndIf
+\State {\bf \sc Break} \label{line:end}
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+
+
 
 \subsection{The Message-Breaking Method} \label{sec:mbm}
-The first strategy, \emph{The Message-Breaking Method}, does not make any predictions on
-the message length of future mixtures. Instead it starts from 
+The simplest strategy we introduce here, \emph{The Message-Breaking Method}, does not use any predictions of the message length of future mixtures. Instead it starts from 
 a $K=1$ mixture and iteratively splits the component with the largest message length until 
-the total message length no longer improves (Algorithm~\ref{alg:MBM}). We evaluate the message length of each component
-by re-ordering Equation \ref{eq:objective_function} and weighting the negative log-likelihood
-$-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility matrix $\mathcal{R}$ with entries
+the total message length no longer improves (Algorithm~\ref{alg:MBM}). This approach is related to the benchmark method in that we iteratively move from a $K=1$ mixture, but we only split components (instead of splitting, merging, and deleting all components). Similarly, in \emph{The Message-Breaking Method} we only split the component with the largest message length instead of exhaustively trying to split all components at every mixture.
+
+
+We evaluate the message length of each component by rearranging Equation \ref{eq:objective_function} and multiplying the negative log-likelihood
+$-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility matrix $\mathcal{R}$ that has entries
 \begin{eqnarray}
 	\mathcal{R}_{nk} = \frac{\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}{\sum_{k=1}^{K}\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}
 \end{eqnarray}
@@ -605,7 +649,7 @@ $-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility mat
 \end{eqnarray}
 
 The component-wise calculation of the message length is performed as part of the 
-expectation step of the expectation-maximisation algorithm, adding negligible computational overhead.
+expectation step of the expectation-maximisation algorithm, adding negligible computational overhead to the algorithm.
 
 When splitting the component with the largest message length, we split this component into two child components. Initially we 
 set the means of the child mixtures as positive and negative eigenvalues along the principal
@@ -618,6 +662,7 @@ By \emph{partial} expectation-maximization we refer to the process of keeping th
 all other components fixed, and only updating the estimates of the parameters of the child
 components \citep{kasarapu2015minimum}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
 
+\andy{Should we move/remove the following paragraph?}
 One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. However, as we show in Section \ref{sec:results}, this hypothetical situation was not observed in any of the $\todo{5000}$ generated datasets.
 
 \begin{algorithm}[H]
@@ -718,57 +763,46 @@ To evaluate the proposed search algorithms, we conduct a set of experiments on s
 \andy{The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.}
 
 
-\subsection{Benchmark Method}
-We use the search algorithm proposed \citep{kasarapu2015minimum} as a benchmark for comparison, which has been shown to be the state-of-the-art.
-% in what sense has this been shown?
-~\cite{kasarapu2015minimum}. 
-\begin{algorithm}[H]
-\caption{The benchmark method~\cite{kasarapu2015minimum}.}
-\label{alg:kasarapu}
-\begin{algorithmic}[1]
-\State {\bf \sc input:} $K$ \Comment{Number of components.}
-\State current $\leftarrow$ one component mixture
-\While{TRUE}
-\State components $\leftarrow$ current
-  \For{$i\in K$}\label{line:splitBegin}\Comment{Exhaustively split all components}
-    \State splits[i]$\leftarrow$ \Call{Split}{current,components[i]}
-  \EndFor
-\State  bestSplit$\leftarrow$\Call{Best}{splits}\label{line:splitEnd} \Comment{Record the best split.}
-\If{K>1}
-  \For{$i\in K$}\label{line:deleteBegin}\Comment{Exhaustively delete all components}
-    \State deletes[i]$\leftarrow$ \Call{Delete}{current,components[i]}
-  \EndFor
-\State  bestDelete$\leftarrow$\Call{Best}{deletes} \label{line:deleteEnd}\Comment{Record the best delete.}
-\EndIf
-  \For{$i\in K$}\label{line:MergeBegin}\Comment{Exhaustively merge all components}
-    \State j$\leftarrow$ \Call{closestComponent}{i}
-    \State merges[i]$\leftarrow$ \Call{Merge}{merges}
-  \EndFor
-\State  bestMerge$\leftarrow$\Call{Best}{merges} \label{line:MergeEnd}\Comment{Record the best merge.}
-\State bestPerturbation $\leftarrow$ \Call{Best}{bestSplit, bestDelete,bestMerge} \Comment{Select the best perturbation.}
-\State $\Delta I \leftarrow$ \Call{MessageLength}{bestPerturbation}-\Call{MessageLength}{current} \Comment{Check for improvement.}
-\If{$\Delta I < 0$}
-\State current $\leftarrow$ bestPerturbation
-\State {\bf \sc Continue}
-\EndIf
-\State {\bf \sc Break} \label{line:end}
-\EndWhile
-\State {\bf \sc output:} current
-\end{algorithmic}
-\end{algorithm}
+\subsection{Generated Datasets}
 
-The method is presented in Algorithm~\ref{alg:kasarapu}. It starts with one component and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). 
+\todo{How we generated data sets}
 
-\subsection{Dataset}
+\todo{Range of generated data sets}
 
-\alda{Andy, can you please include the details?}
+\todo{Figure: predictions for future mixtures}
+
+\todo{Figure: computational cost of various methods}
+
+\todo{Figure: corner plot showing chemical abundance data}
+
+\todo{Figure: corner plot showing chemical abundance data, coloured by their responsibility}
+
+\todo{Figures showing the concentration of chemically-identified data}
+
 \paragraph{Simulations}
 
-\paragraph{GA data}
+\paragraph{Criteria for Comparison}
 
-\subsection{Criteria for Comparison}
+\subsection{Galactic Archaeology data}
 
 \section{Results}
+
+\todo{Convergence criteria: how often do we reach the `true' solution?}
+
+\todo{What is the variance in the results of our method?}
+
+\todo{Speed comparisons}
+
+\todo{What do we find for the chemical abundance data}
+
+\todo{Recovering known star clusters that are still gravitationally bound?}
+
+\todo{Scientific insight from identifying groups in these data?}
+
+\todo{Estimate of the number of star-forming sites in the galaxy?}
+
+
+
 \section{References}
 \bibliographystyle{elsarticle-num}
 \bibliography{mmlbibliography}
@@ -1154,6 +1188,27 @@ Reproducing these results will require at least \todo{X}\,Gb of free disk space
 and \todo{Y}\,hours of compute time, mostly because of the extensive algorithm 
 comparisons performed.
 
+\subsubsection{Search Strategy Implementation}
+
+The astute reader will recognise that each search `strategy' we have described
+is implemented in the \texttt{gmmmml} codebase as a set of `policies' that govern
+different behaviour of the search:
+\begin{itemize}
+\item \emph{Initialisation}: how many mixtures should be initialised, and how?
+\item \emph{Prediction}: when should we make predictions about the message length of future mixtures, and how far ahead should we make predictions?
+\item \emph{Movement}: \emph{what} should the next $K$ be?
+\item \emph{Repartition}: \emph{how} should we move to the next $K$? Should we repartition an existing mixture, initialise a new mixture, or should we make a probabilistic decision?
+\item \emph{Convergence}: when should we stop searching?
+\end{itemize}
+
+As an example, the \emph{Message-Breaking Method} can equivalently be described
+by a set of policies that: 
+	\emph{initialise} a single mixture $K = 1$; 
+	makes no \emph{predictions};
+	\emph{moves} a single step towards the minimum message length;
+	\emph{repartitions} the closest existing mixture by splitting the component with the maximum message length; and 
+	describes \emph{convergence} at the point when the message length of the current mixture is worse than the previous mixture. 
+This policy-strategy factorisation allows for the trivial implementation of flexible search strategies with complex behaviour. We encourage the development of new search strategies.
 
 
 
