@@ -58,7 +58,8 @@ for search_strategy in search_strategies.keys():
 x_labels = ["N", "D", "K", "ND", "NK"]
 y_label = "time"
 
-fig, axes = plt.subplots(1, len(x_labels))
+L = len(x_labels)
+fig, axes = plt.subplots(1, L, figsize=(4 * L, 4))
 
 
 max_y = 0
@@ -83,13 +84,19 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         if len(x.shape) > 1:
             x = np.product(x, axis=0)
 
+        converged = data.T[result_keys.index("I")] <= data.T[result_keys.index("I_t")]
+
+
         idx = np.argsort(x)
-        x, y = x[idx], y[idx]
+        x, y, converged = x[idx], y[idx], converged[idx]
 
         max_y = max(y.max(), max_y)
         max_x = max(x.max(), max_x)
 
-        ax.scatter(x, y, label=search_strategy)
+
+        scat = ax.scatter(x[converged], y[converged], label=search_strategy)
+
+        ax.scatter(x[~converged], y[~converged], alpha=0.5, c=scat.get_facecolor())
 
     ax.loglog()
     ax.set_xlim(1e-0, upper_lim([max_x]))
@@ -101,9 +108,10 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
 for ax in axes:
     ax.set_ylim(1e-2, upper_lim([max_y]))
 
+fig.tight_layout()
 
 
-x_labels = ["N", "D", "K"]
+x_labels = ["K", "N", "D"]
 
 
 # Fit the cost.
@@ -113,9 +121,6 @@ for search_strategy, data in times.items():
     y_idx = result_keys.index(y_label)
 
     log_x = np.log(data.T[x_idx])
-
-    # Include N*D as a param.
-    log_x = np.vstack([log_x, np.product(data.T[x_idx[:2]], axis=0).reshape(1, -1)])
     log_y = np.log(data.T[y_idx])
 
     f = lambda _, *p: p @ log_x
@@ -124,8 +129,8 @@ for search_strategy, data in times.items():
     p_opt, p_cov = op.curve_fit(f, np.ones(j), log_y, p0=np.ones(i))
 
     # Plot the time relative to K
+    order_repr = "".join([f"[{x}^{p:.1f}]" for x, p in zip(x_labels, p_opt)])
 
-
-    raise a
+    print(f"{search_strategy}: O({order_repr})")
 
 raise a

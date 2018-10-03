@@ -17,8 +17,8 @@ gmm_kwds = dict(threshold=1e-5,
                 covariance_regularization=1e-10)
 
 search_strategies = OrderedDict([
+    ("KasarapuAllison2015", dict()),
     ("BayesStepper", dict()),
-    ("KasarapuAllison2015", dict())
 ])
 
 data_paths = sorted(glob("data/*.data"))
@@ -28,7 +28,7 @@ raise_if_not_converged = False
 
 # Initialise the evaluations.
 N = len(data_paths)
-ml = lambda I: np.sum(np.hstack(I.values()))
+ml = lambda I: I if isinstance(I, float) else np.sum(np.hstack(I.values()))
 
 results_path_format = "{data_path}.{search_strategy}.output"
 
