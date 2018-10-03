@@ -21,10 +21,10 @@ search_strategies = OrderedDict([
     ("KasarapuAllison2015", dict())
 ])
 
-data_paths = glob("data/*.data")
+data_paths = sorted(glob("data/*.data"))
 
 overwrite = False
-raise_if_not_converged = True
+raise_if_not_converged = False
 
 # Initialise the evaluations.
 N = len(data_paths)
@@ -76,7 +76,11 @@ for search_strategy, search_kwds in search_strategies.items():
 
             converged = (I <= I_t)
 
-            results.append((converged, I, I_t, tock - tick))
+            result = dict(K=meta["K"], N=meta["N"], D=meta["D"],
+                          converged=(I <= I_t),
+                          I=I, I_t=I_t, time=tock - tick)
+
+            results.append(result)
 
             print(converged, I, I_t, tock - tick)
 
