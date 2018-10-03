@@ -7,17 +7,10 @@ __all__ = ["GaussianMixture"]
 
 import logging
 import numpy as np
-import scipy
-from collections import (defaultdict, OrderedDict)
+from collections import OrderedDict
 from time import time
-from tqdm import tqdm
-from scipy.special import erf
-from scipy.signal import find_peaks_cwt
-from sklearn import cluster
-from sklearn.utils import check_random_state
-from sklearn.utils.extmath import row_norms
 
-from . import (mml, em, operations, strategies)
+from . import (mml, em, strategies)
 
 logger_name, *_ = __name__.split(".")
 logger = logging.getLogger(logger_name)
@@ -331,11 +324,11 @@ class GaussianMixture(object):
                 search_strategy_class = getattr(strategies, search_strategy)
 
             except AttributeError:
-                raise ValueError("unrecognised strategy: '{}'".format(strategy))
+                raise ValueError(f"unrecognised strategy: '{search_strategy}'")
 
         else:
             # Assume strategy is a strategy class.
-            search_strategy_class = strategy
+            search_strategy_class = search_strategy
 
         logger.info(f"Using search strategy '{search_strategy_class.__name__}'")
 

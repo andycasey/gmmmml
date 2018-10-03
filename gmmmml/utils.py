@@ -354,22 +354,28 @@ def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05
     phi = np.abs(np.random.normal(0, psi, size=(K, D)))
 
     I = np.eye(D)
-    covariances = np.empty((K, D, D))
+    covs = np.empty((K, D, D))
     for k, diag in enumerate(phi):
 
-        covariances[k] = I * diag
+        covs[k] = I * diag
 
         for i, j in zip(*np.tril_indices(D, -1)):
             value = rho(1) * diag[i] * diag[j]
-            covariances[k, i, j] = covariances[k, j, i] = value
+            covs[k, i, j] = covs[k, j, i] = value
 
     # Draw samples from each component to generate the data.
     members = np.round(N * weights).astype(int)
+    if members.sum() > N:
+        # Drop a few.
+        diff = members.sum() - N
+        idx = np.random.choice(np.where(members > 2)[0], diff, replace=False)
+        members[idx] -= 1
+
 
     X = np.empty((N, D))
     R = np.zeros(N, dtype=int)
 
-    for i, (m, mean, cov) in enumerate(zip(members, means, covariances)):
+    for i, (m, mean, cov) in enumerate(zip(members, means, covs)):
         si = int(np.sum(members[:i]))
         X[si:si + m] = np.random.multivariate_normal(mean, cov, size=m)[:N-si]
         R[si:si + m] = i
@@ -383,7 +389,7 @@ def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05
                 responsibilities=R, truths=dict(
                     means=means,
                     weights=weights,
-                    covariances=covariances
+                    covs=covs
                 ))
 
     return (X, meta)
