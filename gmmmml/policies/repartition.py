@@ -11,7 +11,7 @@ from .. import operations as op
 logger_name, *_ = __name__.split(".")
 logger = logging.getLogger(logger_name)
 
-
+_failed_repartition = [{None: np.inf}]
 
 
 
@@ -34,7 +34,16 @@ class IterativelyRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
 class RepartitionMixtureUsingKMeansPP(BaseRepartitionPolicy):
 
     def repartition(self, y, K, **kwargs):
-        return (K, op.kmeans_pp(y, K, **kwargs))
+
+        try:
+            result = op.kmeans_pp_and_em(y, K, **kwargs)
+
+        except ValueError:
+            logger.warn(f"Failed to repartition at K = {K}")
+            return (K, _failed_repartition)
+            
+        else:
+            return (K, result)
 
 
 class SimultaneousRepartitionFromNearestMixturePolicy(BaseRepartitionPolicy):
@@ -67,7 +76,7 @@ class GreedilyPerturbNearestMixturePolicy(BaseRepartitionPolicy):
         best_perturbations = defaultdict(lambda: [np.inf])
 
         # TODO: Prevent things gonig into _results unless we have the full dictionary of message lengths
-        ml = lambda I: I if isinstance(I, float) else np.sum(np.hstack(I.values()))
+        ml = lambda I: np.sum(np.hstack(I.values()))
 
         tqdm_format = lambda f: None if kwargs.get("quiet", False) else f
 

@@ -14,10 +14,10 @@ class BayesStepper(initialisation.DefaultInitialisationPolicy,
     pass
 
 
-class BayesJumper(initialisation.DefaultInitialisationPolicy,
+class BayesJumper(initialisation.LogarithmicInitialisationPolicy,
                   prediction.DefaultPredictionPolicy,
-                  movement.MoveTowardsMMLMixtureMovementPolicy,
-                  repartition.SimultaneousRepartitionFromNearestMixturePolicy,
+                  movement.JumpToMMLMixtureMovementPolicy,
+                  repartition.RepartitionMixtureUsingKMeansPP,
                   convergence.ConvergedWithSuccessivelyWorseIterations):
     pass
 

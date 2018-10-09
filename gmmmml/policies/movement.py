@@ -12,7 +12,7 @@ class BaseMovementPolicy(Policy):
 
 
 
-class MoveTowardsMMLMixtureMovementPolicy(BaseMovementPolicy):
+class JumpToMMLMixtureMovementPolicy(BaseMovementPolicy):
 
     def move(self, y, **kwargs):
 
@@ -43,11 +43,12 @@ class MoveTowardsMMLMixtureMovementPolicy(BaseMovementPolicy):
             K_nexts = K_nexts[np.sort(__)]
 
             for K in K_nexts:
-                if K not in self.model._state_K and K not in K_failures: break
+                if K not in self.model._state_K and K not in self.model._results \
+                and K not in K_failures: break
 
             else:
                 # No predictions!
-                logger.warn("MovementPolicy has no new places to move to."\
+                logger.warn("MovementPolicy has no new places to move to. "\
                             "Convergence may not be reached.")
                 break
 
@@ -58,7 +59,7 @@ class MoveTowardsMMLMixtureMovementPolicy(BaseMovementPolicy):
 
 
 
-class StepTowardsMMLMixtureMovementPolicy(MoveTowardsMMLMixtureMovementPolicy):
+class StepTowardsMMLMixtureMovementPolicy(JumpToMMLMixtureMovementPolicy):
 
     def move(self, y, **kwargs):
 

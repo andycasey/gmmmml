@@ -334,6 +334,7 @@ class GaussianMixture(object):
 
         strategy = search_strategy_class(self, **kwds)
         self._results = OrderedDict(strategy.initialise(y, **kwds))
+        self._num_initialisations = len(self._results)
 
         # Chose the next K to trial.
         for K in strategy.move(y, **kwds):
@@ -346,11 +347,17 @@ class GaussianMixture(object):
             # greedy repartition policies).
             self._results.update([strategy.repartition(y, K, **kwds)])
 
-            index = np.argmin(self._state_I)
+            for k, v in self._results.items():
+                try:
+                    v[-1].values()
+                except AttributeError:
+                    raise
+
+            index = np.nanargmin(self._state_I)
             K_best, I_best = (self._state_K[index], self._state_I[index])
             logger.debug(f"Best so far is K = {K_best} with I = {I_best}")
             
-        index = np.argmin(self._state_I)
+        index = np.nanargmin(self._state_I)
         K_best, I_best = (self._state_K[index], self._state_I[index])
         logger.info(f"Best mixture has K = {K_best} and I = {I_best:.0f}")
 

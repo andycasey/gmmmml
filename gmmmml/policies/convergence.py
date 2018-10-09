@@ -57,7 +57,8 @@ class ConvergedWithSuccessivelyWorseIterations(BaseConvergencePolicy):
 
         N = 5
 
-        if len(set(self.model._state_K)) < N:
+        T = len(set(self.model._state_K)) - self.model._num_initialisations
+        if T < N:
             return False
 
         ml = lambda I: I if isinstance(I, float) else np.sum(np.hstack(I.values()))
