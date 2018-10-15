@@ -13,18 +13,19 @@ from time import time
 from gmmmml import GaussianMixture
 
 gmm_kwds = dict(threshold=1e-5, 
-                max_em_iterations=1000,
+                max_em_iterations=10000,
                 covariance_regularization=1e-10)
 
 search_strategies = OrderedDict([
-    ("KasarapuAllison2015", dict()),
+    #("BayesJumper", dict()),
     ("BayesStepper", dict()),
+    ("KasarapuAllison2015", dict()),
 ])
 
-data_paths = sorted(glob("data/*.data"))
+data_paths = sorted(glob("data_2d/*.data"))
 
 overwrite = False
-raise_if_not_converged = False
+raise_if_not_converged = True
 
 # Initialise the evaluations.
 N = len(data_paths)
@@ -60,6 +61,7 @@ for search_strategy, search_kwds in search_strategies.items():
                 model.search(X, search_strategy=search_strategy, **search_kwds)
 
             except:
+                raise
                 I = np.inf
 
             else:

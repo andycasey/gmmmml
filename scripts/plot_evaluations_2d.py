@@ -15,10 +15,11 @@ from glob import glob
 
 search_strategies = OrderedDict([
     ("BayesStepper", dict()),
-    ("KasarapuAllison2015", dict())
+    ("KasarapuAllison2015", dict()),
+#    ("BayesJumper", dict())
 ])
 
-results_path_template = "data/*{search_strategy}.output"
+results_path_template = "data_2d/*{search_strategy}.output"
 
 times = dict()
 result_keys = ["K", "N", "D", "I", "I_t", "time"]
@@ -53,9 +54,9 @@ for search_strategy in search_strategies.keys():
     times[search_strategy] = np.array(times[search_strategy])
 
 
-# Plot as a function of N, D, K
+# Plot as a function of N, K
 
-x_labels = ["N", "D", "K", "ND", "NK"]
+x_labels = ["N", "K"]
 y_label = "time"
 
 L = len(x_labels)
@@ -67,11 +68,8 @@ upper_lim = lambda existing: 10**(1 + np.ceil(np.log10(np.max(existing))))
 
 for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
 
-    try:
-        x_idx = result_keys.index(x_label)
-    
-    except ValueError:
-        x_idx = np.array([result_keys.index(_) for _ in x_label])
+
+    x_idx = result_keys.index(x_label)
 
     y_idx = result_keys.index(y_label)
 
@@ -93,16 +91,44 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         max_y = max(y.max(), max_y)
         max_x = max(x.max(), max_x)
 
+        lx, ly = (np.log10(x), np.log10(y))
+        ly_err = 1e-2 * np.ones_like(ly)
+        
+        A = np.vstack((np.ones_like(lx), lx)).T
+        C = np.diag(ly_err**2)
+
+        cov = np.linalg.inv(A.T @ np.linalg.solve(C, A))
+        mu = cov @ (A.T @ np.linalg.solve(C, ly))
+
+        xi = np.array([x.min(), x.max()])
+        yi = 10**np.polyval(mu[::-1], np.log10(xi))
+
+        ax.plot(xi, yi, label=f"$\mathcal{{O}}({x_label}^{{{mu[1]:.1f}}})$")
 
         scat = ax.scatter(x[converged], y[converged], label=search_strategy)
 
         ax.scatter(x[~converged], y[~converged], alpha=0.5, c=scat.get_facecolor())
 
+        """
+        draws = np.random.multivariate_normal(mu, cov, size=100)[:, ::-1]
+
+        yi_draw = np.array([10**np.polyval(draw, np.log10(xi)) for draw in draws])
+        yi_lower, yi_upper = np.percentile(yi_draw, [16, 84], axis=0)
+
+        # project error.
+        for each in yi_draw:
+            ax.plot(xi, each, alpha=0.01, c=scat.get_facecolor()[0])
+        """
+
+        
     ax.loglog()
-    ax.set_xlim(1e-0, upper_lim([max_x]))
+
+    ax.set_xlim(0.5, upper_lim([max_x]))
+
 
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    ax.legend(frameon=False)
 
 
 for ax in axes:
@@ -110,18 +136,27 @@ for ax in axes:
 
 fig.tight_layout()
 
+raise a
 
-x_labels = ["K", "N", "D"]
+
+fit_x_labels = ["KN"]
 
 
 # Fit the cost.
 for search_strategy, data in times.items():
 
-    x_idx = np.array([result_keys.index(x_label) for x_label in x_labels])
     y_idx = result_keys.index(y_label)
+    log_y = np.log10(data.T[y_idx])
+    log_x = np.zeros((len(fit_x_labels), len(log_y)))
 
-    log_x = np.log(data.T[x_idx])
-    log_y = np.log(data.T[y_idx])
+    for i, x_label in enumerate(fit_x_labels):
+        try:
+            log_x[i] = np.log10(data.T[result_keys.index(x_label)])
+
+        except ValueError:
+            # assume product of individuals
+            x_idxs = np.array([result_keys.index(ea) for ea in x_label])
+            log_x[i] = np.sum(np.log10(data.T[x_idxs]), axis=0)
 
     f = lambda _, *p: p @ log_x
 
@@ -129,8 +164,16 @@ for search_strategy, data in times.items():
     p_opt, p_cov = op.curve_fit(f, np.ones(j), log_y, p0=np.ones(i))
 
     # Plot the time relative to K
-    order_repr = "".join([f"[{x}^{p:.1f}]" for x, p in zip(x_labels, p_opt)])
+    order_repr = "".join([f"[({x})^{p:.1f}]" for x, p in zip(fit_x_labels, p_opt)])
 
     print(f"{search_strategy}: O({order_repr})")
 
+
+"""
+for ax, x_label in zip(axes, x_labels):
+    x = data.T[x_labels.index(x_label)]
+"""
+
+
 raise a
+    

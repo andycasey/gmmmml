@@ -65,6 +65,16 @@ def kmeans_pp(y, K, random_state=None, **kwargs):
     return (means, covs, weights, responsibilities)
 
 
+def kmeans_pp_and_em(y, K, random_state=None, **kwargs):
+
+    *state, responsibilities = kmeans_pp(y, K, random_state=random_state, 
+                                         **kwargs)
+
+    state, responsibilities, ll, I = em.expectation_maximization(
+            y, *state, responsibilities=responsibilities, **kwargs)
+
+    return (state, responsibilities, ll, I)
+
 
 def split_component(y, means, covs, weights, responsibilities, index, split=2,
                     **kwargs):

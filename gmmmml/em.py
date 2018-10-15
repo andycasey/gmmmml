@@ -216,7 +216,7 @@ def expectation_maximization(y, means, covs, weights, covariance_type="full",
 
         current_I = np.sum(np.hstack(I.values()))
         diff = np.abs(prev_I - current_I)
-        if diff <= threshold:
+        if diff <= threshold or not np.isfinite(diff):
             break
 
         prev_I = current_I

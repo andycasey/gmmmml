@@ -34,7 +34,7 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
         y = np.atleast_2d(y)
         N, D = y.shape
 
-        K_inits = np.logspace(0, np.log10(N), self.K_init, dtype=int)
+        K_inits = np.logspace(0, np.log10(N/2.0), self.K_init, dtype=int)
 
         for i, K in enumerate(K_inits):
 
@@ -44,12 +44,18 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
 
             except ValueError:
                 logger.warn(f"Failed to initialise at K = {K}")
-                raise
                 break
-
 
         return None
 
 
 
 
+
+
+
+class LogarithmicInitialisationPolicy(DefaultInitialisationPolicy):
+
+    def __init__(self, model, K_init=10, **kwargs):
+        return super(DefaultInitialisationPolicy, self).__init__(model, K_init, 
+                                                                 **kwargs)

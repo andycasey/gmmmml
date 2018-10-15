@@ -17,6 +17,8 @@ class BaseConvergencePolicy(Policy):
 
 class DefaultConvergencePolicy(BaseConvergencePolicy):
     
+    num_consecutively_worse_trials = 2
+
     @property
     def converged(self):
 
@@ -32,22 +34,32 @@ class DefaultConvergencePolicy(BaseConvergencePolicy):
         _, __ = np.unique(K_all, return_index=True)
         K_unique = K_all[np.sort(__)]
 
-        prev_K, K = K_unique[-2:]
-        
-        
-        I = np.min(I_all[np.where(K_all == K)[0]])
-        prev_I = np.min(I_all[np.where(K_all == prev_K)[0]])
+        N = self.num_consecutively_worse_trials
+        prev_K_trials = K_unique[-N:]
+        best_I_trials = np.array([np.min(I_all[K_all==K]) for K in prev_K_trials])
 
-        delta = I - prev_I
-        
+
         # Stop if the current message length is more than the best from the
-        # previous mixture.
-        converged = delta > 0
+        # previous mixture(s)
+        diffs = np.diff(best_I_trials)
+        converged = np.all(diffs > 0)
 
-        logger.info(f"Convergence threshold: {I:.0f} (@ K = {K}) < {prev_I:.0f}"\
-                    f" (@ prev_K = {prev_K}) ({delta:.0f})")
+        prev_I, I = best_I_trials[-2:]
+        prev_K, K = prev_K_trials[-2:]
+        delta = diffs[-1]
+
+        logger.info(f"Convergence threshold (checked last {N} unique trials): "\
+                    f"{I:.0f} (@ K = {K}) < {prev_I:.0f}"\
+                    f" (@ prev_K = {prev_K}) ({delta:.0f}; {diffs})")
         
         return converged
+
+
+class StrictConvergencePolicy(DefaultConvergencePolicy):
+
+    num_consecutively_worse_trials = 5
+
+
 
 
 class ConvergedWithSuccessivelyWorseIterations(BaseConvergencePolicy):
@@ -57,7 +69,8 @@ class ConvergedWithSuccessivelyWorseIterations(BaseConvergencePolicy):
 
         N = 5
 
-        if len(set(self.model._state_K)) < N:
+        T = len(set(self.model._state_K)) - self.model._num_initialisations
+        if T < N:
             return False
 
         ml = lambda I: I if isinstance(I, float) else np.sum(np.hstack(I.values()))

@@ -284,7 +284,7 @@ def aggregate(x, y, function):
 
 
 def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05,
-                  random_seed=None, **kwargs):
+                  scale=1, random_seed=None, **kwargs):
     r"""
     Generate data from a mixture of multivariate Gaussian components with full
     rank covariance matrices with non-zero off-diagonal terms.
@@ -344,7 +344,7 @@ def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05
     
     # Generate means.
     #means = np.random.normal(0, 1, size=(K, D))
-    means = np.random.uniform(-1, 1, size=(K, D))
+    means = np.random.uniform(-scale, scale, size=(K, D))
 
     # Generate correlation coefficients.
     rho = lambda N=1: ((1 - np.random.uniform(-1, 1, N)**2)**(isotropy - 4)/2.) \
@@ -392,6 +392,9 @@ def generate_data(N, D, K=None, dirichlet_concentration=1, isotropy=10, psi=0.05
                     covs=covs
                 ))
 
+    # Clip crazy values.
+    limit = scale + 5 * psi
+    X = np.clip(X, -limit, limit)
     return (X, meta)
 
 
