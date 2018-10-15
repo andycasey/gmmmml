@@ -69,6 +69,7 @@
 \def\logg{\log{g}}
 
 % Have some maaaath.
+\def\transpose{^\intercal}
 \def\infinity{\rotatebox{90}{8}}
 \def\cov{C}
 \def\veccov{\vect{\cov}}
@@ -147,25 +148,25 @@ share the same chemical composition of the gas cloud that they form from.
 Stars in clusters often do not remain gravitationally bound, and disperse 
 throughout the disk of our galaxy within about $10^9\,{\rm yr}$. %citation needed.
 As a consequence, where a star is now does not reflect its formation site, 
-complicating our understanding of galaxy formation and evolution. However, the
+which complicates our understanding of galaxy formation and evolution. However, the
 observable chemical composition of a star remains largely the same throughout
 that star's lifetime, providing an immutable marker (a chemical tag, or
-`fingerprint') that carries with it information about where and when star
+`fingerprint') that carries with it information about where and when every star
 formed.
 
 
 Observations reveal that stars in surviving clusters show very little scatter
 in their chemical composition~\cite{pancino2010chemical}, and that star
 clusters can be identified solely on the basis of stellar chemical
-abundances~\cite{hogg2016kmeans}. Astronomers have precisely measured the
-chemical composition for nearly one million stars in the disk of our galaxy,
-where the natal formation site for most stars is not known~\cite{galah}.
+abundances~\cite{Hogg:2016}. Astronomers have precisely measured the
+chemical composition for hundreds of thousands of stars in the disk of our galaxy,
+where the natal formation site for most stars is not known~\cite{Buder:2018}.
 Indeed, from those data it is not known how many star formation sites we might
 expect to be able to detect, and we do not know the number of stars that we
 might to observe from each cluster (the so-called stellar mass function).
-Theoretical simulations can provide a guide to these quantities (e.g., of the
-order X star forming sites that have total masses less than Y), but the
-predictions have a large variance.
+Theoretical simulations can provide a guide to these quantities, but the
+predictions are still uncertain.
+% large variance.
 
 
 These facts conspire to produce a challenging parameter estimation and model
@@ -236,12 +237,12 @@ being accumulated by astronomers worldwide.
 \section{Related Work in Mixture Modelling}
 
 \noindent{}Mixture modelling is composed of three main parts:
-\begin{itemize}
-    \item an estimator of component parameters of a mixture,
-    \item an objective functions that scores a mixture, and 
+\begin{enumerate}
+    \item an estimator of component parameters of a mixture;
+    \item an objective functions that scores a mixture; and 
     \item a search strategy which identifies the best number of components and
           their relative weights.
-\end{itemize}
+\end{enumerate}
 
 Different criteria for estimating component parameters have been used in the 
 literature, with traditional methods using maximum likelihood estimation (MLE)
@@ -250,7 +251,7 @@ literature, with traditional methods using maximum likelihood estimation (MLE)
 These methods do not consider the complexity of the model, but only focus on
 the goodness-of-fit, and require modification to minimise the risk of
 over-fitting. In this work, we focus on the Bayesian information-theoretic 
-Minimum Message Length (MML) principle~\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a, Wallace05}.
+Minimum Message Length (MML) principle~\cite{WallaceBoulton1968, WallaceFreeman1987, WallaceDowe1999a, Wallace:2005}.
 Unlike MLE or MAP estimators, the MML principle is invariant under non-linar
 data transformations, and can seemlessly incorporate different probability
 distributions.
@@ -259,11 +260,11 @@ distributions.
 
 %have not been designed to consider the complexity of the model, but only focus on the goodness-of-fit. They have to be modified with ad-hoc principles in order to ensure that the data is not over-fitted. This is a very important property for astrophysical applications. 
 %
-% In this work, we focus on the Bayesian Minimum Message Length Principle~\cite{Wallace05}, which unlike MAP estimators, are invariant under non-linear data transformations.
+% In this work, we focus on the Bayesian Minimum Message Length Principle~\cite{Wallace:2005}, which unlike MAP estimators, are invariant under non-linear data transformations.
 %, and different from MLE, can be used with different probability distributions.  
 %
 The classically-described princple of MML is that the best explanation of the
-data is the one that leads to the shortest so-called two-part message~\cite{Wallace05}, 
+data is the one that leads to the shortest so-called two-part message~\cite{Wallace:2005}, 
 where a \textit{message} takes into account both the complexity of the model 
 and its explanatory power. The complexity of the model is described through
 the first part of the message, and the second part of the message describes
@@ -272,7 +273,7 @@ its explanatory power. The \emph{length} of each message part is quantified
 different models of varying complexity or explanatory power. MML has been 
 shown to perform well on a variety of empirical analyses (see, e.g., 
 \cite{viswanathan1999finding,fitzgibbon2004minimum}, with references to 
-further examples in \cite{Wallace05,dowe2007bayes,Dowe2008a,Dowe2011a}).
+further examples in \cite{Wallace:2005,dowe2007bayes,Dowe2008a,Dowe2011a}).
 
 
 % ARC: Not sure if this paragraph should be here...
@@ -283,7 +284,7 @@ The MML principle requires that we explicitly specify our prior beliefs on the
 model parameters, providing a Bayesian optimisation approach which can be
 applied across entire classes of models.
 
-%Unlike the rival Bayesian approach MAP, for continuous parameters MML is a statistically invariant (meaning that $1$-to-$1$ transformations of co-ordinates, such as polar $(r, \theta)$ to Cartesian $(x, y)$, leave the answer unchanged) Bayesian approach~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}. It allows the modelling of prior beliefs in the calculation of the best model parameters. If one has a particular reason to expect one value rather than another, a prior probability can be chosen to represent that belief. Of course, we can also model the data as objectively as Bayesianism permits. 
+%Unlike the rival Bayesian approach MAP, for continuous parameters MML is a statistically invariant (meaning that $1$-to-$1$ transformations of co-ordinates, such as polar $(r, \theta)$ to Cartesian $(x, y)$, leave the answer unchanged) Bayesian approach~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace:2005,dowe2007bayes}. It allows the modelling of prior beliefs in the calculation of the best model parameters. If one has a particular reason to expect one value rather than another, a prior probability can be chosen to represent that belief. Of course, we can also model the data as objectively as Bayesianism permits. 
 
 Two other well-known methods based on information theory are the Akaike 
 Information Criterion (AIC)~\cite{akaike1974} and Bayesian Information Criterion
@@ -336,7 +337,7 @@ WallaceDowe1997a, WallaceDowe2000, oliver1996unsupervised,roberts1998bayesian,
 biernacki2000assessing}. The search method proposed by Figueiredo and Jain
 ~\cite{figueiredo2002unsupervised}, on the other hand, starts with a large 
 number of components, and iteratively deletes components. A mirror extension 
-of this method was proposed by Kasarapu and Allison~\cite{kasarapu2015minimum}, 
+of this method was proposed by Kasarapu and Allison~\cite{Kasarapu|Allison:2015}, 
 which starts with one components, and selectively splits, deletes, or merges 
 components in an attempt to minimise the message length. While this method 
 removes the overhead introduced by the search algorithm of Figueiredo and Jain
@@ -359,7 +360,7 @@ explorations of new local optima.
 % these two papers above are MML survey pieces
 
 %Things that could also be added include
-%ConwaySloane1988
+%!TEX encoding = UTF-8 UnicodeConwaySloane1988
 % the above is a book on lattices and lattice constants
 %EdwardsDowe1998
 % this was (and still is) a work on single latent factors in mixture modelling with application to astro' data
@@ -371,7 +372,7 @@ explorations of new local optima.
 A complex model is not an optimal one, unless its complexity is justifiable by 
 the added explanatory power. There is an established connection between 
 simplicity and truth, as beautifully elucidated by the Occam's Razor principle. 
-MML is a statistical technique that formalizes and quantifies this principle.
+MML is a statistical technique that attempts to formalize and quantify this principle.
 
 %The basic idea is to consider the transmission of a set of data and a model that describes it. Clearly one can make increasingly complex models to obtain better fits -- think of epicycles in the solar system. Suppose we try to best represent N data points. 
 
@@ -379,13 +380,13 @@ MML is a statistical technique that formalizes and quantifies this principle.
 
 %Over-fitting can result in a model that may be far from the truth. MML will only consider a more complex model if the encoding of the complex model and the data is more efficient  than the less complex model, i.e. it finds the minimum message length needed to transmit the data and the model. It is this \textit{true} model that MML aims to find.
 
-%The MML principle states that the best explanation of the data is the one that leads to the shortest message~\cite{Wallace05}, 
+%The MML principle states that the best explanation of the data is the one that leads to the shortest message~\cite{Wallace:2005}, 
 %where a \textit{message} takes into account both the complexity of the model, and its explanatory power. 
 
 %In essence, MML infers the most concise way of encoding the model, $\theta$, and the data, $x$, given the model, $x|\theta$. A complex model will produce a longer first part of the message than a simple model, since more quantities must be stated. On the other hand, the length of the second part of the message decreases with more accurate and complex models, since less data has to be described fully.
 
 The \textit{message} must encode two parts: the model, and the data given the
-model. The encoding of the message is based on Shannon's information theory~\cite{shannon}. 
+model. The encoding of the message is based on Shannon's information theory~\cite{Shannon:1948}. 
 The information gained from an event $e$ occurring, where $p(e)$ is the
 probability of that event, is $I(e) = -\log_{2}{p(e)}$. The information content
 is largest for improbable outcomes, and smallest for outcomes that we are 
@@ -398,7 +399,7 @@ whereas rarer events convey a much higher information content.
 %%%% This section below looks like a variant of a lift-out from the ARC DP16 grant proposal.
 %%%% One problem with the presented text is that 4 does not equal 6.
 %%%% Mightn't it be easier to talk about Morse Code?
-%%%% In certain parts of the astronomy literature, such an example (when tidied up) might be suitable, but I think that - in the AI Journal - such an example needs to be no longer than short. I think that, here, all we need to do is mention Morse code and (e.g.) the Huffman code example from \cite[sec. 2.1.4]{Wallace05}.
+%%%% In certain parts of the astronomy literature, such an example (when tidied up) might be suitable, but I think that - in the AI Journal - such an example needs to be no longer than short. I think that, here, all we need to do is mention Morse code and (e.g.) the Huffman code example from \cite[sec. 2.1.4]{Wallace:2005}.
 % Consider the simplified illustrative example of rolling an unbiased four-sided die (d4), where each of the four outcomes $(1,2,3,4,5,6)$ have equal probability $p_i=0.25$. The information content in each datum is $- \log_2 0.25 = 2$. In total $\sum_{i=1}^4-\log_2 (p_i) = 2 + 2 + 2 + 2 = 8$ bits are required to describe the four outcomes. The model description could be $\{00,01,10,11\}$:~this is the first part of the message. 
 
 % Now assume that the die is biased, with probabilities $p(1)=0.5, p(2)=0.25, p(3)=0.125$, and $p(4)=0.125$. In this case, the number of bits required to represent each alternative is different. One bit is required for 1, since $-\log_2 0.5 = 1$, and the codeword could be the single binary value 1. Similarly, 2 bits are required for the outcome 2, which can be represented with codeword $01$. It follows that possible codewords for the remaining alternatives, all using the bit ``1'' to indicate the end of each datum, are $001$ for 3, $0001$ for 4, $00001$ for 5, and $000001$ for six. 
@@ -435,7 +436,7 @@ because both terms
 and 
     $\log_{2} f(\vec{\data}|\vec{\theta})$ 
 here correspond to probabilities, but with the benefit of statistical 
-invariance under re-parameterisation (e.g., ~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace05,dowe2007bayes}).
+invariance under re-parameterisation (e.g., ~\cite{WallaceFreeman1987,WallaceDowe1999a,Wallace:2005,dowe2007bayes}).
 
 
 \subsection{Component message lengths}
@@ -452,7 +453,7 @@ specifically encode:
     \item[\textbf{(1)}] \textbf{The model}
     \item[\textbf{a.}]  The number of mixture components (or groups) $K$.
     \item[\textbf{b.}]  The relative weight $w_k$ (or contribution, or mixing 
-                        proportion) of the amount(s) of data in each group. 
+                        proportion) of the amount(s) of data in each group.\footnote{In practice only $K - 1$ weights must be encoded because $\sum\weight_k = 1$.}
 
 %    The relative abundances (or relative weights or mixing proportions) of the amount(s) of data in each group.
 
@@ -484,7 +485,7 @@ specifically encode:
 %To a first approximation, this would appear to be
 %$ \min_{k} -\log (p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) \rm{,}$
 %minimising (over cluster indices $k$) $ -\log (p_k(x)) $ (which is the cost of encoding the particular cluster, $k$) plus the negative log-likelihood given cluster $k$'s parameters.
-%However, as per \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}\cite[sec. 6.8]{Wallace05}, the cost can be reduced to
+%However, as per \cite{WallaceDowe1994b,WallaceDowe1997a,WallaceDowe2000}\cite[sec. 6.8]{Wallace:2005}, the cost can be reduced to
 %$ -\log ( \Sigma_{k=1}^{K} p_k(x) ~ \frac{1}{\sqrt{2 \pi} \sigma_k} ~ e^{-\frac{(x-\mu_k)^2}{2\sigma_k^2}}) $
 \end{itemize}
 
@@ -508,12 +509,12 @@ in the model,
 \begin{eqnarray}
 	Q = \frac{KD(D+3)}{2} + K - 1 \quad ,
 \end{eqnarray}
-\noindent{}$\kappa(Q)$ is a function to approximate the lattice quantisation
-constant for $Q$ free parameters\cite{ConwaySloane1984}, and $|\fisher{\vec{\theta}}|$
+\noindent{}and $\kappa(Q)$ is a function to approximate the lattice quantisation
+constant for $Q$ free parameters\cite{Conway|Sloane:1984}, and $|\fisher{\vec{\theta}}|$
 is the determinant of the \emph{expected} Fisher information matrix (the second
 order partial derivatives of the negative log-likelihood function $-\log\likelihood\left(\vec{\data}|\vec{\theta}\right)$).
-A common that arises after listing the components above is that although we
-have expliticly encoded the model parameters, we have not encoded `the model'
+A common issue that arises after listing the components above is that although we
+have explicitly encoded the model parameters, we have not encoded `the model'
 in the sense that we have not described how these encoded parameters relate 
 to each other. In a sense, we do not describe to the receiver that these
 encoded parameters refer to a mixture of Gaussians, or what we mean when we
@@ -539,8 +540,103 @@ The total message length $I(\vec{\data}|\vec{\psi}, N, D)$ to model some $N \tim
 
 \subsection{Expectation-Maximization}
 
-\todo{Derivations and updates to the mixture parameters through E-M}
+Given a mixture model with $K$ components, we iteratively update the model parameters $\vec\theta$
+by expectation-maximization \cite{dempster1977maximum}. In the expectation step we calculate the partial memberships of the  data
+to each component, as specified by  the responsibility matrix
+\begin{eqnarray}
+	\mathcal{R}_{nk} = \frac{\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}{\sum_{k=1}^{K}\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}
+\end{eqnarray}
 
+\noindent{}where $\mathcal{R}_{nk}$ represents the fractional assignment of the $n$th data point to the
+$k$th component.  At the maximization step we update our estimates of the mixture parameters to minimize
+the total message length (Equation \ref{eq:objective_function}). The updated estimates for the relative
+weights are obtained by differentiating Equation \ref{eq:objective_function} with respect to $\weight_k$ under the constraint $\sum\weight_k = 1$ (see \cite{Kasarapu|Allison:2015} for derivation) such that:
+\begin{equation}
+	\weight_k^{(t+1)} = \frac{2n_k^{(t)} + 1}{2N + K}
+\end{equation}
+\noindent{}where $n_k$ is the effective membership for the $k$th component
+\begin{equation}
+	n_k = \sum_{i=1}^{N} \mathcal{R}_{nk} \quad .
+\end{equation}
+
+\noindent{}The updates of the mean and covariance matrix are given by:
+\begin{eqnarray}
+\vecmean_k^{(t+1)} &=& \frac{1}{n_k^{(t)}}\sum_{i=1}^{N}\mathcal{R}_{nk}^{(t)}\vecmean_k \\
+\veccov_k^{(t+1)} &=& \frac{1}{n_k^{(t)} - 1}\sum_{i=1}^{N}\mathcal{R}_{nk}^{(t)}\left(\vec\data_i - \vecmean_k^{(t+1)}\right)\left(\vec\data_i - \vecmean_k^{(t+1)}\right)\transpose \quad .
+\end{eqnarray}
+
+Throughout this work we consider the mixture to be converged when the change in message length
+is less than $10^{-5}$ nats.
+
+
+\subsection{Predicting the message length of future mixtures}
+
+The objective function in Equation \ref{eq:objective_function} is valid for a class of 
+Gaussian mixture models,  and the EM updates that act to minimize Equation \ref{eq:objective_function} are valid for a mixture with a given number of $K$ components. However, we require a search strategy to minimise Equation \ref{eq:objective_function} across all possible numbers of components. Existing search strategies will greedily  seek to trial different numbers of components. Here we describe methods to predict the minimum message length of a future (untrialled) mixture, which help to guide our search strategies (Section \ref{sec:search}). We separately describe the predictions for different items in Equation \ref{eq:objective_function}:
+\begin{enumerate}
+	\item predicting the sum of the log of the weights;
+	\item predicting the negative log-likelihood; and
+	\item predicting the sum of the log of the determinant of the covariance matrices.
+\end{enumerate}
+
+These items directly contribute to Equation \ref{eq:objective_function}, and their values are not known before trialling a mixture. All other contributions to Equation \ref{eq:objective_function} can be calculated directly given $K$, $N$, and $D$.
+
+\subsubsection{Predicting $\sum\log\weight_k$}	
+
+We consider the two extremes of $\sum\log\weight_k$ for a mixture of $K$ components:
+\begin{enumerate}
+    \item The weights are distributed uniformly such that $w_k = 1/K$ and
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = \sum_{k=1}^{K}\log{\frac{1}{K}} =-K\log{K} \quad .
+          \end{equation}
+    \item The weights are distributed such that $K - 1$ components each 
+          describe just two data points $w_{2..K} = 2/N$, and the remaining 
+          component describes all other data points $w_{1} = 1 - 2(K-1)/N$
+          as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = 2(K-1)\log\frac{2}{N} 
+                		    + \log\left(1 - \frac{2(K - 1)}{N}\right)
+		    \label{eq:slw_uniform}
+          \end{equation}
+
+          \noindent{}and by making use of logarithmic identities:
+          %  $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$:
+          \begin{equation}
+                \sum_{k=1}^{K}\log\weight_k = 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \quad . \label{eq:slw_nonuniform}
+          \end{equation}
+          %\begin{equation}
+          %      \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
+          %\end{equation}
+\end{enumerate}
+
+\noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
+derived the bounds
+%\begin{eqnarray}
+%\sum_{k=1}^{K}\log\weight_k & \geq & -K\log{K} \nonumber \\
+%\sum_{k=1}^{K}\log\weight_k & \leq & 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \nonumber
+%\end{eqnarray}
+\begin{equation}
+-K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
+\end{equation}
+\noindent{}which  describe the smallest and largest contribution that the weights can contribute to the message length for any untrialled mixture with $K$ components. When making predictions for future mixtures, we record the optimal weights for each trialled mixture and calculate a \emph{uniformity fraction} $f_u \in [0, 1]$
+that describes the uniformity of the mixture from Equation \ref{eq:slw_nonuniform} ($f_u = 0$) to Equation \ref{eq:slw_uniform} ($f_u = 1$). We use estimates of $f_u$ from previously trialled mixtures to make predictions for future, untrialled mixtures.
+
+\subsubsection{Predicting $-\log{\mathcal{L}(\data|\vectheta)}$}
+
+
+\subsubsection{Predicting $\sum\log|\veccov_k|$}
+
+\subsubsection{Combining the predictions}
+
+
+% TODO: Predicting the negative log-likelihood.
+
+% TODO: Predicting the sum of the log of the determinant of the covariance matrices.
+
+% Combining it together.
+
+
+\begin{comment}
 \subsection{Theoretical lower bounds on the message length of future mixtures}
 
 Knowing how some of the model parameters are distributed allows us to derive theoretical
@@ -561,22 +657,7 @@ parameters. Some upper limit likely exists for $\sum\log|\cov_k|$, but that limi
 
 Empirically we found that when the dimensionality of the data $D$ is small, these theoretical limits can efficiently describe a lower bound to the message length for any given Gaussian mixture of $K$ components. This allows, in some situations, to efficiently place a useful upper limit on the maximum number of components $K$, $K_{max}$ (useful in that $K_{max} << N$). 
 
-\subsection{Predicting the message length of future mixtures}
-
-The objective function in Equation \ref{eq:objective_function} remains valid across a class of 
-Gaussian mixture models where $N > K$. However, we still require a strategy to minimise this
-objective function over all possible mixture parameters $\vec{\psi}$. Here we describe methods to predict
-the \emph{minimum} message length of future (untrialled) mixtures, which we will then use in conjunction 
-with search strategies (Section \ref{sec:search}).
-
-% TODO: Predicting the sum of the log of the weights.
-
-% TODO: Predicting the negative log-likelihood.
-
-% TODO: Predicting the sum of the log of the determinant of the covariance matrices.
-
-% Combining it together.
-
+\end{comment}
 
 
 \section{Search Strategies} \label{sec:search}
@@ -586,10 +667,10 @@ We introduce and evaluate two search strategies that make use of the objective f
 
 \subsection{Benchmark Method}
 
-We use the search algorithm proposed \citep{kasarapu2015minimum} as a benchmark for comparison. The method is presented in Algorithm \ref{alg:kasarapu}. It starts with a single component mixture and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). This is a greedy approach, which is advantageous in that it is guaranteed to only accept perturbations that minimise the message length, but that guarantee comes with a computational cost. 
+We use the search algorithm proposed \citep{Kasarapu|Allison:2015} as a benchmark for comparison. The method is presented in Algorithm \ref{alg:kasarapu}. It starts with a single component mixture and iteratively splits (lines \ref{line:splitBegin}-\ref{line:splitEnd}), deletes (lines \ref{line:deleteBegin}-\ref{line:deleteEnd}), and merges (lines \ref{line:MergeBegin}-\ref{line:MergeEnd}) components until no improvements in the message length is observed (line~\ref{line:end}). This is a greedy approach, which is advantageous in that it is guaranteed to only accept perturbations that minimise the message length, but that guarantee comes with a computational cost. 
 % in what sense has this been shown?
 \begin{algorithm}[H]
-\caption{The benchmark method~\cite{kasarapu2015minimum}.}
+\caption{The benchmark method~\cite{Kasarapu|Allison:2015}.}
 \label{alg:kasarapu}
 {\bf Input:} $\vec\data$ \\
 {\bf Output:} $\vec\psi$
@@ -633,11 +714,11 @@ the total message length no longer improves (Algorithm~\ref{alg:MBM}). This appr
 
 
 We evaluate the message length of each component by rearranging Equation \ref{eq:objective_function} and multiplying the negative log-likelihood
-$-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility matrix $\mathcal{R}$ that has entries
-\begin{eqnarray}
-	\mathcal{R}_{nk} = \frac{\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}{\sum_{k=1}^{K}\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}
-\end{eqnarray}
-\noindent{}such that the message length of the $k$th component is
+$-\log{\mathcal{L}}(\vec\data|\vectheta)$ by the $N \times K$ responsibility matrix $\mathcal{R}$ 
+%\begin{eqnarray}
+%	\mathcal{R}_{nk} = \frac{\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}{\sum_{k=1}^{K}\weight_{k}f(\vec\data_n|\vecmean_k,\veccov_k)}
+%\end{eqnarray}
+such that the message length of the $k$th component is
 \begin{eqnarray}
 	I_k &=& -\sum_{n=1}^{N}\mathcal{R}_{nk}\log{\weight_{k}f(\data_{n}|\vecmean_k,\veccov_k)} -\frac{(D + 2)}{2}\log{|\cov_k|} \nonumber \\
 		&& \cdots\ + \left(\frac{D(D+3)}{4}-\frac{1}{2}\right)\log{\weight_k} + \left(1 - \frac{D}{2}\right)\log{2} \nonumber \\
@@ -653,14 +734,15 @@ expectation step of the expectation-maximisation algorithm, adding negligible co
 
 When splitting the component with the largest message length, we split this component into two child components. Initially we 
 set the means of the child mixtures as positive and negative eigenvalues along the principal
-eigenvector of the component covariance matrix. A matrix of child responsibilities is then
+eigenvector of the component covariance matrix \citep{Kasarapu|Allison:2015}.
+A matrix of child responsibilities is then
 calculated based on the Euclidean distance between each datum and the child means (i.e., hard
 association), which we use to estimate the covariance matrices and weights of the child
 components. After the parameters of the child components are initialised, we run \emph{partial}
 expectation-maximization to iteratively update the parameter estimates of the child components. 
 By \emph{partial} expectation-maximization we refer to the process of keeping the parameters of
 all other components fixed, and only updating the estimates of the parameters of the child
-components \citep{kasarapu2015minimum}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
+components \citep{Kasarapu|Allison:2015}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
 
 \andy{Should we move/remove the following paragraph?}
 One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. However, as we show in Section \ref{sec:results}, this hypothetical situation was not observed in any of the $\todo{5000}$ generated datasets.
@@ -817,7 +899,7 @@ full objective function.
 \subsubsection{The number of mixture components (or groups) $K$}
 
 We assume a prior on the number of components $K$ of $\prior{K} \propto 2^{-K}$
-\cite[][p279, sec. 6.8.2]{Wallace05} such that the length of the 
+\cite[][p279, sec. 6.8.2]{Wallace:2005} such that the length of the 
 optimal lossless message to encode $K$ is 
 \begin{equation}
     I(K) = -\log{\prior{K}} = K\log{2} + \textrm{constant} \quad .
@@ -859,7 +941,7 @@ I(\vec{w}) &=& -\log{(K - 1)!} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N
 I(\vec{w}) &=& -\log{\Gamma(K)} + \frac{K}{2}\log{\kappa_K} + \frac{K-1}{2}\log{N} - \frac{1}{2}\sum_{k=1}^{K}\log{\weight_k}
 \end{eqnarray}
 \noindent{}where $\kappa_K$ is a lattice constant that varies between $1/12$
-and $1/(2\pi e)$ \cite{BoultonWallace1969}.
+and $1/(2\pi e)$ \cite{Boulton|Wallace:1969}.
 
 
 
@@ -889,7 +971,7 @@ this prior proper by assuming the bounds on $\prior{\vecmean}$ are very large, b
 we do so without actually specifying the value of the bounds because they add 
 only a constant value to the total message length.
 We adopt a conjugate inverted Wishart prior for the covariance matrix of an
-individual mixture \cite[Section 5.2.3 of][]{Schafer_1997}:
+individual mixture \cite[Section 5.2.3 of][]{Knorr-Held:2000}:
 
 \begin{equation}
   \prior{{\vecmean_k, \veccov_k}} \propto |\veccov_k|^{\frac{D+1}{2}} \quad .
@@ -905,14 +987,14 @@ of the Fisher information is non-trivial to evaluate, and as such we
 approximate the determinant of the Fisher information
  $\detfisher{{\vecmean_k, \veccov_k}}$ 
 as the product of $\detfisher{\vecmean_k}$ and $\detfisher{\veccov_k}$ 
-\cite{Oliver_1996,Roberts_1998}. In order to derive $\detfisher{\vecmean_k}$
+\cite{oliver1996unsupervised,roberts1998bayesian}. In order to derive $\detfisher{\vecmean_k}$
 we take the second derivative of the log-likelihood function 
 $\likelihood(\data|\vectheta)$, which yields:
 \begin{equation}
   \detfisher{\vecmean_k} = (N\weight_k)^{D}|\veccov_k|^{-1} \quad .
 \end{equation}
 We make use of an analytical expression for $\detfisher{\veccov_k}$
-\cite{Dwyer_1967,Magnus_1988}:
+\cite{Dwyer:1967,Magnus|Neudecker:1988}:
 \begin{equation}
   \detfisher{\veccov_k} = (N\weight_k)^\frac{D(D+1)}{2}2^{-D}|\veccov_k|^{-(D+1)} \quad .
 \end{equation}
@@ -965,7 +1047,7 @@ parameters are quantised into intervals in high dimensional space in order to
 be losslessly encoded.  We use an approximation of the lattice constant
 \citep[see Sections 5.1.12 and 3.3.4 of ]
 %[]
-{Wallace_2005} such that,
+{Wallace:2005} such that,
 \begin{equation}
   \log\kappa(Q) = \frac{\log{Q\pi}}{Q} - \log{2\pi} - 1 \quad ,
 \end{equation}
