@@ -11,15 +11,15 @@ from astropy.table import Table
 
 from gmmmml import GaussianMixture
 
-gmm_kwds = dict(threshold=1, 
-                max_em_iterations=100,
+gmm_kwds = dict(threshold=1e-3, 
+                max_em_iterations=10000,
                 covariance_regularization=1e-10)
-search_kwds = dict(search_strategy="BayesStepper")
+search_kwds = dict(search_strategy="StrictBayesStepper")
 
 apogee_input_path = "../ct/catalogs/tc-apogee-dr12-regularized-release.fits"
 
 overwrite = False
-output_path = "apogee-results.pkl"
+output_path = "apogee-results-strict.test.pkl"
 
 if os.path.exists(output_path) and not overwrite:
     raise IOError(f"output path '{output_path}' exists and not overwriting")
@@ -45,7 +45,7 @@ result = dict(gmm_kwds=gmm_kwds, search_kwds=search_kwds, time_taken=tock - tick
               message_lengths=model.message_lengths_,
               meta=model.meta_)
 
-with open(output_path, "rb") as fp:
+with open(output_path, "wb") as fp:
     pickle.dump(result, fp)
 
 print(f"Search {search_kwds} found K = {model.weights_.size}")
