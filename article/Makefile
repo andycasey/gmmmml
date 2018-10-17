@@ -14,6 +14,7 @@ vc.tex: ../.git/logs/HEAD
 	mv vc_safe.tex vc.tex
 
 %.pdf: %.tex vc.tex
+	${LATEX} $<
 	${BIBTEX} ms.aux 
 	${LATEX} $<
 	${LATEX} $<
