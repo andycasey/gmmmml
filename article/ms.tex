@@ -136,11 +136,9 @@ The contributions of this paper are:
 \item Solving the galactic archaeology (GA) problem using mixture modelling
 % bear in mind or don't forget that GA will mean `genetic algorithms' to many readers
 \item Minimum Message Length (MML) formulation
-\item 2 search methods
+\item $\mathcal{O}\left(K\right)$ search methods for gaussian mixture  modelling
 \end{itemize}
 \section{Galactic Archaeology}
-% "Galaxy produces ‘molecular forests’"
-% https://CosmosMagazine.com/space/galaxy-produces-molecular-forests
 Galactic Archaeology~\cite{freeman2002new} aims at reconstructing the history 
 of our galaxy by identifying ancient star formation events. Most stars are 
 born in clusters (of order $10^0$ to $10^6$ stars at a time), and all approximately
@@ -708,9 +706,10 @@ We use the search algorithm proposed \citep{Kasarapu|Allison:2015} as a benchmar
 
 
 \subsection{The Message-Breaking Method} \label{sec:mbm}
-The simplest strategy we introduce here, \emph{The Message-Breaking Method}, does not use any predictions of the message length of future mixtures. Instead it starts from 
+The simplest strategy we introduce here, \emph{The Message-Breaking Method}, 
+is a direct improvement upon the Benchmark Method that does not use predictions of the message length of future mixtures. Instead the algorithm begins with 
 a $K=1$ mixture and iteratively splits the component with the largest message length until 
-the total message length no longer improves (Algorithm~\ref{alg:MBM}). This approach is related to the benchmark method in that we iteratively move from a $K=1$ mixture, but we only split components (instead of splitting, merging, and deleting all components). Similarly, in \emph{The Message-Breaking Method} we only split the component with the largest message length instead of exhaustively trying to split all components at every mixture.
+the total message length no longer improves (Algorithm~\ref{alg:MBM}). This approach is related to the benchmark method in that we iteratively move from a $K=1$ mixture, but we only split the component with the largest message length instead of splitting, merging, and deleting all components (and running EM at each operation).
 
 
 We evaluate the message length of each component by rearranging Equation \ref{eq:objective_function} and multiplying the negative log-likelihood
@@ -732,20 +731,6 @@ such that the message length of the $k$th component is
 The component-wise calculation of the message length is performed as part of the 
 expectation step of the expectation-maximisation algorithm, adding negligible computational overhead to the algorithm.
 
-When splitting the component with the largest message length, we split this component into two child components. Initially we 
-set the means of the child mixtures as positive and negative eigenvalues along the principal
-eigenvector of the component covariance matrix \citep{Kasarapu|Allison:2015}.
-A matrix of child responsibilities is then
-calculated based on the Euclidean distance between each datum and the child means (i.e., hard
-association), which we use to estimate the covariance matrices and weights of the child
-components. After the parameters of the child components are initialised, we run \emph{partial}
-expectation-maximization to iteratively update the parameter estimates of the child components. 
-By \emph{partial} expectation-maximization we refer to the process of keeping the parameters of
-all other components fixed, and only updating the estimates of the parameters of the child
-components \citep{Kasarapu|Allison:2015}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
-
-\andy{Should we move/remove the following paragraph?}
-One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. However, as we show in Section \ref{sec:results}, this hypothetical situation was not observed in any of the $\todo{5000}$ generated datasets.
 
 \begin{algorithm}[H]
 \caption{The Message-Breaking Method.}
@@ -769,9 +754,25 @@ One advantage to the Message-Breaking Method is that the total number of E-M ste
 \end{algorithm}
 
 
-\subsection{Component-Jumping Method}
+When splitting the component with the largest message length, we split this component into two child components. Initially we 
+set the means of the child mixtures as positive and negative eigenvalues along the principal
+eigenvector of the component covariance matrix \citep{Kasarapu|Allison:2015}.
+A matrix of child responsibilities is then
+calculated based on the Euclidean distance between each datum and the child means (i.e., hard
+association), which we use to estimate the covariance matrices and weights of the child
+components. After the parameters of the child components are initialised, we run \emph{partial}
+expectation-maximization to iteratively update the parameter estimates of the child components. 
+By \emph{partial} expectation-maximization we refer to the process of keeping the parameters of
+all other components fixed, and only updating the estimates of the parameters of the child
+components \citep{Kasarapu|Allison:2015}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
 
-The \emph{Component-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of model evaluations.
+One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. In the code implementation that we release with this work, we have implemented a \emph{Strict Message-Breaking Method} variant that allows the user to specify the number of successive $K$ trials that increased the message length, before adopting the mixture with the shortest message length. By default the Strict Message-Breaking Method requires five successive mixtures where the message length did not improve.
+
+
+
+\subsection{Message-Jumping Method}
+
+The \emph{Message-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of model evaluations.
 
 \todo{initialisation, how kmeans++ breaks when too big unless covariance regularisation\\}
 
@@ -840,20 +841,33 @@ The \emph{Component-Jumping Method} seeks to find the mixture parameters $\vec\p
 
 \section{Experimental Design}
 
-To evaluate the proposed search algorithms, we conduct a set of experiments on synthetic and real datasets. As the output of the algorithms depends on the starting seed, and some of the methods can be affected by randomness, we perform 50 runs for each search scheme and dataset. 
-
-\andy{The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.}
-
+To evaluate the proposed search algorithms, we conduct a set of experiments on synthetic and real datasets. 
 
 \subsection{Generated Datasets}
 
-\todo{How we generated data sets}
+We set the data dimensionality $D = 2$ after previous experiments found that the data dimensionality had only a small effect on the differential cost on the search strategies tested. We chose $N$ to vary uniformly in log space from $N = 10$ data points to $N = 10^{4.5}$. For each $N$ we set $K = N/10$, and then used these values of $N$, $D$, and $K$ to generate a synthetic dataset. The weights for each mixture were drawn from a Dirichlet distribution with concentration $\alpha = 100$ while ensuring that $\weight_k \in \left(\frac{2}{N}, 1-\frac{2(K-1)}{N}\right)$. The means for each component were drawn from $\mathcal{U}\left(-10, +10\right)$. The correlation coefficients  for the component covariance matrices were drawn from
+\begin{equation}
+	\rho \sim \frac{\left[1-\mathcal{U}(-1, +1)^2\right]^{\frac{1}{2}(s - 4)}}{\mathcal{B}\left(\frac{1}{2}, \frac{1}{2}(s - 4)\right)}
+\end{equation}
+\noindent{}where $s$ is an isotropy hyperparameter that describes the probability of correlations between data dimensions, which we fix as $s=100$. The diagonal variances for the component covariance matrices were drawn from $|\mathcal{N}\left(0, 0.1\right)|$. Given these randomly drawn parameters we generated $N\weight_k$ members for each component, rounding as necessary to ensure the total number of generated data points is kept at $N$.
 
-\todo{Range of generated data sets}
+We evaluated the following methods on all generated datasets: the benchmark method (Algorithm \ref{alg:kasarapu}), the Message-Breaking Method (Algorithm \ref{alg:MBM}), and \todo{X}. The cost (in seconds) is shown as a function of the number of data points $N$ and true number of clusters $K$ in Figure \ref{fig:algorithm_costs}.
+\todo{Cost is approximately linear for MBM, but of O(3) for kasarpu. Not surprising because Kasarapu is a greedy search method, requiring at least 3*K operations (split, merge, delete) at each mixture.}
 
-\todo{Figure: predictions for future mixtures}
+We considered the search algorithm to be converged to the global minima if the calculated message length is shorter than the message length given the true mixture parameters. \todo{Something about when converged and not}
 
-\todo{Figure: computational cost of various methods}
+\todo{Figure: predictions for future mixtures for one generated data set}
+
+
+
+\andy{As the output of the algorithms depends on the starting seed, and some of the methods can be affected by randomness, we perform 50 runs for each search scheme and dataset.  The different search schemes are validated using the Kolmogorov-Smirnov (KS) non-parametric test~\citep{Pettitt77S}, which checks for a statistical significance in the difference between the performances of the algorithms. The 50 runs are submitted to the KS analysis with a null hypothesis of no difference between the performances of the different search methods.}
+
+
+\subsection{Galactic Archaeology data}
+
+\todo{describe APOGEE data}
+
+
 
 \todo{Figure: corner plot showing chemical abundance data}
 
@@ -1068,63 +1082,15 @@ parameters is
 Combining the expressions for the message length (or information content) of
 each component, we arrive at our objective function $I$ to minimise across 
 all model parameters (including the number of mixtures, $K$):
+\begin{eqnarray}
+	I(\vec{\data}|\vec{\psi}, N, D) &=& -\log\mathcal{L}\left(\vec{\data}|\vectheta\right) - \frac{(D + 2)}{2}\sum_{k=1}^{K}\log{|{\cov}_k|} \nonumber \\
+	&& \cdots\ + \left(\frac{D(D+3)}{4} - \frac{1}{2}\right)\sum_{k=1}^{K}\log{\weight_k} + K\left(1-\frac{D}{2}\right)\log{2} \nonumber \\ && \cdots\ + \log\Gamma{(K)} + \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \frac{Q}{2}\log{N} \,\,\,\, . 
+	\label{eq:objective_function}
+\end{eqnarray}
 
-\begin{equation}
-\todo{I = 0}
-\end{equation}
 
 
 \section{Bounds on components of the message length}
-
-
-In Eq. \ref{eq:I1} it can be seen that for any finite mixture, $I_1$ can be
-almost directly computed just from knowing the number of mixture components
-$K$ and the properties of the data: the number of data points $N$ and its
-dimensionality $D$. The only ambiguous term is $\sum_{k=1}^{K}\log\weight_k$,
-which will depend on the data. However, for any finite mixture of $K$
-components we can consider the two extremes of $\sum_{k=1}^{K}\log\weight_k$:
-
-\begin{enumerate}
-    \item The weights are distributed uniformly such that $w_k = 1/K$ and
-          \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = \sum_{k=1}^{K}\log{\frac{1}{K}} =-K\log{K} \quad .
-          \end{equation}
-    \item The weights are distributed such that $K - 1$ components each 
-          describe just two data points $w_{1..K-1} = 2/N$, and the remaining 
-          component describes all other data points $w_{K} = 1 - 2(K-1)/N$
-          as $\sum_{k=1}^{K}\weight_k = 1$. At this extreme,
-          %\begin{equation}
-          %      \sum_{k=1}^{K}\log\weight_k = (K-1)\log\frac{1}{N} + \log\left(1 - \frac{K - 1}{N}\right)
-          %\end{equation}
-          \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = 2(K-1)\log\frac{2}{N} 
-                		    + \log\left(1 - \frac{2(K - 1)}{N}\right)
-          \end{equation}
-
-          \noindent{}and by making use of the identity 
-            $\log{(a-b)} = \log{a} + \log{(1 - \frac{b}{a})}$:
-          \begin{equation}
-                \sum_{k=1}^{K}\log\weight_k = 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \quad .
-          \end{equation}
-          %\begin{equation}
-          %      \sum_{k=1}^{K}\log\weight_k = \log{(N-K+1)} - K\log{N} \quad .
-          %\end{equation}
-\end{enumerate}
-
-\noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
-derived the bounds
-\begin{eqnarray}
-\sum_{k=1}^{K}\log\weight_k & \geq & -K\log{K} \nonumber \\
-\sum_{k=1}^{K}\log\weight_k & \leq & 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \nonumber
-\end{eqnarray}
-\begin{equation}
--K\log{K} \quad \leq \quad \sum_{k=1}^{K}\log\weight_k \quad \leq \quad (K - 1)\log{2} - K\log{N} + \log{(N - 2K + 2)}
-\end{equation}
-
-\noindent{}which gives us analytic expressions for the upper and lower value 
-of $I_1$, regardless of the values of $\vec{\weight}$, for any mixture, and
-bounds on $I_{1}$ can be derived from just $\{K, N, D\}$.
-
 
 Developing similar theoretical bounds for $I_2$ is not straightforward, because
 the determinants of the covariance matrices of Gaussian components will not
