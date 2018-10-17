@@ -6,12 +6,17 @@ Plot the results from the evaluations on artificial data.
 # TODO: Get these from somewhere else?
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 import scipy.optimize as op
 import pickle
 from collections import OrderedDict
 
 from glob import glob
+
+from mpl_utils import mpl_style
+
+matplotlib.style.use(mpl_style)
 
 search_strategies = OrderedDict([
     ("BayesStepper", dict()),
@@ -56,11 +61,20 @@ for search_strategy in search_strategies.keys():
 
 # Plot as a function of N, K
 
-x_labels = ["N", "K"]
+x_labels = ["K"]
 y_label = "time"
 
+latex_labels = dict(time=r"$\textrm{time}\,/\,\textrm{seconds}$",
+                    K=r"$\textrm{number of true clusters}$ $K$",
+                    KasarapuAllison2015=r"$\textrm{Kasarapu \& Allison (2015)}$",
+                    BayesStepper=r"$\textrm{Message-Breaking Method}$")
+
+scat_kwds = dict(KasarapuAllison2015=dict(marker="s", s=50),
+                 BayesStepper=dict(s=50))
+
 L = len(x_labels)
-fig, axes = plt.subplots(1, L, figsize=(4 * L, 4))
+fig, axes = plt.subplots(1, L, figsize=(5 * L, 5))
+axes = np.atleast_1d([axes]).flatten()
 
 
 max_y = 0
@@ -103,11 +117,26 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         xi = np.array([x.min(), x.max()])
         yi = 10**np.polyval(mu[::-1], np.log10(xi))
 
-        ax.plot(xi, yi, label=f"$\mathcal{{O}}({x_label}^{{{mu[1]:.1f}}})$")
+        ax.plot(xi, yi, "-", label=f"$\mathcal{{O}}({x_label}^{{{mu[1]:.1f}}})$")
+        _kwds = dict(label=latex_labels.get(search_strategy, search_strategy))
+        _kwds.update(scat_kwds.get(search_strategy, dict()))
 
-        scat = ax.scatter(x[converged], y[converged], label=search_strategy)
+        scat = ax.scatter(x[converged], y[converged], **_kwds)
 
-        ax.scatter(x[~converged], y[~converged], alpha=0.5, c=scat.get_facecolor())
+        _kwds.pop("label")
+        ax.scatter(x[~converged], y[~converged], alpha=0.5, c=scat.get_facecolor(), **_kwds)
+
+        if x_label == "N":
+            Np = 10000
+            Yp = 10**np.polyval(mu[::-1], np.log10(Np))
+            print(f"Time for {search_strategy} on N = {Np} is {Yp:.0f}")
+
+        elif x_label == "K":
+            Kp = 1000
+            Yp = 10**np.polyval(mu[::-1], np.log10(Kp))
+            print(f"Time for {search_strategy} on K = {Kp} is {Yp:.0f}")
+
+
 
         """
         draws = np.random.multivariate_normal(mu, cov, size=100)[:, ::-1]
@@ -126,8 +155,8 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
     ax.set_xlim(0.5, upper_lim([max_x]))
 
 
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    ax.set_xlabel(latex_labels.get(x_label, x_label))
+    ax.set_ylabel(latex_labels.get(y_label, y_label))
     ax.legend(frameon=False)
 
 
@@ -135,6 +164,8 @@ for ax in axes:
     ax.set_ylim(1e-2, upper_lim([max_y]))
 
 fig.tight_layout()
+
+fig.savefig("article/cost.pdf", dpi=300)
 
 raise a
 
@@ -173,7 +204,3 @@ for search_strategy, data in times.items():
 for ax, x_label in zip(axes, x_labels):
     x = data.T[x_labels.index(x_label)]
 """
-
-
-raise a
-    
