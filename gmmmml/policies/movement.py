@@ -1,6 +1,8 @@
 
 import logging
 import numpy as np
+from scipy.special import erf
+from scipy.signal import find_peaks_cwt
 from .base import Policy
 
 logger_name, *_ = __name__.split(".")
@@ -57,6 +59,75 @@ class JumpToMMLMixtureMovementPolicy(BaseMovementPolicy):
 
         return None
 
+
+class ConvergeToMixtureWithMaximumExpectationImprovementPolicy(BaseMovementPolicy):
+
+    def move(self, y, **kwargs):
+
+        width = 2
+
+        old_min = None
+
+        while True:
+
+            # Check if converged.
+
+            Kp, I, I_var, I_lower = self.predict(y)
+
+            # The implicit assumption is that the bounds of Kp are not changing
+            # between predictions, otherwise the policy will *always* want to
+            # expand the bounds of K (rather than finding K minimum).
+
+            # Calculate the acquisition function.
+            I_min = np.min(self.model._state_I)
+            I_diff = I_min - I
+            chi = I_diff / np.sqrt(I_var)
+            Phi = 0.5 * (1.0 + erf(chi / np.sqrt(2)))
+            phi = np.exp(-0.5 * chi**2) / np.sqrt(2 * np.pi * I_var)
+            A_ei = I_diff * Phi + I_var * phi
+
+            # Prefer the point that maximizes the expectation improvement.
+            indices = [np.argmax(A_ei)]
+            indices.extend(find_peaks_cwt(A_ei, width * np.ones_like(A_ei)))
+            indices.extend(np.argsort(A_ei)[::-1])
+            indices = np.array(indices)
+
+            # Unique without sorting.
+            sidx = np.unique(indices, return_index=True)[1]
+            indices = np.array([indices[si] for si in sorted(sidx)])
+
+            # Next values to try, excluding trialled.
+            K_next = [Kp[i] for i in indices \
+                if  Kp[i] not in self.model._results.keys() \
+                and Kp[i] not in self.model._state_K]
+
+            # OK, take best.
+            if len(K_next) == 0:
+                logger.warn("No new movement to make. May have not converged")
+                break
+
+            K = K_next[0]
+
+            # Check for convergence.
+            current_min = Kp[np.argmin(I)]
+
+            # We could actually claim convergence before actually trialling the
+            # K_min mixture, but we will need the best mixture returned, so we
+            # effectively *have* to trial it.
+            # However, I don't want to make the search heuristic more complex,
+            # so we will just consider convergence when the minimum has not
+            # improved between trials and we have trialled that K.
+            if current_min == old_min and current_min in self.model._state_K:
+                print("Converged")
+                break
+
+            logger.info(f"Moving to K = {K}")
+
+            old_min = current_min
+
+            yield K
+
+        return None
 
 
 class StepTowardsMMLMixtureMovementPolicy(JumpToMMLMixtureMovementPolicy):

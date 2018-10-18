@@ -1,2 +1,6 @@
+
 class Policy(object):
-    pass
+
+    def __init__(self, *args, **kwargs):
+        self.meta = dict()
+        

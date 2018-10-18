@@ -13,16 +13,21 @@ from time import time
 from gmmmml import GaussianMixture
 
 gmm_kwds = dict(threshold=1e-5, 
-                max_em_iterations=10000,
+                max_em_iterations=100,
                 covariance_regularization=1e-10)
 
 search_strategies = OrderedDict([
-    #("BayesJumper", dict()),
-    ("BayesStepper", dict()),
-    ("KasarapuAllison2015", dict()),
+    ("MessageJumping", dict(covariance_regularization=0)),
+    #("BayesStepper", dict()),
+    #("KasarapuAllison2015", dict()),
 ])
 
 data_paths = sorted(glob("data_2d/*.data"))
+
+#data_paths = [
+#    "data_2d/01000_010000_2.data",
+#    "data_2d/01000_020000_2.data"
+#]
 
 overwrite = False
 raise_if_not_converged = True

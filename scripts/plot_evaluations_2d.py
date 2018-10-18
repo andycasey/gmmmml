@@ -21,6 +21,7 @@ matplotlib.style.use(mpl_style)
 search_strategies = OrderedDict([
     ("BayesStepper", dict()),
     ("KasarapuAllison2015", dict()),
+    ("MessageJumping", dict())
 #    ("BayesJumper", dict())
 ])
 
@@ -67,7 +68,8 @@ y_label = "time"
 latex_labels = dict(time=r"$\textrm{time}\,/\,\textrm{seconds}$",
                     K=r"$\textrm{number of true clusters}$ $K$",
                     KasarapuAllison2015=r"$\textrm{Kasarapu \& Allison (2015)}$",
-                    BayesStepper=r"$\textrm{Message-Breaking Method}$")
+                    BayesStepper=r"$\textrm{Message-Breaking Method}$",
+                    MessageJumping=r"$\textrm{Message-Jumping Method}$")
 
 scat_kwds = dict(KasarapuAllison2015=dict(marker="s", s=50),
                  BayesStepper=dict(s=50))

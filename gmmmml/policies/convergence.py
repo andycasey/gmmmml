@@ -60,6 +60,15 @@ class StrictConvergencePolicy(DefaultConvergencePolicy):
     num_consecutively_worse_trials = 5
 
 
+class NeverConvergePolicy(BaseConvergencePolicy):
+
+    @property
+    def converged(self):
+        """ Continue indefinitely because we assume convergence is over-ridden
+        by another policy. """
+
+        return False
+
 
 
 class ConvergedWithSuccessivelyWorseIterations(BaseConvergencePolicy):

@@ -17,8 +17,10 @@ class BaseInitialisationPolicy(Policy):
 
     def __init__(self, model, K_init=1, **kwargs):
 
+        super(BaseInitialisationPolicy, self).__init__(model, **kwargs)
+
         self.model = model
-        self.K_init = K_init
+        self.meta.update(K_init=K_init)
         return None
 
 
@@ -34,7 +36,7 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
         y = np.atleast_2d(y)
         N, D = y.shape
 
-        K_inits = np.logspace(0, np.log10(N/2.0), self.K_init, dtype=int)
+        K_inits = np.logspace(0, np.log10(N/2.0), self.meta["K_init"], dtype=int)
 
         for i, K in enumerate(K_inits):
 
@@ -50,12 +52,3 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
 
 
 
-
-
-
-
-class LogarithmicInitialisationPolicy(DefaultInitialisationPolicy):
-
-    def __init__(self, model, K_init=10, **kwargs):
-        return super(DefaultInitialisationPolicy, self).__init__(model, K_init, 
-                                                                 **kwargs)

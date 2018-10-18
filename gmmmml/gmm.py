@@ -271,7 +271,7 @@ class GaussianMixture(object):
         return em.expectation_maximization(y, means, covs, weights, **kwds)
 
 
-    def search(self, y, search_strategy="BayesStepper", **kwargs):
+    def search(self, y, search_strategy="MessageBreaking", **kwargs):
         r"""
         Search for the optimal number of multivariate Gaussian components, and
         the parameters of that mixture, given the data.
@@ -297,11 +297,12 @@ class GaussianMixture(object):
             Some strategies include:
 
             - `strategies.KasarapuAllison2015`
-            - `strategies.BayesStepper`
-            - `strategies.BayesJumper`
+            - `strategies.MessageBreaking`
+            - `strategies.StrictMessageBreaking`
+            - `strategies.MessageJumping`
             - `strategies.GreedyKMeans`
 
-            Defaults to `strategies.BayesStepper`, a fast and possibly convex
+            Defaults to `strategies.MessageBreaking`, a fast and possibly convex
             optimisation search strategy.
         """
 
