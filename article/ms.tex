@@ -615,8 +615,7 @@ We consider the two extremes of $\sum\log\weight_k$ for a mixture of $K$ compone
           %\end{equation}
 \end{enumerate}
 
-\noindent{}Thus, for any finite mixture of $K$ Gaussian components we have 
-derived the bounds
+\noindent{}Thus, for any finite mixture of $K$ Gaussian components we have the bounds
 %\begin{eqnarray}
 %\sum_{k=1}^{K}\log\weight_k & \geq & -K\log{K} \nonumber \\
 %\sum_{k=1}^{K}\log\weight_k & \leq & 2K\left(\log{2} - 1\right) - 2\log{2} + \log{N} + \log{\left(N - 2K + 2\right)} \nonumber
@@ -637,18 +636,74 @@ we clip the predictions of the expectation value on the message length required 
 
 \subsubsection{Predicting $-\log{\mathcal{L}(\data|\vectheta)}$}
 
+The negative log-likelihood could be infinitely high given the wrong component parameters.
+When predicting the negative log likelihood $-\log{\mathcal{L}(\data|\vectheta)}$ we seek to
+predict the \emph{minimum} $-\log{\mathcal{L}(\data|\vectheta)}$ for an untrialled mixture with
+$K$ components. We assume that the improvement in $-\log{\mathcal{L}(\data|\vectheta}$ between
+subsequent trials of $K$ improves of order $1/K$ \cite{Li|Barron:2000}. We assume a mean model for the minimal message lengths $I$ of previously trialled mixtures
+with $K$ components as
+\begin{equation}
+	-\log{\mathcal{L}(\data|\vectheta)} = \frac{\alpha}{K} + \beta
+\end{equation}
+\noindent{}where $\alpha$ and $\beta$ are unknowns, and fit these data using a Gaussian
+Process \citep{GPs} where the covariance between the data ($K$, $I$) is modelled by a squared exponential kernel 
+function \citep{GPs;expsquared} with white noise component added to the diagonal of the covariance matrix. 
+We simultaneously optimized the parameters $\alpha$, $\beta$ and the kernel hyperparameters
+\cite{BFGS,Geoge}.
+Given this Gaussian Process model with the optimized parameters, we make predictions for the minimum message length of untrialled mixtures. Specifically we are making predictions for the expectation value of the minimum message length of untrialled mixtures, and each prediction of the expectation value has an associated variance in its prediction. Given the kernel adopted, the predicted variance will be higher for untrialled mixtures that are farthest away (in $K$) than any trialled mixture (Figure~\ref{fig:mml-predictions}).
+
 
 \subsubsection{Predicting $\sum\log|\veccov_k|$}
 
+The remaining component whose contribution to the message length is unknown is the sum of
+the log of the determinant of the covariance matrices $\sum\log|\veccov_k|$. For most
+practical scenarios this component is a much smaller order of magnitude than the negative
+log likelihood $-\log{\mathcal{L}(\data|\vectheta)}$. Through experiments with generated
+data sets, we found that the message length to encode $\sum\log|\veccov_k|$
+\begin{equation}
+	I_{sldc} = -\frac{1}{2}(D + 2)\sum\log|\veccov_k|
+\end{equation}
+\noindent{}tended to decrease with increasing $K$ components when the value of $K$ is low
+(e.g., $\approx \frac{1}{5}K_{true}$), and then began to increase linearly with $K$ until
+$K_{true}$. Our experiments suggested that this is merely a consequence of the search
+process, and cannot be reliably used for a heuristic for predicting $K_{true}$, as the
+turnover point occurred when the first true data component is well-described by a single
+model component. That is to say that by $K \approx \frac{1}{5}K_{true}$, there is one
+component covariance matrix that will no longer change significantly, and therefore the
+determinants of the component covariance matrices that are added to the mixture will only
+tend to decrease on average, producing a near linear increase in $I_{sldc}$. Before the
+turnover point, as components are added the average determinants of the covariance matrices
+continues to increase.
+
+ % Remove above paragraph?
+We trialled several heuristics to approximate the change in $\sum\log|\veccov_k|$ between
+mixtures. While some heuristics based on the distribution of distances between data points
+appeared promising, we found good results by simply modelling $I_{sldc}$ as a function
+of the number of trialled components $K$ using a Gaussian Process. We used a Mat\'ern-3/2
+kernel \citep{matern,GPs} function to model the covariance between data points ($K$, $I_{sldc}$) and added
+hyperparameters to fit the data mean, and a white noise component that was added to the
+diagonal of the covariance matrix. We optimized these hyperparameters using the L-BFGS-B
+algorithm \citep{bfgs,scipy,george}, and made predictions for the message length required
+to encode the sum of the log of the determinant of covariance matrices of untrialled
+mixtures.
+
+Like the predictions from our Gaussian Process model for $-\log{\mathcal{L}(\data|\vectheta)}$,
+our predictions for the expectation value of $-\frac{1}{2}(D + 2)\sum\log|\veccov_k|$ (for
+the optimal mixture) come with an associated variance on that prediction.
+
+
 \subsubsection{Combining the predictions}
 
-
-% TODO: Predicting the negative log-likelihood.
-
-% TODO: Predicting the sum of the log of the determinant of the covariance matrices.
-
-% Combining it together.
-
+We sum the predictions in the message length required to describe $\sum\log\weight_k$, the
+negative log likelihood $-\log{\mathcal{L}(\data|\vectheta)}$, and the sum of the log of 
+the determinant of the covariance matrices $\sum\log|\veccov_k|$, as well as constant and
+deterministic terms, to predict the (minimum) message length of an untrialled mixture.
+We sum the variances in the predictions of each component. This process is illustrated in
+Figure~\ref{fig:mml-predictions} where we show the predicted (blue) and actual message lengths 
+(black) for various mixtures. The
+minimum message length over all models $\vec{\mathcal{M}}$ is predicted to be near
+$K \approx \todo{X}$, even though only a few mixtures have been trialled, and the nearest
+trialled mixture is $K = \todo{X}$. 
 
 \begin{comment}
 \subsection{Theoretical lower bounds on the message length of future mixtures}
@@ -737,7 +792,7 @@ such that the message length of the $k$th component is
 \begin{eqnarray}
 	I_k &=& -\sum_{n=1}^{N}\mathcal{R}_{nk}\log{\weight_{k}f(\data_{n}|\vecmean_k,\veccov_k)} -\frac{(D + 2)}{2}\log{|\cov_k|} \nonumber \\
 		&& \cdots\ + \left(\frac{D(D+3)}{4}-\frac{1}{2}\right)\log{\weight_k} + \left(1 - \frac{D}{2}\right)\log{2} \nonumber \\
-		&& \cdots + \frac{1}{K}\left[\log\Gamma(K) + \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \frac{Q}{2}\log{N}\right]
+		&& \cdots + \frac{1}{K}\left[\log\Gamma(K) + \frac{1}{2}\left(\log{Q\pi} - Q\log{2\pi}\right) + \frac{Q}{2}\log{N}\right] \label{eq:component-message-length}
 \end{eqnarray}
 \noindent{}and the total message length remains the sum of the message lengths of the components
 \begin{eqnarray}
@@ -780,18 +835,19 @@ components. After the parameters of the child components are initialised, we run
 expectation-maximization to iteratively update the parameter estimates of the child components. 
 By \emph{partial} expectation-maximization we refer to the process of keeping the parameters of
 all other components fixed, and only updating the estimates of the parameters of the child
-components \citep{Kasarapu|Allison:2015}. After partial E-M has converged, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
+components \citep{Kasarapu|Allison:2015}. After partial E-M has converged to the same specified tolerance given for the search, we integrate the child components with the rest of the mixture and run full E-M before the \textsc{Split} operation (line \ref{line:mbm-split} of Algorithm~\ref{alg:MBM}) is considered complete.
 
-One advantage to the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to the Message-Breaking Method is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. In the code implementation that we release with this work, we have implemented a \emph{Strict Message-Breaking Method} variant that allows the user to specify the number of successive $K$ trials that increased the message length, before adopting the mixture with the shortest message length. By default the Strict Message-Breaking Method requires five successive mixtures where the message length did not improve.
+One advantage of the Message-Breaking Method is that the total number of E-M steps is relatively few because all partial E-M steps are performed from a near-optimal initialisation point. One possible disadvantage to this approach is that there may be mixtures where the \textsc{Split} operation increases the message length by $\epsilon$, but a subsequent \textsc{Split} operation would \emph{decrease} the total message length by $>\epsilon$. As a result, the algorithm would converge to a local minima, not the global one. In the code implementation that we release with this work, we have implemented a \emph{Strict Message-Breaking Method} variant that allows the user to specify the number of successive $K$ trials that increased the message length, before adopting the mixture with the shortest message length. By default the Strict Message-Breaking Method requires five successive mixtures where the message length did not improve.
 
 
 
 \subsection{Message-Jumping Method}
 
-The \emph{Message-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of computations. In the \emph{Message-Breaking Method} we
-try to accomplish this using partial E-M to minimise the total number of computations
+The \emph{Message-Jumping Method} seeks to find the mixture parameters $\vec\psi$ that produce the minimum message length over the class of finite mixtures $\vec{\mathcal{M}}$ in the fewest number of computations. This objective is shared by the \emph{Message-Breaking Method} and the \emph{Message-Jumping Method}, but they differ in their approach.
+
+In the \emph{Message-Breaking Method} we seek to minimize the total number of computations by using  partial E-M to minimise the total number of (effective) E-M steps
 required to converge on a $K+1$ component mixture from a $K$ component mixture.
-However, in the \emph{Message-Jumping Method} we seek to minimise the total number
+In the \emph{Message-Jumping Method} we seek to minimise the total number
 of computations by optimizing a fewer number of mixtures. Instead of iteratively
 perturbing a mixture from say $K = 10$ to $K = 30$, we use predictions of the
 message length of untrialled mixtures and immediately `jump' to a component (
@@ -800,46 +856,54 @@ minimum message length over \emph{all} components. In doing so we seek a global
 message length minima with a fewer number of total E-M operations.
 
 
-We describe the \emph{Message-Jumping Method} in Algorithm~\ref{alg:mbm}. In this
+We describe the \emph{Message-Jumping Method} in Algorithm~\ref{alg:MBM}. In this
 method we seek to predict the minimum message length for any number of $K$ components,
 and then converge to the optimal mixture as quickly as possible. For this reason,
 we initialise many mixtures that are evenly separated in $\log_{10}$ space from
-$K = 1$ to $K = N/2$ in order to
+$K = 1$ to $K = N/2$ (the maximum possible number of components) in order to
 quickly describe the minimum message length across all $K$. Specifically we
 introduce a search hyperparameter $K_{inits}$ (defaults to 10) that sets the
 number of mixtures to initialise -- and those initial $K$ values. 
+
+
 We initialise each mixture using the K-means++ algorithm\cite{kmeanspp} and
 optimize the mixture using EM as described earlier. We trial each of the $K_{init}$
-mixtures in rank order of increasing $K$. If one of these mixtures fails to initialise
-or optimise, this is likely because we could not perform Choleksy decomposition
-of one (or more) of the covariance matrices. In practice this is typically because
-the estimate of $K$ is much higher than $K_{true}$, leading to near-zero values
-along the diagonal of the covariance matrix. In this situation we do not attempt
-to initialise any more of the $K_{init}$ mixtures -- although higher $K$ values
-can be trialled later -- and we being the search method.
+mixtures in order of increasing $K$. If one of these mixtures fails to initialise
+or optimize, this is likely because of zero entries in the diagonal of the covariance
+matrices. In practice this is typically because
+the estimate of $K$ is much higher than $K_{true}$. In this situation we do not attempt
+to initialise any more of the $K_{init}$ mixtures, and we being the search method.
 
 The motivation for this initialisation process is to mimic the search strategy
 that a human might take: What is an order-of-magnitude estimate on the number of
-$K$? Or what is a ballpark number on the maximum number of $K$ that we should
-trial? After we have that number, and an estimate on the message length for a
+$K$? Or rather: what is a ballpark number on the maximum number of $K$ that we should
+trial? After we have that estimate, and we have an estimate on the message length for a
 few sparsely-sampled numbers of components, we can make reasonable predictions
 on the global minimum.
 
 
 We record the message length for the optimal mixture at each trialled $K$, and
 the model parameters for that mixture. With these quantities we predict the
-message length of untrialled mixtures for every $K$ value from $K = 1$ to $K = \ceil{1.1\max(K_{trialled})}$ -- e.g., up to 10\% ahead of the largest previously trialled
-$K$ value. The message length predicted from the optimised Gaussian processes
+message length of untrialled mixtures for every $K$ value from $K = 1$ to 
+\todo{some number}. The message length predicted from the optimised Gaussian processes
 provide an expectation value on the message length for an untrialled mixture, as
 well as a variance in that prediction (Figure \ref{fig:search-predictions}).
 Before selecting the next value of $K$ to trial, we use the expectation value and
-associated variance to compute the acquisition function (or the "expected
-improvement") at each value of $K$ \cite{Jones:1998}. 
+associated variance to compute the acquisition function\cite{Jones:1998} (or the "expected
+improvement") at each value of $K$ 
+\begin{equation}
+	\todo{\Psi = X}
+\end{equation}
+\noindent{}and select the next $K$ value by choosing the $K$ that will maximize
+the expected improvement.
 
-We select the next $K$ value by choosing the value that will maximise the expected
-improvement \todo{but this forces us out to large K, so ....}
+After the next $K$ value has been chosen, we initialise a new mixture with $K$
+components using the K-means++ algorithm\citep{kmeanspp} and run E-M until
+convergence. If the initialisation and optimization process fails, we reselect
+the next $K$ value that will maximise the expected improvement. After the mixture
+has converged, we update our predictions for the message length of untrialled
+mixtures and choose the next $K$ value to trial.
 
-\todo{initialisation with kmeans++, if it fails,....}
 
 \begin{algorithm}[H]
 
@@ -865,17 +929,19 @@ improvement \todo{but this forces us out to large K, so ....}
 	  \State mix $\leftarrow$ \Call{KMeans$^{++}$}{k} \Comment{Initialise with K-means++.}
 	  \State mix $\leftarrow$ \Call{ExpectationMaximization}{mix}
   \catch
+  	  \State $K_{max} \leftarrow k$ \Comment{Record the maximum $K$ value.}
   	  \State {\bf \sc Break} \Comment{Do not trial any higher $K$ values.}
   \finally 
-      \State mixture[k] $\leftarrow$ mix 
-      \State state[k] $\leftarrow$ \Call{MessageLength}{mixture[k]}
+      \State mixtures[k] $\leftarrow$ mix 
+      \State states[k] $\leftarrow$ \Call{MessageLength}{mix}
   \endtry
 \EndFor
 \State converged $\leftarrow$ FALSE
 \While{not converged}
-	\State $K_{predict} \leftarrow [1, \cdots, 2\Call{Max}{K_{t}}]$ \Comment{Predict future message lengths.}
-	\State $I_{predict} \leftarrow$ \Call{PredictMessageLength}{$K_{predict}$}
+	\State $K_{predict} \leftarrow [1, \cdots, K_{max}]$ \Comment{Predict future message lengths.}
+	\State $I_{predict} \leftarrow$ \Call{PredictMessageLength}{$K_{predict}$,mixtures,states}
 	% argsort.
+	\State $A \leftarrow$ \Call{Acquisition}{$K_{predict},I_{predict}$} \Comment{Calculate the expected improvement.}
 	\State $K_{next} \leftarrow$ \Call{ArgSort}{$I_{predict}$} \Comment{Sort $K$ by predicted message length.}
 	\For{$k\in K_{next}$}
 		% Check if the mixture at K was good?
@@ -889,6 +955,9 @@ improvement \todo{but this forces us out to large K, so ....}
 	   	    \State mix $\leftarrow$ \Call{ExpectationMaximization}{mix}
 		  \catch
   	        \State {\bf \sc Continue} \Comment{Move on to next $K$ trial.}
+	      \finally
+	      	\State mixtures[k] $\leftarrow$ mix
+			\State states[k] $\leftarrow$ \Call{MessageLength}{mix}
 		  \endtry 
 		\EndIf
 	\EndFor
@@ -906,11 +975,15 @@ search algorithms.
 
 \subsection{Generated Datasets}
 
+\begin{comment}
 We set the data dimensionality $D = 2$ after previous experiments found that the data dimensionality had only a small effect on the differential cost on the search strategies tested. We chose $N$ to vary uniformly in log space from $N = 10$ data points to $N = 10^{4.5}$. For each $N$ we set $K = N/10$, and then used these values of $N$, $D$, and $K$ to generate a synthetic dataset. The weights for each mixture were drawn from a Dirichlet distribution with concentration $\alpha = 100$ while ensuring that $\weight_k \in \left(\frac{2}{N}, 1-\frac{2(K-1)}{N}\right)$. The means for each component were drawn from $\mathcal{U}\left(-10, +10\right)$. The correlation coefficients  for the component covariance matrices were drawn from
 \begin{equation}
 	\rho \sim \frac{\left[1-\mathcal{U}(-1, +1)^2\right]^{\frac{1}{2}(s - 4)}}{\mathcal{B}\left(\frac{1}{2}, \frac{1}{2}(s - 4)\right)}
 \end{equation}
 \noindent{}where $s$ is an isotropy hyperparameter that describes the probability of correlations between data dimensions, which we fix as $s=100$. The diagonal variances for the component covariance matrices were drawn from $|\mathcal{N}\left(0, 0.1\right)|$. Given these randomly drawn parameters we generated $N\weight_k$ members for each component, rounding as necessary to ensure the total number of generated data points is kept at $N$.
+\end{comment}
+
+
 
 We evaluated the following methods on all generated datasets: the benchmark method (Algorithm \ref{alg:kasarapu}), the Message-Breaking Method (Algorithm \ref{alg:MBM}), and \todo{X}. The cost (in seconds) is shown as a function of the number of data points $N$ and true number of clusters $K$ in Figure \ref{fig:algorithm_costs}.
 \todo{Cost is approximately linear for MBM, but of O(3) for kasarpu. Not surprising because Kasarapu is a greedy search method, requiring at least 3*K operations (split, merge, delete) at each mixture.}
@@ -934,38 +1007,56 @@ flux value near 0 implies strong stellar absorption. All else being equal, a str
 amount of absorption (lower normalised flux value) at a particular wavelength 
 indicates that the star contains more of the chemical element that absorbs and
 emits light at that wavelength. For example, sodium emits and absorbs light 
-at X\,\AA\ when an electron moves between the XY transitions. All else being
-equal, a star with lower normalised flux at a rest-frame wavelength of X\,\AA\
+at 1639.33\,nm in vacuum conditions. All else being
+equal, a star with lower normalised flux at a rest-frame wavelength of 1639.33\,nm
 indicates that the star has a higher abundance of sodium.
 
-We make use of the detailed chemical abundances calculated by \citep{casey}
-from 96,648 APOGEE spectra. This data set includes 15 measured chemical abundances
+We make use of detailed chemical abundances measured for 96,648 APOGEE spectra\citep{Casey:2016}.
+This data set includes 15 measured chemical abundances
 for all stars (e.g., no missing data), with estimated uncertainties. All chemical
 abundances are reported as the logarithmic count of the number of atoms relative
 to hydrogen, with a correction to account for the Sun's chemical composition such
-that "[Na/H] = 0" indicates a star has the same abundance of sodium relative to
-hydrogen as the Sun. \todo{To provide context on the fidelity of the data, in Figure \ref{fig:gce} we show the measured abundance
-of [Na/H] with respect to the measured abundance of [Fe/H] for all XX,XXX stars,
-where the Sun's abundance is marked.}
+that a value of [Na/H] = 0 indicates a star has the same abundance of sodium relative to
+hydrogen as the Sun. To provide some context for the data, in Figure \ref{fig:gce} 
+we show the measured abundance of various elements relative to the measured abundance
+of [Fe/H] for all 96,648 stars. The Sun's abundance is marked.
 
-The data set also contains other measured properties of the
-stars, including their temperature and surface gravity, and whether they are 
+The data set also contains other measured properties for each star. This 
+includes the effective temperature and surface gravity, and whether they are 
 likely associated with any gravitationally-bound star cluster. Most stars are
 not likely members of any known star cluster; most stars in this dataset are 
 described as `field' stars because they have no obvious association.
 We do not make use of any of this ancillary data (e.g., temperature, cluster
-association) during our search, but we do make use of it to evaluate the performance
-of our search.
+association) during our search, but we do make use of it after the search is
+complete in order to evaluate the performance of our search.
 
 
 
 \section{Results}
 
-Costs of generated data sets.
-Convergence of generated data sets.
-When ther eis a switchover and we are faster.
+We recorded the wall clock time required by each search algorithm on generated data sets, which we show in Figure~\ref{fig:cost}. Although wall-clock time metrics are subject to decisions made during implementation, all search and optimisation methods are implemented in the same way (using the same objective function), so the relative differences between methods is reliable. The \emph{Message-Breaking Method} and \emph{Message-Jumping Method} have approximately \todo{the same costs in wall time as a function of the number of clusters}.
 
-Expectation that kasarapu and allison should be O(3) and we are O(1) with some overhead.
+
+\todo{Costs of generated data sets.}
+\todo{Switchover in time and we are faster}
+
+\todo{Convergence of generated data sets.}
+
+
+\todo{Expected complexity of \cite{Kasarapu|Allison:2015} given the search setup}
+
+
+The \emph{Message-Breaking Method} splits the component with the largest message length (Equation~\ref{eq:component-message-length}), whereas the benchmark method~\cite{Kasarapu|Allison:2015} tries to split, merge, and delete each component. After repeated trials on generated data sets, we found that the benchmark method~\cite{Kasarapu|Allison:2015} would most frequently chose to split the same component that the \emph{Message-Breaking Method} would split (e.g., the component with the largest message length). We tracked the operation type (e.g., split, delete, merge) and which component was operated upon for \todo{X} operations in \todo{Y} generated data sets for the benchmark method~\cite{Kasarapu|Allison:2015} and the \emph{Message-Breaking Method}. 
+
+The benchmark method chose to split in all \todo{X} operations (e.g., no delete or merge operations). We also found that the benchmark method usually (X/X; X\%) chose to split the same component that the \emph{Message-Breaking Method} split: the component with the largest message length. The results are shown in Figure~\ref{fig:path-operations}. Some X\% of the time the component with the second largest message length was split by the benchmark method, X\% of the time with the third-largest, and X\% with the fourth-largest. Despite there being X operations with more than 4 components available to split, the benchmark method consistently chose one of four components with the  largest message lengths. Despite the path differences taken between the benchmark method and the \emph{Message-Breaking Method}, the optimised mixture parameters and message lengths found by each search algorithm were usually the same within the E-M convergence tolerance. This indicates that the \emph{Message-Breaking Method} is just as effective as the benchmark method on generated data sets, and more efficient because it does not need to trial all possible operations on all possible components.
+
+
+
+%One advantage of greedily trying to operate on all components is that there is confidence that `the best' operation has been taken, as all other possible operations have been trialled. Cost is the most obvious disadvantage to such an approach.
+
+
+
+
 
 \begin{figure}
     \includegraphics[width=1.0\textwidth]{cost.pdf}
@@ -1002,14 +1093,15 @@ Expectation that kasarapu and allison should be O(3) and we are O(1) with some o
 \bibliographystyle{elsarticle-num}
 \bibliography{mmlbibliography}
 
-\section{Appendices}
-\subsection{The MML objective function}
+\appendix
+
+\section{The MML objective function}
 \label{app:mml_derivation}
 In the following subsections we provide expressions for the message length to
 encode a gaussian mixture model, and our prior beliefs on the parameters of that model, before describing our
 full objective function.
 
-\subsubsection{The number of mixture components (or groups) $K$}
+\subsection{The number of mixture components (or groups) $K$}
 
 We assume a prior on the number of components $K$ of $\prior{K} \propto 2^{-K}$
 \cite[][p279, sec. 6.8.2]{Wallace:2005} such that the length of the 
@@ -1021,7 +1113,7 @@ This  expresses our prior belief that there ought to be fewer components.
 
 
 
-\subsubsection{The relative weight $w_k$ of each component}
+\subsection{The relative weight $w_k$ of each component}
 
 We assume a uniform prior on the individual weights $\weight_{k}$. The weights
 $\weights$ are drawn from a multinomial distribution, such that only $K - 1$
@@ -1058,7 +1150,7 @@ and $1/(2\pi e)$ \cite{Boulton|Wallace:1969}.
 
 
 
-\subsubsection{The mean $\vecmean_k$ and covariance matrix $\veccov_k$ for all
+\subsection{The mean $\vecmean_k$ and covariance matrix $\veccov_k$ for all
                $K$ Gaussian components}
 
 In order to properly encode the means $\vecmean$ and covariance matrices
@@ -1136,7 +1228,7 @@ parameters $\vecmean$ and $\veccov$ for all $K$ mixtures:
 \end{eqnarray}
 
 
-\subsubsection{The data given the model}
+\subsection{The data given the model}
 If we assume that the data have homoskedastic noise properties, then the 
 precision of each measurement $\mathcal{E}$ relates the probability of a
 datum $p(\datum_n)$ can be related to the probability density of
@@ -1158,9 +1250,7 @@ The final part of the message is to encode the lattice quantisation constant,
 which arises from the approximation to the (so-called) strict MML, where
 parameters are quantised into intervals in high dimensional space in order to
 be losslessly encoded.  We use an approximation of the lattice constant
-\citep[see Sections 5.1.12 and 3.3.4 of ]
-%[]
-{Wallace:2005} such that,
+(see Sections 5.1.12 and 3.3.4 of \citep{Wallace:2005}) such that,
 \begin{equation}
   \log\kappa(Q) = \frac{\log{Q\pi}}{Q} - \log{2\pi} - 1 \quad ,
 \end{equation}
@@ -1176,7 +1266,7 @@ parameters is
 \end{equation}
 
 
-\subsection{Objective function}
+\subsection{The complete objective function}
 
 Combining the expressions for the message length (or information content) of
 each component, we arrive at our objective function $I$ to minimise across 
@@ -1188,7 +1278,7 @@ all model parameters (including the number of mixtures, $K$):
 \end{eqnarray}
 
 
-
+\begin{comment}
 \section{Bounds on components of the message length}
 
 Developing similar theoretical bounds for $I_2$ is not straightforward, because
@@ -1314,16 +1404,16 @@ data points and $w_{1} = w_2 = w_{\cdots} = w_{K-1} = 2/N$ such that
 The remaining term in Eq. \ref{eq:logl-lower-bound}, $\frac{1}{2}N\sum_{k=1}^{K}\weight_{k}\log|\vec{\cov}_k|$, requires some  consideration.
 
 \andy{here}
+\end{comment}
 
-
-\subsection{Reproducibility} \label{sec:reproducibility}
+\section{Reproducibility} \label{sec:reproducibility}
 
 \noindent{}This project was developed in a public \texttt{git} repository that is 
 accessible at:
 \begin{center}
 \giturl
 \end{center}
-\noindent{}This repository includes a well-tested \texttt{Python 3.6} implementation
+\noindent{}This repository includes a well-tested \texttt{Python 3.7} implementation
 of the algorithms described here, scripts to reproduce our results, and \LaTeX\ to compile this manuscript. This research can be reproduced in full using
 the following commands in a modern terminal:\\\\
 \bashcommand{git clone https://github.com/andycasey/gmmmml.git gmmmml}
@@ -1335,7 +1425,7 @@ Reproducing these results will require at least \todo{X}\,Gb of free disk space
 and \todo{Y}\,hours of compute time, mostly because of the extensive algorithm 
 comparisons performed.
 
-\subsubsection{Search Strategy Implementation}
+\section{Code implementation of search strategies}
 
 The astute reader will recognise that each search `strategy' we have described
 is implemented in the \texttt{gmmmml} codebase as a set of `policies' that govern
