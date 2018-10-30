@@ -413,6 +413,8 @@ def iteratively_split_components(y, means, covs, weights, K, **kwargs):
         raise ValueError(f"the given mixture already has >={K} components")
 
 
+    meta = dict(I_components_chosen_for_split=[])
+
     Ks = []
     Is = []
     while K > weights.size:
@@ -424,6 +426,8 @@ def iteratively_split_components(y, means, covs, weights, K, **kwargs):
         
         # TODO: Allow us to get back the component-wise relative message lengths
         #       so we don't have to calculate the expectation step twice.
+
+        meta["I_components_chosen_for_split"].append([I_components[index], np.sum(I_components)])
 
         (state, responsibilities, ll, I) = split_component(
             y, means, covs, weights, R, index, **kwargs)
@@ -442,7 +446,10 @@ def iteratively_split_components(y, means, covs, weights, K, **kwargs):
     ax.scatter(Ks, Is)
     """
 
-    return (state, responsibilities, ll, I)
+    debug = kwargs.get("debug", False)
+
+    return (state, responsibilities, ll, I) if not debug \
+                                            else (state, responsibilities, ll, I, meta)
 
 
 def simultaneously_split_mixture(y, means, covs, weights, K, **kwargs):

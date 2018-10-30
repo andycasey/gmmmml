@@ -348,11 +348,14 @@ class GaussianMixture(object):
             # greedy repartition policies).
             self._results.update([strategy.repartition(y, K, **kwds)])
 
+            # This is to find the bug RE I not being a dict. No time now!
+            """
             for k, v in self._results.items():
                 try:
                     v[-1].values()
                 except AttributeError:
                     raise
+            """
 
             index = np.nanargmin(self._state_I)
             K_best, I_best = (self._state_K[index], self._state_I[index])
@@ -370,6 +373,7 @@ class GaussianMixture(object):
         self.means_, self.covs_, self.weights_ = state
         self.responsibilities_, self.log_likelihoods_, self.message_lengths_ = (R, ll, I)
         self.meta_ = meta
+        self.strategy_ = strategy
 
         return self
 

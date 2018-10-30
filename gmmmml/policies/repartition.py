@@ -6,7 +6,7 @@ from collections import defaultdict
 from tqdm import tqdm
 
 from .base import Policy
-from .. import operations as op
+from .. import (em, operations as op)
 
 logger_name, *_ = __name__.split(".")
 logger = logging.getLogger(logger_name)
@@ -112,15 +112,28 @@ class GreedilyPerturbNearestMixturePolicy(BaseRepartitionPolicy):
         bop, bp = min(best_perturbations.items(), key=lambda x: x[1][0])
         logger.debug(f"Best operation is {bop} on index {bp[1]}")
 
+
+        debug = kwargs.get("debug", False)
+
         if ml(bp[-1]) >= ml(prev_I):
             logger.info("All perturbations are worse.")
-            return (K, (state, R, ll, I))
+            return (K, (state, R, ll, prev_I, dict())) \
+                if debug else (K, (state, R, ll, prev_I))
+
+
+        if debug:
+            _, __, I_components = em._component_expectations(y, *state, **kwargs)
+            meta = dict(I_component_chosen=np.hstack([I_components[bp[1]], I_components]),
+                        operation=bop)
+
 
         _, __, state, R, ll, I = bp
 
         K = _K_from_state(state)
-        
-        return (K, (state, R, ll, I))
+
+        return (K, (state, R, ll, I, meta)) if debug else (K, (state, R, ll, I))
+
+
 
 
 def _K_from_state(state):

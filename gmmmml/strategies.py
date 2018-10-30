@@ -14,6 +14,7 @@ class MessageBreaking(initialisation.DefaultInitialisationPolicy,
     pass
 
 
+
 class StrictMessageBreaking(initialisation.DefaultInitialisationPolicy,
                             prediction.DefaultPredictionPolicy,
                             movement.StepTowardsMMLMixtureMovementPolicy,
@@ -49,3 +50,50 @@ class KasarapuAllison2015(initialisation.DefaultInitialisationPolicy,
                           repartition.GreedilyPerturbNearestMixturePolicy,
                           convergence.DefaultConvergencePolicy):
     pass
+
+
+
+class DebugMessageBreaking(MessageBreaking):
+
+    def __init__(self, *args, **kwargs):
+
+        self._message_length_of_components_split = []
+        super(DebugMessageBreaking, self).__init__(*args, **kwargs)
+
+
+    def repartition(self, y, K, **kwargs):
+
+        kwds = kwargs.copy()
+        kwds["debug"] = True
+
+        K, result = super(DebugMessageBreaking, self).repartition(y, K, **kwds)
+        state, R, ll, I, meta = result
+
+        self._message_length_of_components_split.append(meta["I_components_chosen_for_split"])
+
+        return (K, (state, R, ll, I))
+
+
+class DebugKasarapuAllison2015(KasarapuAllison2015):
+
+    def __init__(self, *args, **kwargs):
+      self._message_length_of_components_split = []
+      super(KasarapuAllison2015, self).__init__(*args, **kwargs)
+
+
+    def repartition(self, y, K, **kwargs):
+
+        kwds = kwargs.copy()
+        kwds["debug"] = True
+
+        K, result = super(KasarapuAllison2015, self).repartition(y, K, **kwds)
+        state, R, ll, I, meta = result
+
+        if "I_component_chosen" in meta:
+
+            self._message_length_of_components_split.append(meta["I_component_chosen"])
+
+            # Just for running path traces! 
+            assert meta["operation"] == "split"
+
+        return (K, (state, R, ll, I))

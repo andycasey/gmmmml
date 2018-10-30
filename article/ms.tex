@@ -1052,6 +1052,24 @@ The benchmark method chose to split in all \todo{X} operations (e.g., no delete 
 
 
 
+
+\begin{figure}
+    \includegraphics[width=1.0\textwidth]{paths-splits.pdf}
+    \caption{The number of split operations performed by the benchmark method
+             \cite{Kasarapu|Allison:2015} on the top four components (by message
+             length) from 169 generated data sets. The \emph{Message-Breaking
+             Method} always splits the component with the largest message length.
+             Although the benchmark method tries to split, merge, and delete all
+             components, it most frequently decides to split the same component
+             that the \emph{Message-Breaking Method} splits -- without trialling
+             all operations. The benchmark method chose to split (instead of
+             merge or delete) in all 2029 operations.}
+    \label{fig:path-operations}
+\end{figure}
+
+
+
+
 %One advantage of greedily trying to operate on all components is that there is confidence that `the best' operation has been taken, as all other possible operations have been trialled. Cost is the most obvious disadvantage to such an approach.
 
 
