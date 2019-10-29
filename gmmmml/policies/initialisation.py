@@ -38,6 +38,9 @@ class DefaultInitialisationPolicy(BaseInitialisationPolicy):
 
         K_inits = np.logspace(0, np.log10(N/2.0), self.meta["K_init"], dtype=int)
 
+        if not np.all(np.isfinite(y)):
+            raise ValueError("not all Y values finite")
+
         for i, K in enumerate(K_inits):
 
             try:

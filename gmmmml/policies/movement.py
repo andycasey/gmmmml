@@ -176,5 +176,8 @@ class IncreasingComponentsPolicy(BaseMovementPolicy):
     def move(self, y, **kwargs):
 
         while not self.converged:
-            K_max = np.max(self.model._state_K)
-            yield 1 + K_max
+            if self.model._state_K:
+                K_max = np.max(self.model._state_K)
+                yield 1 + K_max
+            else:
+                yield 1

@@ -19,10 +19,10 @@ gmm_kwds = dict(threshold=1e-5,
 search_strategies = OrderedDict([
     #("MessageJumping", dict(covariance_regularization=0)),
     ("MessageBreaking", dict()),
-    #("KasarapuAllison2015", dict()),
+    ("KasarapuAllison2015", dict()),
 ])
 
-data_paths = sorted(glob("data_2d/*.data"))
+data_paths = sorted(glob("data-permutations/*.data"))
 
 #data_paths = [
 #    "data_2d/01000_010000_2.data",
@@ -30,7 +30,7 @@ data_paths = sorted(glob("data_2d/*.data"))
 #]
 
 overwrite = False
-raise_if_not_converged = True
+raise_if_difference_more_than = np.inf
 
 # Initialise the evaluations.
 N = len(data_paths)
@@ -84,6 +84,7 @@ for search_strategy, search_kwds in search_strategies.items():
             converged = (I <= I_t)
 
             result = dict(K=meta["K"], N=meta["N"], D=meta["D"],
+                          estimated_K=model.weights_.size,
                           converged=(I <= I_t),
                           I=I, I_t=I_t, time=tock - tick)
 
@@ -91,7 +92,8 @@ for search_strategy, search_kwds in search_strategies.items():
 
             print(converged, I, I_t, tock - tick)
 
-            assert converged or not raise_if_not_converged
+            if not converged and abs(I - I_t) > raise_if_difference_more_than:
+                raise a
 
         with open(results_path, "wb") as fp:
             pickle.dump(results, fp)

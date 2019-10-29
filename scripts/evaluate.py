@@ -25,7 +25,7 @@ search_strategies = OrderedDict([
 #    ("BayesJumper", dict())
 ])
 
-results_path_template = "data_2d/*{search_strategy}.output"
+results_path_template = "data-permutations/*{search_strategy}.output"
 
 times = dict()
 result_keys = ["K", "N", "D", "I", "I_t", "time"]
@@ -66,7 +66,7 @@ for search_strategy in search_strategies.keys():
 
 # Plot as a function of N, K
 
-x_labels = ["K", "N"]
+x_labels = ["K", "N", "NK"]
 y_label = "time"
 
 latex_labels = dict(time=r"$\textrm{time}\,/\,\textrm{seconds}$",
@@ -89,13 +89,16 @@ upper_lim = lambda existing: 10**(1 + np.ceil(np.log10(np.max(existing))))
 
 for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
 
-
-    x_idx = result_keys.index(x_label)
+    try:
+        x_idx = result_keys.index(x_label)
+    except ValueError:
+        x_idx = [result_keys.index(xl) for xl in x_label]
 
     y_idx = result_keys.index(y_label)
 
     max_x = 0
     for search_strategy, data in times.items():
+
 
         x = data.T[x_idx]
         y = data.T[y_idx]
@@ -137,9 +140,9 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         def estimate_time(xdata, *coefficients):
             return np.sum(coefficients[1:] * np.log10(xdata), axis=1) + coefficients[0]
 
-        op_param, op_cov = op.curve_fit(estimate_time, X, np.log10(Y), p0=np.hstack([0, np.zeros(len(x_params))]), maxfev=1000)
+        op_param, op_cov = op.curve_fit(estimate_time, X, np.log10(Y), p0=np.hstack([0, np.ones(len(x_params))]), maxfev=1000)
 
-        predicted_time = estimate_time(X, *op_param)[idx]
+        predicted_time = 10**estimate_time(X, *op_param)[idx]
 
         print("t ~ O(K^{:.1f}N^{:.1f})".format(*op_param[1:]))
         #K = 0.1/N
@@ -152,7 +155,7 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         scat = ax.scatter(x[converged], y[converged], **_kwds)
 
 
-        #ax.plot(x, predicted_time, lw=3, alpha=0.5, linestyle=":")
+        ax.plot(x, predicted_time, lw=3, alpha=0.5, linestyle=":")
         #ax.scatter(x, predicted_time, facecolor="r", alpha=0.5, s=10)
 
         _kwds.pop("label")
@@ -179,6 +182,7 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
         for each in yi_draw:
             ax.plot(xi, each, alpha=0.01, c=scat.get_facecolor()[0])
         """
+
         
     ax.loglog()
 
@@ -191,11 +195,19 @@ for i, (ax, x_label) in enumerate(zip(axes, x_labels)):
 
 
 for ax in axes:
-    ax.set_ylim(1e-2, upper_lim([max_y]))
+    ax.set_ylim(1e-3, upper_lim([max_y]))
 
 fig.tight_layout()
 
 fig.savefig("article/cost.pdf", dpi=300)
+
+data = times["MessageBreaking"]
+
+
+fig2, ax2 = plt.subplots()
+ax2.scatter(data.T[1], data.T[-1], c=data.T[0])
+ax2.loglog()
+
 
 raise a
 

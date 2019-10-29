@@ -3,12 +3,12 @@
 from .policies import (initialisation, prediction, movement, repartition, 
                        convergence)
 
-__all__ = ["MessageBreaking", "MessageJumping", "GreedyKMeans", "KasarapuAllison2015"]
+__all__ = ["MessageBreaking", "MessageJumping", "GreedyKMeans", "KasarapuAllison2015", "MessageBreakingNoPredictions"]
 
 
 class MessageBreaking(initialisation.DefaultInitialisationPolicy,
-                      prediction.DefaultPredictionPolicy,
-                      movement.StepTowardsMMLMixtureMovementPolicy,
+                      prediction.NoPredictionPolicy,
+                      movement.IncreasingComponentsPolicy,
                       repartition.IterativelyRepartitionFromNearestMixturePolicy,
                       convergence.DefaultConvergencePolicy):
     pass
@@ -16,8 +16,8 @@ class MessageBreaking(initialisation.DefaultInitialisationPolicy,
 
 
 class StrictMessageBreaking(initialisation.DefaultInitialisationPolicy,
-                            prediction.DefaultPredictionPolicy,
-                            movement.StepTowardsMMLMixtureMovementPolicy,
+                            prediction.NoPredictionPolicy,
+                            movement.IncreasingComponentsPolicy,
                             repartition.IterativelyRepartitionFromNearestMixturePolicy,
                             convergence.StrictConvergencePolicy):
     pass
